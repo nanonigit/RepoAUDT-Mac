@@ -1460,25 +1460,59 @@ def load_saved_analyses() -> Dict[str, Any]:
     ensure_dirs()
     if STATE_FILE.exists():
         try:
-            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            data.setdefault("diagrams", [])
+            data.setdefault("techSpecs", {})
+            data.setdefault("tableSchemas", {})
+            data.setdefault("deleted_ids", [])
+            return data
         except Exception:
             pass
-    return {"diagrams": [], "techSpecs": {}, "tableSchemas": {}}
+    return {"diagrams": [], "techSpecs": {}, "tableSchemas": {}, "deleted_ids": []}
 
 
 def save_analysis_result(result: Dict[str, Any]) -> Dict[str, Any]:
     state = load_saved_analyses()
     new_diagrams = result.get("diagrams") or ([result["diagram"]] if "diagram" in result else [])
     new_ids = {d["id"] for d in new_diagrams}
-    new_urls = {d["github_url"] for d in new_diagrams}
+    new_urls = {(d.get("github_url"), d.get("perspective")) for d in new_diagrams}
+
+    # If user re-adds a previously deleted repo, remove it from deleted_ids
+    deleted_ids = set(state.get("deleted_ids", [])) - new_ids
+    state["deleted_ids"] = list(deleted_ids)
 
     existing = [
         d for d in state.get("diagrams", [])
-        if d.get("id") not in new_ids and d.get("github_url") not in new_urls
+        if d.get("id") not in new_ids and (d.get("github_url"), d.get("perspective")) not in new_urls
     ]
     state["diagrams"] = new_diagrams + existing
     state.setdefault("techSpecs", {}).update(result.get("techSpecs", {}))
     state.setdefault("tableSchemas", {}).update(result.get("tableSchemas", {}))
+    STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    return state
+
+
+def delete_saved_diagram(diagram_id: Optional[str] = None, category: Optional[str] = None, ids_list: Optional[List[str]] = None) -> Dict[str, Any]:
+    state = load_saved_analyses()
+    deleted_set = set(state.get("deleted_ids", []))
+
+    if diagram_id:
+        deleted_set.add(diagram_id)
+        state["diagrams"] = [d for d in state.get("diagrams", []) if d.get("id") != diagram_id]
+
+    if ids_list:
+        for did in ids_list:
+            deleted_set.add(did)
+        id_lookup = set(ids_list)
+        state["diagrams"] = [d for d in state.get("diagrams", []) if d.get("id") not in id_lookup]
+
+    if category:
+        for d in state.get("diagrams", []):
+            if d.get("category") == category and d.get("id"):
+                deleted_set.add(d["id"])
+        state["diagrams"] = [d for d in state.get("diagrams", []) if d.get("category") != category]
+
+    state["deleted_ids"] = list(deleted_set)
     STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     return state
 

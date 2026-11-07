@@ -146,6 +146,18 @@ class RepoCheckerRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"error": str(exc)})
             return
 
+        if self.path.startswith("/api/delete"):
+            try:
+                body = json.loads(body_raw)
+                diag_id = body.get("id")
+                category = body.get("category")
+                ids_list = body.get("ids")
+                state = analyzer.delete_saved_diagram(diagram_id=diag_id, category=category, ids_list=ids_list)
+                self._send_json(200, {"ok": True, "deleted_ids": state.get("deleted_ids", []), "remaining_saved": len(state.get("diagrams", []))})
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
         self._send_json(404, {"error": "Unknown API endpoint"})
 
 
