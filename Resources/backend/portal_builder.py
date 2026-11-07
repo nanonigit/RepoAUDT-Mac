@@ -1224,6 +1224,54 @@ def build_portal_html(data, is_shareable=False):
       z-index: 20;
     }
 
+    /* Collapsible Left / Right Panes */
+    body.sidebar-collapsed #sidebar,
+    body.sidebar-collapsed #sidebar-resizer,
+    body.inspector-collapsed #inspector,
+    body.inspector-collapsed #resizer {
+      display: none !important;
+    }
+    .pane-toggle-btn {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.74rem;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 7px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .pane-toggle-btn:hover {
+      color: #f8fafc;
+      border-color: #38bdf8;
+    }
+    .pane-toggle-btn.pane-open {
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.45);
+      background: rgba(56, 189, 248, 0.1);
+    }
+    .pane-close-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #64748b;
+      font-size: 0.85rem;
+      line-height: 1;
+      padding: 4px 7px;
+      border-radius: 6px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .pane-close-btn:hover {
+      color: #f8fafc;
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.45);
+    }
+
     /* Draggable Resizer Bar between Sidebar and Main Content */
     #sidebar-resizer {
       width: 8px;
@@ -3973,6 +4021,7 @@ def build_portal_html(data, is_shareable=False):
       <div class="brand-title" style="display: flex; align-items: center; gap: 8px;">
         <img src="app-icon.png" alt="RepoChecker" style="width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
         <div>RepoChecker <span>AI Studio</span></div>
+        <button class="pane-close-btn" onclick="setSidebarCollapsed(true)" title="左ペインを閉じる (⌘B)" style="margin-left: auto;">✕</button>
       </div>
       <div class="live-status"><div class="live-dot"></div> NATIVE MACOS STUDIO (CodeRabbit + Mermaid)</div>
       <div style="margin-top: 10px; background: linear-gradient(135deg, rgba(30, 58, 138, 0.45) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid #3b82f6; border-radius: 9px; padding: 9px 10px;">
@@ -4065,6 +4114,7 @@ def build_portal_html(data, is_shareable=False):
       <!-- Tier 2: View Mode Switcher & Canvas Zoom Controls -->
       <div class="header-bottom-tier">
         <div class="view-mode-container">
+          <button class="pane-toggle-btn pane-open" id="btn-toggle-sidebar" onclick="toggleSidebarPane()" title="左ペイン（リポジトリ一覧）を開閉 (⌘B)">◧ 左ペイン</button>
           <div class="view-mode-tabs">
             <button class="view-mode-btn active" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示">
               <span>🗺️</span>
@@ -4096,6 +4146,7 @@ def build_portal_html(data, is_shareable=False):
               <span>リセット</span>
             </button>
           </div>
+          <button class="pane-toggle-btn pane-open" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペイン（詳細インスペクター）を開閉 (⌘I)">右ペイン ◨</button>
         </div>
       </div>
     </div>
@@ -4140,6 +4191,7 @@ def build_portal_html(data, is_shareable=False):
           <h3>🔍 コンポーネント詳細インスペクター</h3>
           <div class="inspector-actions">
             <button class="btn-icon" onclick="toggleInspectorWidth()" title="幅を最大化 / 元に戻す">⛶</button>
+            <button class="pane-close-btn" onclick="setInspectorCollapsed(true)" title="右ペインを閉じる (⌘I)">✕</button>
           </div>
         </div>
         <div class="inspector-tabs">
@@ -4431,6 +4483,81 @@ def build_portal_html(data, is_shareable=False):
         setTimeout(() => currentPanZoom.resize(), 80);
       }
     }
+
+    // Collapsible Left (Sidebar) / Right (Inspector) Panes
+    const PANE_STORAGE_KEY_SIDEBAR = 'repochecker_sidebar_collapsed';
+    const PANE_STORAGE_KEY_INSPECTOR = 'repochecker_inspector_collapsed';
+    const PANE_RESIZE_DELAY_MS = 60;
+
+    function refreshCanvasAfterPaneToggle() {
+      if (!currentPanZoom) return;
+      setTimeout(() => {
+        if (!currentPanZoom) return;
+        currentPanZoom.resize();
+        currentPanZoom.fit();
+        currentPanZoom.center();
+      }, PANE_RESIZE_DELAY_MS);
+    }
+
+    function updatePaneToggleButtons() {
+      const sidebarBtn = document.getElementById('btn-toggle-sidebar');
+      const inspectorBtn = document.getElementById('btn-toggle-inspector');
+      const isSidebarCollapsed = document.body.classList.contains('sidebar-collapsed');
+      const isInspectorCollapsed = document.body.classList.contains('inspector-collapsed');
+      if (sidebarBtn) {
+        sidebarBtn.classList.toggle('pane-open', !isSidebarCollapsed);
+        sidebarBtn.textContent = isSidebarCollapsed ? '◧ 左ペインを開く' : '◧ 左ペイン';
+      }
+      if (inspectorBtn) {
+        inspectorBtn.classList.toggle('pane-open', !isInspectorCollapsed);
+        inspectorBtn.textContent = isInspectorCollapsed ? '右ペインを開く ◨' : '右ペイン ◨';
+      }
+    }
+
+    function setSidebarCollapsed(collapsed) {
+      document.body.classList.toggle('sidebar-collapsed', collapsed);
+      localStorage.setItem(PANE_STORAGE_KEY_SIDEBAR, collapsed ? '1' : '0');
+      updatePaneToggleButtons();
+      refreshCanvasAfterPaneToggle();
+    }
+
+    function setInspectorCollapsed(collapsed) {
+      document.body.classList.toggle('inspector-collapsed', collapsed);
+      localStorage.setItem(PANE_STORAGE_KEY_INSPECTOR, collapsed ? '1' : '0');
+      updatePaneToggleButtons();
+      refreshCanvasAfterPaneToggle();
+    }
+
+    function toggleSidebarPane() {
+      setSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+    }
+
+    function toggleInspectorPane() {
+      setInspectorCollapsed(!document.body.classList.contains('inspector-collapsed'));
+    }
+
+    function restorePaneCollapseState() {
+      document.body.classList.toggle('sidebar-collapsed', localStorage.getItem(PANE_STORAGE_KEY_SIDEBAR) === '1');
+      document.body.classList.toggle('inspector-collapsed', localStorage.getItem(PANE_STORAGE_KEY_INSPECTOR) === '1');
+      updatePaneToggleButtons();
+    }
+
+    // ⌘B / Ctrl+B: toggle left pane, ⌘I / Ctrl+I: toggle right pane
+    document.addEventListener('keydown', (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') return;
+      const key = e.key.toLowerCase();
+      if (key === 'b') {
+        e.preventDefault();
+        toggleSidebarPane();
+      } else if (key === 'i') {
+        e.preventDefault();
+        toggleInspectorPane();
+      }
+    });
+
+    restorePaneCollapseState();
 
     // Sync from GitHub
     async function triggerGitHubSync() {
