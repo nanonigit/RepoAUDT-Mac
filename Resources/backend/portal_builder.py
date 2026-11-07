@@ -5733,7 +5733,7 @@ def build_portal_html(data, is_shareable=False):
         renderDiagram(selectedDiagram);
       } else if (mode === 'seq') {
         if (btnSeq) btnSeq.classList.add('active');
-        if (seqBar) seqBar.style.display = 'flex';
+        if (seqBar) seqBar.style.display = 'none';
         if (wtPanel) wtPanel.style.display = 'flex';
         if (canvasContainer) canvasContainer.style.display = 'block';
         if (crView) crView.style.display = 'none';
@@ -7247,19 +7247,11 @@ def build_portal_html(data, is_shareable=False):
       const activeSeqId = activeSeq.id || ('seq-' + (currentRepoSeqIndex + 1));
       const cleanSeqTitle = (t) => String(t || '実行フロー').replace(/^\\d+\\.\\s*/, '');
 
-      // Update sequence selector pill buttons dynamically for the selected repo
       const seqBar = document.getElementById('sequence-selector-bar');
-      seqBar.innerHTML = `
-        <span style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; display: flex; align-items: center; gap: 4px;">
-          <span>⏱️</span> 実行フロー:
-        </span>
-        ${seqs.map((s, idx) => `
-          <button class="seq-pill-btn ${idx === currentRepoSeqIndex ? 'active' : ''}" onclick="selectRepoSeq(${idx})">
-            ${idx + 1}. ${cleanSeqTitle(s.short_title || s.title)}
-          </button>
-        `).join('')}
-        <span class="seq-desc-tooltip" id="seq-desc-tooltip">${activeSeq.desc || ''}</span>
-      `;
+      if (seqBar) {
+        seqBar.style.display = 'none';
+        seqBar.innerHTML = '';
+      }
 
       viewBreadcrumb.textContent = `plusimpact / ${selectedDiagram.repo} / sequence / ${activeSeqId}`;
       viewTitle.textContent = `${selectedDiagram.repo} - ${cleanSeqTitle(activeSeq.short_title || activeSeq.title)}`;
