@@ -4678,16 +4678,16 @@ def build_portal_html(data, is_shareable=False):
           const pushedStr = formatDateShort(item.pushedAt || item.updatedAt);
 
           el.innerHTML = `
-            <div class="nav-item-top">
-              <div class="repo-name">
+            <div class="nav-item-top" style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+              <div class="repo-name" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 ${item.repo}
-                ${item._hasActionReq ? `
-                <span class="repo-badge-action-req" onclick="showActionModalForRepo(event, ${index})" title="クリックして要対応の理由と対応方法を確認">
+              </div>
+              ${item._hasActionReq ? `
+                <span class="repo-badge-action-req" style="flex-shrink: 0;" onclick="showActionModalForRepo(event, ${index})" title="クリックして要対応の理由と対応方法を確認">
                   🔴 要対応 ↗
                 </span>
               ` : ''}
-              </div>
-              ${item.is_root ? '<span class="badge-eco">ECO</span>' : ''}
+              ${item.is_root ? '<span class="badge-eco" style="flex-shrink: 0;">ECO</span>' : ''}
             </div>
             <div class="persp-tag">perspective: ${item.perspective}</div>
             <div class="date-meta-row">
@@ -5811,8 +5811,89 @@ def build_portal_html(data, is_shareable=False):
     let currentHighlightedNodes = [];
 
     function highlightActionRequiredNodes(svgElement, repoItem) {
-      // Disabled per user request: Do not show red alert banner or red box overrides on diagrams
       currentHighlightedNodes = [];
+      if (!svgElement || !repoItem) return;
+
+      const candidateNodes = Array.from(svgElement.querySelectorAll('g.node, g.actor'));
+      const actionItems = getRepoActionItems(repoItem);
+
+      if (actionItems.length === 0) {
+        if (candidateNodes.length > 0) {
+          setTimeout(() => candidateNodes[0].dispatchEvent(new MouseEvent('click', { bubbles: true })), 80);
+        }
+        return;
+      }
+
+      const slug = (repoItem.repo_slug || repoItem.repo || '').toLowerCase();
+      let keywords = [];
+      actionItems.forEach(act => {
+        if (act.target_node) keywords.push(act.target_node.toLowerCase());
+        if (act.file) {
+          const cleanFile = act.file.split(' ')[0].split(':')[0].toLowerCase();
+          keywords.push(cleanFile);
+          const base = cleanFile.split('/').pop().split('.')[0];
+          if (base && base.length > 2) keywords.push(base);
+        }
+      });
+
+      if (slug.includes('xcore')) {
+        keywords.push('service business logic', 'src/services');
+      } else if (slug === 'plusimpact') {
+        keywords.push('corporate website', 'core api');
+      } else if (slug.includes('maice-backend')) {
+        keywords.push('jwt', 'auth0', 'controller', 'domain business');
+      }
+
+      let matchedNodes = [];
+      candidateNodes.forEach(node => {
+        const txt = (node.textContent || '').toLowerCase();
+        const nid = (node.id || '').toLowerCase();
+        if (keywords.some(kw => kw && (txt.includes(kw) || nid.includes(kw)))) {
+          matchedNodes.push(node);
+        }
+      });
+
+      if (matchedNodes.length === 0 && candidateNodes.length > 0) {
+        matchedNodes.push(candidateNodes[Math.min(1, candidateNodes.length - 1)]);
+      }
+
+      matchedNodes.forEach(node => {
+        node.classList.add('action-required-node-highlight');
+        node._actionItems = actionItems;
+        currentHighlightedNodes.push(node);
+
+        const shapes = node.querySelectorAll('rect, polygon, path, circle');
+        shapes.forEach(sh => {
+          sh.style.stroke = '#ef4444';
+          sh.style.strokeWidth = '3.5px';
+          sh.style.fill = '#3b0a14';
+        });
+
+        try {
+          const bbox = node.getBBox();
+          if (bbox && bbox.width > 10 && !node.querySelector('.svg-action-pill')) {
+            const badgeG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            badgeG.setAttribute('class', 'svg-action-pill');
+            const pillW = 126;
+            const pillH = 22;
+            const pillX = bbox.x + (bbox.width / 2) - (pillW / 2);
+            const pillY = bbox.y - pillH - 6;
+            badgeG.innerHTML = `
+              <rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="11" fill="#ef4444" stroke="#ffffff" stroke-width="1.5"></rect>
+              <text x="${bbox.x + (bbox.width / 2)}" y="${pillY + 15}" fill="#ffffff" font-size="11" font-weight="800" text-anchor="middle" style="font-family: sans-serif; pointer-events: none;">
+                🚨 要対応 (Click!)
+              </text>
+            `;
+            node.appendChild(badgeG);
+          }
+        } catch (e) {}
+      });
+
+      if (matchedNodes.length > 0) {
+        setTimeout(() => {
+          matchedNodes[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        }, 100);
+      }
     }
 
     function triggerClickOnFirstActionNode() {
