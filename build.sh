@@ -39,6 +39,7 @@ ditto "$APP" "$BUNDLE_DIR"
 if [[ "$MODE" == "--install" ]]; then
     echo "[4/4] Installing to /Applications/$APP_NAME.app..."
     pkill -x "$APP_NAME" 2>/dev/null || true
+    pkill -f "Resources/backend/server.py" 2>/dev/null || true
     for attempt in {1..30}; do
         if ! pgrep -x "$APP_NAME" >/dev/null; then break; fi
         sleep 0.1

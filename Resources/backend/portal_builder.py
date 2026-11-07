@@ -5782,10 +5782,11 @@ def build_portal_html(data, is_shareable=False):
             severity: a.severity || 'CRITICAL',
             title: a.title,
             file: a.file || 'src/',
+            target_node: a.target_node || '',
             desc: a.desc,
             fix_cmd: a.fix_cmd,
             official_source: a.official_source,
-            diff: (cr.findings && cr.findings[0] && cr.findings[0].diff) ? cr.findings[0].diff : ''
+            diff: a.diff || ((cr.findings && cr.findings[0] && cr.findings[0].diff) ? cr.findings[0].diff : '')
           });
         });
       }
