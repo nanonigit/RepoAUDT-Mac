@@ -24,6 +24,7 @@ WEBUI_DIR = BACKEND_DIR.parent / "webui"
 sys.path.insert(0, str(BACKEND_DIR))
 
 import analyzer  # noqa: E402
+import security_audit_engine  # noqa: E402
 
 
 def check_live_health(port: int) -> Dict[str, Any]:
@@ -111,6 +112,9 @@ class RepoCheckerRequestHandler(SimpleHTTPRequestHandler):
             state = analyzer.load_saved_analyses()
             self._send_json(200, state)
             return
+        if self.path.startswith("/api/settings"):
+            self._send_json(200, security_audit_engine.get_masked_settings())
+            return
         if self.path.startswith("/api/health"):
             self._send_json(200, check_live_health(self.server_port))
             return
@@ -156,6 +160,26 @@ class RepoCheckerRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(200, {"ok": True, "deleted_ids": state.get("deleted_ids", []), "remaining_saved": len(state.get("diagrams", []))})
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path.startswith("/api/settings"):
+            try:
+                body = json.loads(body_raw)
+                updated = security_audit_engine.save_settings(body)
+                self._send_json(200, {"ok": True, "settings": updated})
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path.startswith("/api/test-llm"):
+            try:
+                body = json.loads(body_raw)
+                provider = (body.get("provider") or "openai").strip()
+                key_override = body.get("api_key")
+                res = security_audit_engine.test_llm_connection(provider, key_override)
+                self._send_json(200, res)
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
             return
 
         self._send_json(404, {"error": "Unknown API endpoint"})

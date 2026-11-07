@@ -2222,7 +2222,7 @@
     }
 
     /* Action Required Full Modal */
-    #action-hub-modal, #health-modal, #analyze-repo-modal {
+    #action-hub-modal, #health-modal, #analyze-repo-modal, #admin-settings-modal {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.85);
@@ -2797,7 +2797,10 @@
 <body>
   <div id="sidebar">
     <div class="brand-header">
-      <div class="brand-title">RepoChecker <span>Architecture & AI Studio</span></div>
+      <div class="brand-title" style="display: flex; align-items: center; gap: 8px;">
+        <img src="app-icon.png" alt="RepoChecker" style="width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
+        <div>RepoChecker <span>AI Studio</span></div>
+      </div>
       <div class="live-status"><div class="live-dot"></div> NATIVE MACOS STUDIO (CodeRabbit + Mermaid)</div>
       <div style="margin-top: 10px; background: linear-gradient(135deg, rgba(30, 58, 138, 0.45) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid #3b82f6; border-radius: 9px; padding: 9px 10px;">
         <div style="font-size: 0.72rem; font-weight: 800; color: #93c5fd; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
@@ -2819,7 +2822,7 @@
       <div class="sync-meta-box">
         <div class="sync-timestamp-row">
           <span>🔄 最終更新:</span>
-          <strong id="portal-sync-time">2026/11/07 19:56:06</strong>
+          <strong id="portal-sync-time">2026/11/07 20:04:36</strong>
         </div>
         
     <!-- Live Uptime & Health Monitoring Widget -->
@@ -2870,7 +2873,11 @@
             <div id="header-freshness-container"></div>
           </div>
         </div>
-        <div class="header-top-right" style="display: flex; align-items: center; gap: 8px;">
+        <div class="header-top-right" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-sync" onclick="openAdminSettingsModal()" style="background: linear-gradient(135deg, #0f766e 0%, #047857 100%) !important; border-color: #34d399 !important;" title="OpenAI / Claude / Gemini / Groq APIキーと PHP・Node.js 脆弱性監査MCP/スキルを設定します (⌘,)">
+            <span>⚙️</span>
+            <span>管理・AI/脆弱性監査設定</span>
+          </button>
           <button class="btn btn-sync" onclick="openAnalyzeModal()" style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important; border-color: #a78bfa !important;" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します">
             <span>➕</span>
             <span>GitHub URLを追加分析</span>
@@ -3552,7 +3559,7 @@
 
         list.forEach(({ item, index, fresh }) => {
           const el = document.createElement('div');
-          el.className = 'nav-item' + (selectedDiagram && selectedDiagram.id === item.id ? ' active' : '');
+          el.className = 'nav-item' + ((typeof selectedDiagram !== 'undefined' && selectedDiagram && selectedDiagram.id === item.id) ? ' active' : (index === 0 && typeof selectedDiagram === 'undefined' ? ' active' : ''));
           el.id = 'nav-item-' + index;
 
           const createdStr = formatDateShort(item.createdAt);
@@ -4891,6 +4898,140 @@
     let healthData = {"checked_at": "2026/11/07 16:21:23", "total": 6, "online_count": 6, "services": [{"id": "omm_root", "name": "OMM Viewer (Root)", "type": "Local HTTP Service", "status": "ONLINE", "latency_ms": 0, "details": "Port 3000 is actively listening (Latency: 0ms)", "checked_at": "2026/11/07 16:21:23"}, {"id": "omm_backend", "name": "OMM Viewer (maice-backend)", "type": "Local HTTP Service", "status": "ONLINE", "latency_ms": 0, "details": "Port 3001 is actively listening (Latency: 0ms)", "checked_at": "2026/11/07 16:21:23"}, {"id": "portal_local", "name": "Architecture Portal Server", "type": "Local HTTP Server", "status": "ONLINE", "latency_ms": 0, "details": "Port 8080 is actively listening (Latency: 0ms)", "checked_at": "2026/11/07 16:21:23"}, {"id": "github_api", "name": "GitHub API (plusimpact)", "type": "External Cloud API", "status": "ONLINE", "latency_ms": 516, "details": "HTTP 200 (Latency: 516ms)", "checked_at": "2026/11/07 16:21:23"}, {"id": "auth0_status", "name": "Auth0 Identity Service", "type": "Identity Provider", "status": "ONLINE", "latency_ms": 639, "details": "HTTP 200 (Latency: 639ms)", "checked_at": "2026/11/07 16:21:23"}, {"id": "launchagent_sync", "name": "Git Auto-Sync Daemon", "type": "Background LaunchAgent", "status": "ONLINE", "latency_ms": 1, "details": "LaunchAgent scheduled (Every 4 hours)", "checked_at": "2026/11/07 16:21:23"}]};
 
     
+    
+    async function openAdminSettingsModal() {
+      const modal = document.getElementById('admin-settings-modal');
+      const fb = document.getElementById('adm-test-feedback');
+      if (fb) fb.style.display = 'none';
+      if (modal) modal.style.display = 'flex';
+
+      try {
+        const resp = await fetch('/api/settings');
+        if (!resp.ok) return;
+        const s = await resp.json();
+        const provEl = document.getElementById('adm-active-provider');
+        if (provEl && s.active_provider) provEl.value = s.active_provider;
+
+        ['openai', 'claude', 'gemini', 'groq'].forEach(p => {
+          const inp = document.getElementById('adm-key-' + p);
+          const st = document.getElementById('adm-status-' + p);
+          const mod = document.getElementById('adm-model-' + p);
+          const isCfg = s.configured && s.configured[p];
+          const masked = (s.keys_masked && s.keys_masked[p]) || '';
+          if (inp) inp.value = masked;
+          if (st) {
+            st.textContent = isCfg ? `🟢 設定済 (${masked})` : '⚪ 未設定';
+            st.className = 'sec-legend-badge ' + (isCfg ? 'sec-legend-green' : '');
+          }
+          if (mod && s.models && s.models[p]) mod.value = s.models[p];
+        });
+
+        if (s.skills) {
+          document.getElementById('adm-skill-osv').checked = s.skills.osv_mcp !== false;
+          document.getElementById('adm-skill-runtime').checked = s.skills.php_node_runtime_audit !== false;
+          document.getElementById('adm-skill-sast').checked = s.skills.owasp_sast_skill !== false;
+          document.getElementById('adm-skill-llm').checked = s.skills.llm_deep_audit !== false;
+        }
+      } catch (e) {}
+    }
+
+    function closeAdminSettingsModal() {
+      const modal = document.getElementById('admin-settings-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async function testProviderKey(provider) {
+      const fb = document.getElementById('adm-test-feedback');
+      const keyVal = (document.getElementById('adm-key-' + provider)?.value || '').trim();
+      if (fb) {
+        fb.style.display = 'block';
+        fb.style.background = 'rgba(56, 189, 248, 0.12)';
+        fb.style.border = '1px solid #38bdf8';
+        fb.style.color = '#38bdf8';
+        fb.textContent = `⏳ ${provider.toUpperCase()} API への疎通・認証テストを実行中...`;
+      }
+
+      // Save current inputs first so model/key are up to date
+      await saveAdminSettings(false, true);
+
+      try {
+        const resp = await fetch('/api/test-llm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, api_key: keyVal })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          fb.style.background = 'rgba(16, 185, 129, 0.15)';
+          fb.style.border = '1px solid #10b981';
+          fb.style.color = '#34d399';
+          fb.textContent = data.message || `✅ ${provider.toUpperCase()} 接続成功！`;
+        } else {
+          fb.style.background = 'rgba(239, 68, 68, 0.15)';
+          fb.style.border = '1px solid #ef4444';
+          fb.style.color = '#f87171';
+          fb.textContent = `❌ ${provider.toUpperCase()} 接続エラー: ${data.error || '認証失敗'}`;
+        }
+      } catch (err) {
+        if (fb) {
+          fb.style.color = '#f87171';
+          fb.textContent = `❌ 通信エラー: ${err.message}`;
+        }
+      }
+    }
+
+    async function saveAdminSettings(reanalyzeCurrent, silent) {
+      const payload = {
+        active_provider: document.getElementById('adm-active-provider')?.value || 'auto',
+        keys: {
+          openai: document.getElementById('adm-key-openai')?.value || '',
+          claude: document.getElementById('adm-key-claude')?.value || '',
+          gemini: document.getElementById('adm-key-gemini')?.value || '',
+          groq: document.getElementById('adm-key-groq')?.value || '',
+        },
+        models: {
+          openai: document.getElementById('adm-model-openai')?.value || 'gpt-4o',
+          claude: document.getElementById('adm-model-claude')?.value || 'claude-3-7-sonnet-latest',
+          gemini: document.getElementById('adm-model-gemini')?.value || 'gemini-2.5-flash',
+          groq: document.getElementById('adm-model-groq')?.value || 'llama-3.3-70b-versatile',
+        },
+        skills: {
+          osv_mcp: !!document.getElementById('adm-skill-osv')?.checked,
+          php_node_runtime_audit: !!document.getElementById('adm-skill-runtime')?.checked,
+          owasp_sast_skill: !!document.getElementById('adm-skill-sast')?.checked,
+          llm_deep_audit: !!document.getElementById('adm-skill-llm')?.checked,
+        }
+      };
+
+      try {
+        const resp = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (!silent) {
+          const fb = document.getElementById('adm-test-feedback');
+          if (fb) {
+            fb.style.display = 'block';
+            fb.style.background = 'rgba(16, 185, 129, 0.15)';
+            fb.style.border = '1px solid #10b981';
+            fb.style.color = '#34d399';
+            fb.textContent = '✅ AI APIキーおよび脆弱性監査MCP/スキル設定を保存しました！';
+          }
+          await openAdminSettingsModal();
+        }
+        if (reanalyzeCurrent && typeof selectedDiagram !== 'undefined' && selectedDiagram) {
+          closeAdminSettingsModal();
+          const targetUrl = selectedDiagram.github_url || selectedDiagram.repo;
+          if (targetUrl) {
+            openAnalyzeModal(targetUrl);
+            runGitHubRepoAnalysis(targetUrl);
+          }
+        }
+      } catch (e) {}
+    }
+
     function openAnalyzeModal(prefillUrl) {
       const modal = document.getElementById('analyze-repo-modal');
       const input = document.getElementById('modal-gh-url-input');
@@ -5194,6 +5335,8 @@
         const params = new URLSearchParams(window.location.search);
         if (params.get('openModal') === 'analyze') {
           openAnalyzeModal('https://github.com/plusimpact');
+        } else if (params.get('openModal') === 'admin') {
+          openAdminSettingsModal();
         }
       }, 200);
     });
@@ -6175,6 +6318,162 @@
               style="background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 5px 10px; color: #f8fafc; font-size: 0.74rem; width: 200px; outline: none;" />
           </div>
           <div id="saved-repos-manage-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Admin Settings: Multi-LLM API Keys (OpenAI, Claude, Gemini, Groq) & PHP/Node.js Vulnerability MCP/Skills Modal -->
+  <div id="admin-settings-modal" style="display: none;" onclick="closeAdminSettingsModal()">
+    <div class="action-hub-dialog" onclick="event.stopPropagation()" style="border-color: #10b981; max-width: 860px;">
+      <div class="action-hub-header" style="background: linear-gradient(135deg, #064e3b 0%, #0f172a 100%);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <img src="app-icon.png" style="width: 32px; height: 32px; border-radius: 50%;" />
+          <div>
+            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">⚙️ 管理画面：AI APIキー & PHP/Node.js 脆弱性監査 MCP・スキル設定</h3>
+            <span style="font-size: 0.72rem; color: #6ee7b7;">OpenAI / Claude / Gemini / Groq のAPIキー管理と、OSV脆弱性MCP・OWASP SASTスキルの監査設定</span>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeAdminSettingsModal()">✕ 閉じる</button>
+      </div>
+
+      <div class="action-hub-body" style="padding: 20px; overflow-y: auto; max-height: 80vh;">
+        <!-- Active AI Auditor Provider Selector -->
+        <div style="background: #090d16; border: 1px solid #1e293b; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="font-size: 0.84rem; font-weight: 800; color: #34d399;">🤖 優先使用する AI コード・脆弱性監査エンジン</div>
+              <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 2px;">設定済みのAPIキーを使って、ソースコードと依存パッケージの深層セキュリティ監査を実行します</div>
+            </div>
+            <select id="adm-active-provider" style="background: #0f172a; border: 1.5px solid #34d399; color: #fff; padding: 7px 12px; border-radius: 7px; font-size: 0.8rem; font-weight: 700; outline: none;">
+              <option value="auto">⚡ 自動選択 (設定済みキーを上から優先)</option>
+              <option value="openai">🟢 OpenAI (GPT-4o / o3-mini)</option>
+              <option value="claude">🟠 Anthropic Claude (Claude 3.7 / 3.5 Sonnet)</option>
+              <option value="gemini">🔵 Google Gemini (Gemini 2.5 Pro / Flash)</option>
+              <option value="groq">🟣 Groq Cloud (Llama 3.3 70B / DeepSeek R1)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 4 AI Providers API Key Inputs -->
+        <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;">
+          🔑 AI プロバイダー APIキー設定 <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">(ローカルの ~/Library/Application Support/RepoChecker/settings.json に暗号権限 0600 で安全に保存されます)</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(370px, 1fr)); gap: 12px; margin-bottom: 18px;">
+          <!-- OpenAI -->
+          <div style="background: #090d16; border: 1px solid #334155; border-radius: 9px; padding: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <span style="font-size: 0.8rem; font-weight: 800; color: #f8fafc;">🟢 OpenAI API Key</span>
+              <span id="adm-status-openai" class="sec-legend-badge" style="font-size: 0.62rem;">未設定</span>
+            </div>
+            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+              <input id="adm-key-openai" type="password" placeholder="sk-proj-..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
+              <button class="table-view-btn" onclick="testProviderKey('openai')" style="white-space: nowrap;">⚡ 接続テスト</button>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
+              <span>監査モデル:</span>
+              <input id="adm-model-openai" type="text" value="gpt-4o" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
+            </div>
+          </div>
+
+          <!-- Anthropic Claude -->
+          <div style="background: #090d16; border: 1px solid #334155; border-radius: 9px; padding: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <span style="font-size: 0.8rem; font-weight: 800; color: #f8fafc;">🟠 Anthropic Claude API Key</span>
+              <span id="adm-status-claude" class="sec-legend-badge" style="font-size: 0.62rem;">未設定</span>
+            </div>
+            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+              <input id="adm-key-claude" type="password" placeholder="sk-ant-api03-..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
+              <button class="table-view-btn" onclick="testProviderKey('claude')" style="white-space: nowrap;">⚡ 接続テスト</button>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
+              <span>監査モデル:</span>
+              <input id="adm-model-claude" type="text" value="claude-3-7-sonnet-latest" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
+            </div>
+          </div>
+
+          <!-- Google Gemini -->
+          <div style="background: #090d16; border: 1px solid #334155; border-radius: 9px; padding: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <span style="font-size: 0.8rem; font-weight: 800; color: #f8fafc;">🔵 Google Gemini API Key</span>
+              <span id="adm-status-gemini" class="sec-legend-badge" style="font-size: 0.62rem;">未設定</span>
+            </div>
+            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+              <input id="adm-key-gemini" type="password" placeholder="AIzaSy..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
+              <button class="table-view-btn" onclick="testProviderKey('gemini')" style="white-space: nowrap;">⚡ 接続テスト</button>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
+              <span>監査モデル:</span>
+              <input id="adm-model-gemini" type="text" value="gemini-2.5-flash" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
+            </div>
+          </div>
+
+          <!-- Groq -->
+          <div style="background: #090d16; border: 1px solid #334155; border-radius: 9px; padding: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <span style="font-size: 0.8rem; font-weight: 800; color: #f8fafc;">🟣 Groq Cloud API Key</span>
+              <span id="adm-status-groq" class="sec-legend-badge" style="font-size: 0.62rem;">未設定</span>
+            </div>
+            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+              <input id="adm-key-groq" type="password" placeholder="gsk_..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
+              <button class="table-view-btn" onclick="testProviderKey('groq')" style="white-space: nowrap;">⚡ 接続テスト</button>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
+              <span>監査モデル:</span>
+              <input id="adm-model-groq" type="text" value="llama-3.3-70b-versatile" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
+            </div>
+          </div>
+        </div>
+
+        <div id="adm-test-feedback" style="display: none; margin-bottom: 14px; padding: 10px 14px; border-radius: 8px; font-size: 0.78rem; font-weight: 700;"></div>
+
+        <!-- Vulnerability MCP & Security Skills Toggles -->
+        <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;">
+          🛡️ 脆弱性・コード監査 MCP & スキル構成 (PHP / Node.js / Python / Swift / Go 対応)
+        </div>
+        <div style="background: #090d16; border: 1px solid #334155; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;">
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="adm-skill-osv" checked style="margin-top: 3px;" />
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 800; color: #38bdf8;">🌐 OSV.dev 脆弱性データベース MCP (リアルタイム CVE 照合)</div>
+              <div style="font-size: 0.7rem; color: #94a3b8;">PHP (`composer.json` / Packagist)、Node.js (`package.json` / npm)、Python (`requirements.txt` / PyPI)、Go、Rust の全パッケージバージョンを Google OSV.dev API に照会し、既知の脆弱性 (CVE / GHSA) を自動検出します。</div>
+            </div>
+          </label>
+
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="adm-skill-runtime" checked style="margin-top: 3px;" />
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 800; color: #34d399;">🐘 PHP / Node.js / ランタイム EOL & バージョン脆弱性監査スキル</div>
+              <div style="font-size: 0.7rem; color: #94a3b8;">PHP 5.x / 7.x / 8.0 等のセキュリティサポート終了 (EOL) ランタイムや、Node.js 旧世代エンジン、Laravel / WordPress / Express / Next.js / Axios 等の危険バージョンを監査します。</div>
+            </div>
+          </label>
+
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="adm-skill-sast" checked style="margin-top: 3px;" />
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 800; color: #f472b6;">🔒 OWASP Top 10 & Security-Review SAST スキル (ソースコード脆弱性診断)</div>
+              <div style="font-size: 0.7rem; color: #94a3b8;">PHP の SQLインジェクション (`mysqli_query` 直接結合)、XSS (`echo $_GET`)、RCE (`eval` / `shell_exec` / `unserialize`)、Node.js/TS の SSRF・インジェクション、Python/Swift の危険な例外・強制アンラップを行単位で検出し修正 Diff を提案します。</div>
+            </div>
+          </label>
+
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="adm-skill-llm" checked style="margin-top: 3px;" />
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 800; color: #a78bfa;">🧠 マルチLLM ディープ脆弱性・設計監査 (OpenAI / Claude / Gemini / Groq)</div>
+              <div style="font-size: 0.7rem; color: #94a3b8;">上で設定された AI プロバイダーの API キーを使用し、リポジトリのコード構造・フレームワーク固有の脆弱性を AI が深層監査して「要対応アラート」に統合します。</div>
+            </div>
+          </label>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap;">
+          <button class="table-view-btn" onclick="saveAdminSettings(false)" style="padding: 9px 18px; font-size: 0.8rem;">
+            💾 設定・APIキーを保存
+          </button>
+          <button onclick="saveAdminSettings(true)" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: 1px solid #6ee7b7; color: #fff; font-size: 0.82rem; font-weight: 800; padding: 9px 20px; border-radius: 8px; cursor: pointer;">
+            🛡️ 保存して現在選択中のリポジトリを今すぐAI・脆弱性再監査
+          </button>
         </div>
       </div>
     </div>

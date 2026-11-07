@@ -180,7 +180,7 @@ struct MainContentView: View {
                     Text("RepoChecker エンジンを起動中...")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
-                    Text("ローカルCodeRabbit監査 & Mermaid構成図エンジンを初期化しています")
+                    Text("ローカルCodeRabbit・脆弱性監査 (MCP/Skills) & Mermaid構成図エンジンを初期化しています")
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
                 }
@@ -191,9 +191,16 @@ struct MainContentView: View {
                 Button(action: {
                     coordinator.webView?.evaluateJavaScript("openAnalyzeModal()", completionHandler: nil)
                 }) {
-                    Label("GitHub URLを分析", systemImage: "plus.magnifyingglass")
+                    Label("GitHub追加・リスト管理", systemImage: "plus.magnifyingglass")
                 }
-                .help("任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を実行します (⌘N)")
+                .help("GitHub組織/リポジトリURLの追加分析と保有リストの管理・削除を行います (⌘N)")
+
+                Button(action: {
+                    coordinator.webView?.evaluateJavaScript("openAdminSettingsModal()", completionHandler: nil)
+                }) {
+                    Label("AIキー・監査設定", systemImage: "key.radiowaves.forward.fill")
+                }
+                .help("OpenAI / Claude / Gemini / Groq APIキーと PHP・Node.js 脆弱性監査MCP/スキルを設定します (⌘,)")
 
                 Button(action: {
                     coordinator.webView?.evaluateJavaScript("openActionRequiredHubModal()", completionHandler: nil)
@@ -227,6 +234,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = NSAppearance(named: .darkAqua)
         NSApp.setActivationPolicy(.regular)
+        if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
+           let iconImg = NSImage(contentsOfFile: iconPath) {
+            NSApp.applicationIconImage = iconImg
+        }
         BackendServerManager.shared.startIfNeeded()
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -245,7 +256,7 @@ struct RepoCheckerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup("RepoChecker — Architecture & CodeRabbit AI Studio") {
+        WindowGroup("RepoChecker — Architecture & Vulnerability AI Studio") {
             MainContentView(coordinator: appDelegate.coordinator)
                 .frame(minWidth: 1080, minHeight: 700)
                 .preferredColorScheme(.dark)
@@ -253,10 +264,15 @@ struct RepoCheckerApp: App {
         .defaultSize(width: 1480, height: 920)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("GitHub URLを分析...") {
+                Button("GitHub URLを追加分析 / リスト管理...") {
                     appDelegate.coordinator.webView?.evaluateJavaScript("openAnalyzeModal()", completionHandler: nil)
                 }
                 .keyboardShortcut("n", modifiers: [.command])
+
+                Button("AI APIキー & 脆弱性監査設定 (管理画面)...") {
+                    appDelegate.coordinator.webView?.evaluateJavaScript("openAdminSettingsModal()", completionHandler: nil)
+                }
+                .keyboardShortcut(",", modifiers: [.command])
 
                 Button("要対応アラート一覧を表示") {
                     appDelegate.coordinator.webView?.evaluateJavaScript("openActionRequiredHubModal()", completionHandler: nil)

@@ -23,8 +23,11 @@ swiftc -O -parse-as-library -target arm64-apple-macos14.0 \
     -framework SwiftUI -framework AppKit -framework WebKit -framework Combine \
     "$DIR"/Sources/*.swift -o "$APP/Contents/MacOS/$APP_NAME"
 
-echo "[2/4] Bundling Info.plist, backend analyzer engine, and WebUI resources..."
+echo "[2/4] Bundling Info.plist, AppIcon.icns, backend analyzer engine, and WebUI resources..."
 cp "$DIR/Info.plist" "$APP/Contents/Info.plist"
+if [[ -f "$DIR/AppIcon.icns" ]]; then
+    cp "$DIR/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+fi
 ditto "$DIR/Resources/backend" "$APP/Contents/Resources/backend"
 ditto "$DIR/Resources/webui" "$APP/Contents/Resources/webui"
 chmod +x "$APP/Contents/Resources/backend/server.py" "$APP/Contents/Resources/backend/analyzer.py"
@@ -46,6 +49,7 @@ if [[ "$MODE" == "--install" ]]; then
     done
     rm -rf "/Applications/$APP_NAME.app"
     ditto "$BUNDLE_DIR" "/Applications/$APP_NAME.app"
+    touch "/Applications/$APP_NAME.app"
     echo "✅ Installed: /Applications/$APP_NAME.app"
 else
     echo "✅ Built: $BUNDLE_DIR"

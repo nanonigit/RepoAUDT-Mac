@@ -18,6 +18,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import security_audit_engine
 
 
 APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChecker"
@@ -1065,9 +1066,36 @@ def analyze_repository(
     meta = extract_git_metadata(repo_dir, owner, repo, fallback_meta=fallback_meta)
     deps = detect_tech_stack_and_deps(repo_dir)
     components = discover_repo_components(repo_dir, repo)
+
+    # Run OSV.dev MCP & PHP/Node.js/Polyglot Security Skill Audit
+    sec_scan = security_audit_engine.scan_php_and_nodejs_and_polyglot_vulnerabilities(repo_dir, components)
+    existing_fw_names = {f["name"] for f in deps.get("frameworks", [])}
+    for fw in sec_scan.get("frameworks", []):
+        if fw["name"] not in existing_fw_names:
+            deps.setdefault("frameworks", []).append(fw)
+    deps.setdefault("runtime", {}).update(sec_scan.get("runtime", {}))
+    existing_cves = {a.get("cve") for a in deps.get("security_advisories", [])}
+    for adv in sec_scan.get("security_advisories", []):
+        if adv.get("cve") not in existing_cves:
+            deps.setdefault("security_advisories", []).append(adv)
+
     mermaid_code = build_mermaid_flowchart(components)
     sequences = build_mermaid_sequences(repo, components)
     coderabbit = run_coderabbit_static_audit(repo_dir, repo, components, deps)
+
+    # Merge PHP / Node.js / OWASP SAST findings
+    for sf in sec_scan.get("sast_findings", []):
+        coderabbit["action_items"].insert(0, sf)
+        coderabbit["findings"].insert(0, {**sf, "line": "SAST"})
+
+    # Run Live Multi-LLM Deep Audit if OpenAI / Claude / Gemini / Groq API key is configured
+    llm_items, llm_label = security_audit_engine.run_llm_deep_vulnerability_audit(repo_dir, repo, components)
+    if llm_items:
+        coderabbit["action_items"] = llm_items + coderabbit["action_items"]
+        coderabbit["findings"] = llm_items + coderabbit["findings"]
+        coderabbit["status"] = "ACTION_REQUIRED"
+    if llm_label:
+        coderabbit["summary"] = f"[{llm_label} + OSV/Security-Skill 監査済] " + coderabbit["summary"]
     extracted_schemas = extract_data_models_from_repo(repo_dir, repo)
 
     repo_tech_specs: Dict[str, Any] = {}
