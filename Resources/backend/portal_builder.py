@@ -5212,45 +5212,149 @@ def build_portal_html(data, is_shareable=False):
           "処理結果の構造化レスポンス生成とエラーハンドリング"
         ];
 
-        tabBody = `
-          ${repoContextHtml}
-          ${actionAlertHtml}
-          <div class="node-header-card">
-            <span class="node-category-tag">${category}</span>
-            <div class="node-main-title">${selectedNodeData.name}</div>
-            ${selectedNodeData.path ? `
-              <div class="node-file-chip" title="対象コードパス">
-                <span>📁</span>
-                <span>${selectedNodeData.path}</span>
-              </div>
-            ` : ''}
-            <div class="node-tech-row">
-              <span>⚡ 技術スタック:</span>
-              <strong style="color: #e2e8f0;">${tech}</strong>
-            </div>
-          </div>
+        if (selectedNodeData.isWalkthroughStep && selectedNodeData.walkthroughStep) {
+          const st = selectedNodeData.walkthroughStep;
+          const total = selectedNodeData.walkthroughTotal || currentWalkthroughSteps.length || 1;
+          const stepIdx = selectedNodeData.walkthroughStepIdx || 0;
+          const flowBadge = st.isSelf
+            ? '<span style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde68a; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: 800;">🔄 内部処理 (Self)</span>'
+            : (st.isReturn
+                ? '<span style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #a7f3d0; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: 800;">↩️ 応答・返却 (Return)</span>'
+                : '<span style="background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #bae6fd; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: 800;">➡️ 呼び出し・遷移 (Call)</span>');
+          const fromMeta = selectedNodeData.fromMeta || null;
+          const toMeta = selectedNodeData.toMeta || null;
 
-          <div class="responsibility-card">
-            <div class="resp-header">
-              <span>🎯</span>
-              <span>システムの責務 (SYSTEM RESPONSIBILITY)</span>
-            </div>
-            <div class="resp-content">${resp}</div>
-          </div>
-
-          <div class="logic-steps-card">
-            <div class="steps-header">
-              <span>⚙️</span>
-              <span>主な処理ロジック (PROCESSING LOGIC)</span>
-            </div>
-            ${steps.map((st, idx) => `
-              <div class="step-item">
-                <div class="step-num-badge">${idx + 1}</div>
-                <div>${st}</div>
+          tabBody = `
+            <div style="background: linear-gradient(145deg, rgba(14, 116, 144, 0.28) 0%, rgba(15, 23, 42, 0.95) 100%); border: 1.5px solid #38bdf8; border-radius: 10px; padding: 14px; margin-bottom: 14px; box-shadow: 0 6px 20px rgba(56, 189, 248, 0.18);">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="background: #38bdf8; color: #040711; font-weight: 900; font-size: 0.74rem; padding: 3px 9px; border-radius: 5px; font-family: 'JetBrains Mono', monospace;">
+                    STEP ${st.stepNumber} / ${total}
+                  </span>
+                  ${flowBadge}
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <button onclick="walkthroughPrev()" ${stepIdx <= 0 ? 'disabled' : ''} style="background: #1e293b; border: 1px solid #334155; color: ${stepIdx <= 0 ? '#475569' : '#e2e8f0'}; border-radius: 5px; padding: 3px 8px; font-size: 0.7rem; font-weight: 700; cursor: ${stepIdx <= 0 ? 'default' : 'pointer'};">◀ 前へ</button>
+                  <button onclick="walkthroughNext()" ${stepIdx >= total - 1 ? 'disabled' : ''} style="background: #1e293b; border: 1px solid #334155; color: ${stepIdx >= total - 1 ? '#475569' : '#e2e8f0'}; border-radius: 5px; padding: 3px 8px; font-size: 0.7rem; font-weight: 700; cursor: ${stepIdx >= total - 1 ? 'default' : 'pointer'};">次へ ▶</button>
+                </div>
               </div>
-            `).join('')}
-          </div>
-        `;
+
+              <div style="font-size: 0.96rem; font-weight: 800; color: #fde047; line-height: 1.4; margin-bottom: 12px;">
+                ⚡ ${st.message}
+              </div>
+
+              <!-- From -> To Cards -->
+              <div style="display: flex; flex-direction: column; gap: 6px; background: rgba(9, 14, 26, 0.85); border: 1px solid #1e293b; border-radius: 8px; padding: 10px;">
+                <div style="border-left: 3px solid #38bdf8; padding-left: 8px;">
+                  <div style="font-size: 0.68rem; font-weight: 800; color: #38bdf8;">📤 送信元 (From / Caller)</div>
+                  <div style="font-size: 0.84rem; font-weight: 700; color: #f8fafc;">${st.fromLabel}</div>
+                  ${fromMeta ? `<div style="font-size: 0.71rem; color: #94a3b8; margin-top: 2px;">${fromMeta}</div>` : ''}
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 6px; padding-left: 10px; color: #38bdf8; font-size: 0.72rem; font-weight: 700;">
+                  <span>⬇️</span>
+                  <span style="font-family: 'JetBrains Mono', monospace; color: #cbd5e1;">${st.fromId} ${st.arrow} ${st.toId}</span>
+                </div>
+
+                <div style="border-left: 3px solid #34d399; padding-left: 8px;">
+                  <div style="font-size: 0.68rem; font-weight: 800; color: #34d399;">📥 遷移先 (To / Receiver)</div>
+                  <div style="font-size: 0.84rem; font-weight: 700; color: #f8fafc;">${st.toLabel}</div>
+                  ${toMeta ? `<div style="font-size: 0.71rem; color: #94a3b8; margin-top: 2px;">${toMeta}</div>` : ''}
+                </div>
+              </div>
+
+              ${st.note ? `
+                <div style="margin-top: 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 6px; padding: 7px 10px; font-size: 0.75rem; color: #fde68a;">
+                  📌 <strong>補足ノート:</strong> ${st.note}
+                </div>
+              ` : ''}
+            </div>
+
+            <div class="responsibility-card">
+              <div class="resp-header">
+                <span>🎯</span>
+                <span>このステップの処理内容 (STEP DETAIL)</span>
+              </div>
+              <div class="resp-content" style="white-space: pre-line;">${resp}</div>
+            </div>
+
+            <div class="logic-steps-card">
+              <div class="steps-header">
+                <span>⚙️</span>
+                <span>ステップ実行詳細・前後関係</span>
+              </div>
+              ${steps.map((sItem, idx) => `
+                <div class="step-item">
+                  <div class="step-num-badge">${idx + 1}</div>
+                  <div>${sItem}</div>
+                </div>
+              `).join('')}
+            </div>
+
+            <div class="logic-steps-card" style="border-color: rgba(56, 189, 248, 0.3);">
+              <div class="steps-header" style="color: #38bdf8;">
+                <span>⏱️</span>
+                <span>シーケンス全ステップ一覧 (クリックで移動)</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 5px; max-height: 240px; overflow-y: auto;">
+                ${currentWalkthroughSteps.map((wStep, wIdx) => {
+                  const isCurr = wIdx === stepIdx;
+                  return `
+                    <div onclick="setWalkthroughStep(${wIdx})" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: ${isCurr ? 'rgba(56, 189, 248, 0.18)' : 'rgba(15, 23, 42, 0.6)'}; border: 1px solid ${isCurr ? '#38bdf8' : '#1e293b'};">
+                      <span style="background: ${isCurr ? '#38bdf8' : '#1e293b'}; color: ${isCurr ? '#040711' : '#94a3b8'}; font-weight: 800; font-size: 0.68rem; min-width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${wStep.stepNumber}</span>
+                      <div style="min-width: 0; flex: 1;">
+                        <div style="font-size: 0.74rem; font-weight: ${isCurr ? '800' : '600'}; color: ${isCurr ? '#fde047' : '#e2e8f0'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${wStep.message}</div>
+                        <div style="font-size: 0.66rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${wStep.fromLabel} ➔ ${wStep.toLabel}</div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+
+            ${repoContextHtml}
+          `;
+        } else {
+          tabBody = `
+            ${repoContextHtml}
+            ${actionAlertHtml}
+            <div class="node-header-card">
+              <span class="node-category-tag">${category}</span>
+              <div class="node-main-title">${selectedNodeData.name}</div>
+              ${selectedNodeData.path ? `
+                <div class="node-file-chip" title="対象コードパス">
+                  <span>📁</span>
+                  <span>${selectedNodeData.path}</span>
+                </div>
+              ` : ''}
+              <div class="node-tech-row">
+                <span>⚡ 技術スタック:</span>
+                <strong style="color: #e2e8f0;">${tech}</strong>
+              </div>
+            </div>
+
+            <div class="responsibility-card">
+              <div class="resp-header">
+                <span>🎯</span>
+                <span>システムの責務 (SYSTEM RESPONSIBILITY)</span>
+              </div>
+              <div class="resp-content">${resp}</div>
+            </div>
+
+            <div class="logic-steps-card">
+              <div class="steps-header">
+                <span>⚙️</span>
+                <span>主な処理ロジック (PROCESSING LOGIC)</span>
+              </div>
+              ${steps.map((st, idx) => `
+                <div class="step-item">
+                  <div class="step-num-badge">${idx + 1}</div>
+                  <div>${st}</div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
       } else if (currentInspTab === 'versions') {
         // Versions & Security Tab with Authoritative Sources and Red/Green Status Legend
         const advisories = deps.security_advisories || [];
@@ -6873,35 +6977,8 @@ def build_portal_html(data, is_shareable=False):
         }
       }
 
-      if (currentWalkthroughIndex < 0 || currentWalkthroughIndex >= total) {
-        cardEl.style.display = 'none';
-        cardEl.innerHTML = '';
-        return;
-      }
-      cardEl.style.display = 'flex';
-
-      const st = currentWalkthroughSteps[currentWalkthroughIndex];
-      const flowTypeBadge = st.isSelf
-        ? '<span style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde68a; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;">🔄 内部処理</span>'
-        : (st.isReturn
-            ? '<span style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #a7f3d0; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;">↩️ 応答</span>'
-            : '<span style="background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #bae6fd; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;">➡️ 呼び出し</span>');
-
-      cardEl.innerHTML = `
-        <div class="wt-route-flow" style="width: 100%; justify-content: space-between;">
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span style="background: #38bdf8; color: #040711; font-weight: 900; font-size: 0.7rem; padding: 2px 7px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;">
-              STEP ${st.stepNumber}/${total}
-            </span>
-            ${flowTypeBadge}
-            <span class="wt-node-badge from-node">📤 ${st.fromLabel}</span>
-            <span class="wt-arrow-connector">━━▶</span>
-            <span class="wt-node-badge to-node">📥 ${st.toLabel}</span>
-            <span class="wt-msg-summary">⚡ ${st.message}</span>
-          </div>
-          ${st.note ? `<span class="wt-note-chip">📌 ${st.note}</span>` : ''}
-        </div>
-      `;
+      cardEl.style.display = 'none';
+      cardEl.innerHTML = '';
     }
 
     function setWalkthroughStep(stepIdx) {
@@ -6942,6 +7019,9 @@ def build_portal_html(data, is_shareable=False):
       currentWalkthroughIndex = -1;
       renderWalkthroughBar();
       clearWalkthroughSvgHighlight();
+      selectedNodeData = null;
+      if (inspEmpty) inspEmpty.style.display = 'flex';
+      if (inspContent) inspContent.style.display = 'none';
     }
 
     function toggleWalkthroughPlay() {
@@ -7063,6 +7143,29 @@ def build_portal_html(data, is_shareable=False):
       });
     }
 
+    function resolveParticipantMeta(labelStr) {
+      if (!labelStr) return '';
+      const clean = String(labelStr).replace(/^[^a-zA-Z0-9\u3040-\u9FFF]+/, '').trim();
+      const lower = clean.toLowerCase();
+      // 1. Check node_specs of current repo
+      if (selectedDiagram && selectedDiagram.node_specs) {
+        for (const [k, v] of Object.entries(selectedDiagram.node_specs)) {
+          if (k.toLowerCase().includes(lower) || (v.title && v.title.toLowerCase().includes(lower))) {
+            return `${v.category || 'Component'} | ${v.tech || ''}`.replace(/\|\s*$/, '').trim();
+          }
+        }
+      }
+      // 2. Check matching repository in diagrams
+      if (Array.isArray(diagrams)) {
+        const matchedRepo = diagrams.find(d => d.repo && d.repo.toLowerCase() === lower);
+        if (matchedRepo) {
+          const fw = (matchedRepo.deps && matchedRepo.deps.frameworks || []).map(f => f.name || f).slice(0, 3).join(', ');
+          return `Repository (${matchedRepo.category || 'Repo'})${fw ? ' | ' + fw : ''}`;
+        }
+      }
+      return '';
+    }
+
     function syncInspectorWithWalkthroughStep(stepIdx) {
       if (!selectedDiagram || stepIdx < 0 || stepIdx >= currentWalkthroughSteps.length) return;
       const st = currentWalkthroughSteps[stepIdx];
@@ -7073,7 +7176,16 @@ def build_portal_html(data, is_shareable=False):
       inspEmpty.style.display = 'none';
       inspContent.style.display = 'block';
 
+      const fromMeta = resolveParticipantMeta(st.fromLabel);
+      const toMeta = resolveParticipantMeta(st.toLabel);
+
       selectedNodeData = {
+        isWalkthroughStep: true,
+        walkthroughStep: st,
+        walkthroughStepIdx: stepIdx,
+        walkthroughTotal: total,
+        fromMeta,
+        toMeta,
         name: `Step ${st.stepNumber}/${total}: ${st.message}`,
         path: `${st.fromId} ➔ ${st.toId}`,
         repoItem: selectedDiagram,
@@ -7081,10 +7193,10 @@ def build_portal_html(data, is_shareable=False):
           title: `Step ${st.stepNumber}: ${st.message}`,
           category: st.isReturn ? "Sequence Response (応答遷移)" : "Sequence Transition (機能呼び出し遷移)",
           tech: `${st.fromLabel} ━━▶ ${st.toLabel}`,
-          desc: `【機能遷移ウォークスルー Step ${st.stepNumber}/${total}】\\n送信元「${st.fromLabel}」から遷移先「${st.toLabel}」へ「${st.message}」を実行・遷移します。${st.note ? '（補足: ' + st.note + '）' : ''}`,
+          desc: `送信元「${st.fromLabel}」から遷移先「${st.toLabel}」へ「${st.message}」を実行・遷移します。${st.note ? '（補足: ' + st.note + '）' : ''}`,
           steps: [
-            `📤 送信元 (From): ${st.fromLabel}`,
-            `📥 遷移先 (To): ${st.toLabel}`,
+            `📤 送信元 (From): ${st.fromLabel}${fromMeta ? ' (' + fromMeta + ')' : ''}`,
+            `📥 遷移先 (To): ${st.toLabel}${toMeta ? ' (' + toMeta + ')' : ''}`,
             `⚡ 実行処理: ${st.message}`,
             prevStep ? `⬅️ 直前のステップ (Step ${prevStep.stepNumber}): ${prevStep.fromLabel.split(' / ')[0]} → ${prevStep.toLabel.split(' / ')[0]} (${prevStep.message})` : `🏁 開始ステップ (Step 1)`,
             nextStep ? `➡️ 次の遷移先 (Step ${nextStep.stepNumber}): ${nextStep.fromLabel.split(' / ')[0]} → ${nextStep.toLabel.split(' / ')[0]} (${nextStep.message})` : `🎉 最終ステップ完了`
@@ -7099,6 +7211,7 @@ def build_portal_html(data, is_shareable=False):
       if (ovTab) ovTab.classList.add('active');
 
       renderInspector();
+      if (inspContent) inspContent.scrollTop = 0;
     }
 
     // Keyboard navigation (ArrowLeft / ArrowRight) for Sequence Walkthrough
