@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>ja_JP</string>
     <key>CFBundleExecutable</key>
-    <string>RepoPulse</string>
+    <string>RepoChecker</string>
     <key>CFBundleIdentifier</key>
-    <string>com.naoki.RepoPulse</string>
+    <string>com.naoki.RepoChecker</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>RepoPulse</string>
+    <string>RepoChecker</string>
     <key>CFBundleDisplayName</key>
-    <string>RepoPulse - Architecture &amp; CodeRabbit Studio</string>
+    <string>RepoChecker - Architecture &amp; CodeRabbit Studio</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

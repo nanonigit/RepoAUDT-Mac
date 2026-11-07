@@ -1,4 +1,4 @@
-# RepoPulse — GitHub Architecture & CodeRabbit AI Studio for macOS
+# RepoChecker — GitHub Architecture & CodeRabbit AI Studio for macOS
 
 GitHubのURL（`https://github.com/owner/repo` または `owner/repo`）を入力するだけで、あらゆるリポジトリのソースコード構造を自動解析し、インタラクティブな構成図・シーケンス図・CodeRabbit風AIコード監査・要対応（脆弱性・バグ・改善提案）の可視化を行うネイティブ macOS アプリケーションです。
 
@@ -24,4 +24,4 @@ GitHubのURL（`https://github.com/owner/repo` または `owner/repo`）を入�
 ./build.sh --install
 ```
 
-ビルド完了後、`/Applications/RepoPulse.app` にインストールされます。
+ビルド完了後、`/Applications/RepoChecker.app` にインストールされます。

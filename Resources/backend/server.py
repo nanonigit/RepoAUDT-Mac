@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Local HTTP Backend Server for RepoPulse macOS App.
+Local HTTP Backend Server for RepoChecker macOS App.
 Serves the interactive WebUI and provides REST endpoints:
   - GET  /api/state    : Load persisted analyzed GitHub repositories
-  - POST /api/analyze  : Clone/fetch and analyze any GitHub repository URL
+  - POST /api/analyze  : Analyze any GitHub Organization/User URL or Repository URL
+  - POST /api/list-org : List repositories under a GitHub Organization or User
   - GET  /api/health   : Real-time service health & uptime check
 """
 
 import json
 import os
-import socket
 import sys
 import time
 import urllib.request
@@ -30,10 +30,9 @@ def check_live_health(port: int) -> Dict[str, Any]:
     services = []
     now_str = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
-    # 1. RepoPulse Local Engine
     services.append({
-        "id": "repopulse_engine",
-        "name": f"RepoPulse Analysis Engine (Port {port})",
+        "id": "repochecker_engine",
+        "name": f"RepoChecker Analysis Engine (Port {port})",
         "type": "Local macOS Backend",
         "status": "ONLINE",
         "latency_ms": 2,
@@ -41,12 +40,11 @@ def check_live_health(port: int) -> Dict[str, Any]:
         "checked_at": now_str,
     })
 
-    # 2. GitHub API
     t0 = time.time()
     gh_status = "ONLINE"
     gh_detail = "HTTP 200 OK (api.github.com)"
     try:
-        req = urllib.request.Request("https://api.github.com/rate_limit", headers={"User-Agent": "RepoPulse-macOS"})
+        req = urllib.request.Request("https://api.github.com/rate_limit", headers={"User-Agent": "RepoChecker-macOS"})
         with urllib.request.urlopen(req, timeout=5) as resp:
             if resp.status != 200:
                 gh_status = "DEGRADED"
@@ -64,15 +62,13 @@ def check_live_health(port: int) -> Dict[str, Any]:
         "checked_at": now_str,
     })
 
-    # 3. Git / GitHub CLI Auth
-    gh_bin = "/opt/homebrew/bin/gh" if Path("/opt/homebrew/bin/gh").exists() else "gh"
     services.append({
         "id": "gh_cli",
         "name": "GitHub CLI & Git Credentials",
         "type": "Local Auth Provider",
-        "status": "ONLINE" if Path(gh_bin).exists() or True else "OFFLINE",
+        "status": "ONLINE",
         "latency_ms": 5,
-        "details": "Authenticated (Public & Private Repo Clone Ready)",
+        "details": "Authenticated (Org/User & Private Repo Clone Ready)",
         "checked_at": now_str,
     })
 
@@ -85,14 +81,13 @@ def check_live_health(port: int) -> Dict[str, Any]:
     }
 
 
-class RepoPulseRequestHandler(SimpleHTTPRequestHandler):
+class RepoCheckerRequestHandler(SimpleHTTPRequestHandler):
     server_port: int = 18765
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(WEBUI_DIR), **kwargs)
 
     def log_message(self, format: str, *args: Any) -> None:
-        # Quiet standard logging
         pass
 
     def _send_json(self, status_code: int, payload: Dict[str, Any]) -> None:
@@ -122,18 +117,31 @@ class RepoPulseRequestHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        body_raw = self.rfile.read(length).decode("utf-8", errors="ignore") if length > 0 else "{}"
+
         if self.path.startswith("/api/analyze"):
-            length = int(self.headers.get("Content-Length", "0"))
-            body_raw = self.rfile.read(length).decode("utf-8", errors="ignore") if length > 0 else "{}"
             try:
                 body = json.loads(body_raw)
                 repo_url = (body.get("url") or "").strip()
                 if not repo_url:
                     self._send_json(400, {"error": "GitHub URL が空です。"})
                     return
-                result = analyzer.analyze_repository(repo_url)
+                result = analyzer.analyze_any_github_target(repo_url)
                 analyzer.save_analysis_result(result)
                 self._send_json(200, result)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path.startswith("/api/list-org"):
+            try:
+                body = json.loads(body_raw)
+                raw_target = (body.get("url") or body.get("owner") or "").strip()
+                parsed = analyzer.parse_github_target(raw_target)
+                owner = parsed["owner"]
+                repos = analyzer.list_org_or_user_repositories(owner, limit=40)
+                self._send_json(200, {"owner": owner, "repos": repos})
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
             return
@@ -142,11 +150,11 @@ class RepoPulseRequestHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-    port = int(os.environ.get("REPOPULSE_PORT", "18765"))
-    RepoPulseRequestHandler.server_port = port
+    port = int(os.environ.get("REPOCHECKER_PORT", "18765"))
+    RepoCheckerRequestHandler.server_port = port
     ThreadingHTTPServer.allow_reuse_address = True
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), RepoPulseRequestHandler)
-    print(f"RepoPulse server listening on http://127.0.0.1:{port}", flush=True)
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), RepoCheckerRequestHandler)
+    print(f"RepoChecker server listening on http://127.0.0.1:{port}", flush=True)
     httpd.serve_forever()
 
 

@@ -45,7 +45,7 @@ final class BackendServerManager: ObservableObject {
         } else {
             env["PATH"] = extraPaths
         }
-        env["REPOPULSE_PORT"] = String(port)
+        env["REPOCHECKER_PORT"] = String(port)
         env["PYTHONUNBUFFERED"] = "1"
         proc.environment = env
 
@@ -53,7 +53,7 @@ final class BackendServerManager: ObservableObject {
             try proc.run()
             self.serverProcess = proc
         } catch {
-            NSLog("Failed to start RepoPulse backend server: \(error)")
+            NSLog("Failed to start RepoChecker backend server: \(error)")
         }
 
         Task {
@@ -136,7 +136,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         completionHandler: @escaping () -> Void
     ) {
         let alert = NSAlert()
-        alert.messageText = "RepoPulse"
+        alert.messageText = "RepoChecker"
         alert.informativeText = message
         alert.addButton(withTitle: "OK")
         alert.runModal()
@@ -177,7 +177,7 @@ struct MainContentView: View {
                 VStack(spacing: 14) {
                     ProgressView()
                         .controlSize(.large)
-                    Text("RepoPulse エンジンを起動中...")
+                    Text("RepoChecker エンジンを起動中...")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
                     Text("ローカルCodeRabbit監査 & Mermaid構成図エンジンを初期化しています")
@@ -241,11 +241,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct RepoPulseApp: App {
+struct RepoCheckerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup("RepoPulse — Architecture & CodeRabbit AI Studio") {
+        WindowGroup("RepoChecker — Architecture & CodeRabbit AI Studio") {
             MainContentView(coordinator: appDelegate.coordinator)
                 .frame(minWidth: 1080, minHeight: 700)
                 .preferredColorScheme(.dark)

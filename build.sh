@@ -2,7 +2,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="RepoPulse"
+APP_NAME="RepoChecker"
 BUNDLE_DIR="$DIR/$APP_NAME.app"
 MODE="${1:---install}"
 

@@ -3921,7 +3921,7 @@ def build_portal_html(data, is_shareable=False):
 <body>
   <div id="sidebar">
     <div class="brand-header">
-      <div class="brand-title">RepoPulse <span>Architecture & AI Studio</span></div>
+      <div class="brand-title">RepoChecker <span>Architecture & AI Studio</span></div>
       <div class="live-status"><div class="live-dot"></div> NATIVE MACOS STUDIO (CodeRabbit + Mermaid)</div>
       <div style="margin-top: 10px; background: linear-gradient(135deg, rgba(30, 58, 138, 0.45) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid #3b82f6; border-radius: 9px; padding: 9px 10px;">
         <div style="font-size: 0.72rem; font-weight: 800; color: #93c5fd; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
@@ -3929,7 +3929,7 @@ def build_portal_html(data, is_shareable=False):
           <span style="font-size: 0.64rem; color: #60a5fa; cursor: pointer;" onclick="openAnalyzeModal()">詳細・履歴 ↗</span>
         </div>
         <div style="display: flex; gap: 5px;">
-          <input id="sidebar-gh-url-input" type="text" placeholder="https://github.com/owner/repo"
+          <input id="sidebar-gh-url-input" type="text" placeholder="https://github.com/org または owner/repo"
             style="flex: 1; min-width: 0; background: #090d16; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; color: #f8fafc; font-size: 0.73rem; outline: none;"
             onkeydown="if(event.key==='Enter') triggerSidebarAnalyze()" />
           <button onclick="triggerSidebarAnalyze()" id="sidebar-gh-analyze-btn"
@@ -6011,7 +6011,9 @@ def build_portal_html(data, is_shareable=False):
       const modal = document.getElementById('analyze-repo-modal');
       const input = document.getElementById('modal-gh-url-input');
       const prog = document.getElementById('analyze-progress-box');
+      const browserBox = document.getElementById('org-repos-browser-box');
       if (prog) prog.style.display = 'none';
+      if (browserBox) browserBox.style.display = 'none';
       if (modal) modal.style.display = 'flex';
       if (input) {
         if (prefillUrl) input.value = prefillUrl;
@@ -6028,6 +6030,57 @@ def build_portal_html(data, is_shareable=False):
       const input = document.getElementById('modal-gh-url-input');
       if (input) input.value = url;
       submitModalAnalyze();
+    }
+
+    function quickBrowseOrg(url) {
+      const input = document.getElementById('modal-gh-url-input');
+      if (input) input.value = url;
+      browseOrgRepositories();
+    }
+
+    async function browseOrgRepositories() {
+      const input = document.getElementById('modal-gh-url-input');
+      const rawUrl = (input && input.value.trim()) ? input.value.trim() : 'https://github.com/plusimpact';
+      if (input && !input.value.trim()) input.value = rawUrl;
+
+      const browserBox = document.getElementById('org-repos-browser-box');
+      const titleEl = document.getElementById('org-repos-browser-title');
+      const listEl = document.getElementById('org-repos-browser-list');
+      if (!browserBox || !listEl) return;
+
+      browserBox.style.display = 'block';
+      titleEl.style.color = '#60a5fa';
+      titleEl.textContent = `⏳ "${rawUrl}" 配下のリポジトリ一覧を取得中...`;
+      listEl.innerHTML = '';
+
+      try {
+        const resp = await fetch('/api/list-org', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: rawUrl })
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error(data.error || '一覧の取得に失敗しました');
+
+        const repos = data.repos || [];
+        titleEl.textContent = `📂 ${data.owner} 配下のリポジトリ一覧 (${repos.length}件) — クリックで個別解析、右ボタンで全体エコシステム一括解析`;
+        listEl.innerHTML = repos.map(r => `
+          <div onclick="quickFillAndAnalyze('${r.url}')"
+            style="background: #111827; border: 1px solid #334155; border-radius: 6px; padding: 8px 10px; cursor: pointer; transition: all 0.15s;"
+            onmouseover="this.style.borderColor='#60a5fa'" onmouseout="this.style.borderColor='#334155'">
+            <div style="font-size: 0.76rem; font-weight: 800; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              📦 ${r.name}
+            </div>
+            <div style="font-size: 0.66rem; color: #38bdf8; margin-top: 2px;">${r.language || 'Code'}</div>
+            <div style="font-size: 0.65rem; color: #94a3b8; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              ${r.description || 'クリックしてこのリポジトリを解析'}
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        titleEl.style.color = '#f87171';
+        titleEl.textContent = `❌ 一覧取得エラー: ${err.message}`;
+      }
     }
 
     function triggerSidebarAnalyze() {
@@ -6054,7 +6107,7 @@ def build_portal_html(data, is_shareable=False):
       if (prog) prog.style.display = 'block';
       if (progTitle) {
         progTitle.style.color = '#38bdf8';
-        progTitle.textContent = `⏳ "${repoUrl}" をクローン＆CodeRabbit解析中...`;
+        progTitle.textContent = `⏳ "${repoUrl}" を自動解析中（親階層の場合は全体エコシステム＋配下リポジトリを一括構築します）...`;
       }
       if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ 解析中...'; }
       if (sideBtn) { sideBtn.disabled = true; sideBtn.textContent = '⏳...'; }
@@ -6070,19 +6123,22 @@ def build_portal_html(data, is_shareable=False):
           throw new Error(data.error || '解析サーバーエラーが発生しました');
         }
 
-        // Merge specs and schemas
         if (data.techSpecs) Object.assign(techSpecs, data.techSpecs);
         if (data.tableSchemas) Object.assign(tableSchemas, data.tableSchemas);
 
-        // Prepend or update diagram in diagrams list
-        const newDiag = data.diagram;
-        const existIdx = diagrams.findIndex(d => d.id === newDiag.id || d.github_url === newDiag.github_url);
-        if (existIdx !== -1) {
-          diagrams.splice(existIdx, 1);
-        }
-        diagrams.unshift(newDiag);
+        const returnedDiagrams = Array.isArray(data.diagrams) && data.diagrams.length > 0
+          ? data.diagrams
+          : (data.diagram ? [data.diagram] : []);
 
-        // Reset filter to all and select new diagram at index 0
+        for (let i = returnedDiagrams.length - 1; i >= 0; i--) {
+          const d = returnedDiagrams[i];
+          const existIdx = diagrams.findIndex(x => x.id === d.id || (x.github_url === d.github_url && x.perspective === d.perspective));
+          if (existIdx !== -1) {
+            diagrams.splice(existIdx, 1);
+          }
+          diagrams.unshift(d);
+        }
+
         currentFreshnessFilter = 'all';
         const searchEl = document.getElementById('search-box');
         if (searchEl) searchEl.value = '';
@@ -6115,7 +6171,7 @@ def build_portal_html(data, is_shareable=False):
         if (Array.isArray(state.diagrams) && state.diagrams.length > 0) {
           for (let i = state.diagrams.length - 1; i >= 0; i--) {
             const d = state.diagrams[i];
-            const existIdx = diagrams.findIndex(x => x.id === d.id || x.github_url === d.github_url);
+            const existIdx = diagrams.findIndex(x => x.id === d.id || (x.github_url === d.github_url && x.perspective === d.perspective));
             if (existIdx !== -1) diagrams.splice(existIdx, 1);
             diagrams.unshift(d);
           }
@@ -7024,26 +7080,31 @@ def build_portal_html(data, is_shareable=False):
 
   <!-- Analyze Any GitHub Repository Modal -->
   <div id="analyze-repo-modal" style="display: none;" onclick="closeAnalyzeModal()">
-    <div class="action-hub-dialog" onclick="event.stopPropagation()" style="border-color: #3b82f6; max-width: 680px;">
+    <div class="action-hub-dialog" onclick="event.stopPropagation()" style="border-color: #3b82f6; max-width: 760px;">
       <div class="action-hub-header" style="background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);">
         <div style="display: flex; align-items: center; gap: 10px;">
           <span style="font-size: 1.4rem;">🔍</span>
           <div>
-            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">GitHub リポジトリ自動解析 (Universal Code Analyzer)</h3>
-            <span style="font-size: 0.72rem; color: #93c5fd;">任意のGitHub URLまたは owner/repo から構成図・シーケンス図・CodeRabbit監査を生成</span>
+            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">GitHub 組織・ユーザー / リポジトリ自動解析 (RepoChecker)</h3>
+            <span style="font-size: 0.72rem; color: #93c5fd;">上の階層（例: https://github.com/plusimpact）からの全体エコシステム一括解析 ＆ 個別リポジトリ解析に対応</span>
           </div>
         </div>
         <button class="modal-close-btn" onclick="closeAnalyzeModal()">✕ 閉じる</button>
       </div>
-      <div class="action-hub-body" style="padding: 20px;">
+      <div class="action-hub-body" style="padding: 20px; overflow-y: auto; max-height: 75vh;">
         <div style="margin-bottom: 14px;">
           <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #e2e8f0; margin-bottom: 6px;">
-            🔗 分析したい GitHub リポジトリ URL または <code style="color: #38bdf8;">owner/repo</code>:
+            🔗 親階層の組織/ユーザーURL (<code style="color: #34d399;">https://github.com/org</code>) または リポジトリURL (<code style="color: #38bdf8;">owner/repo</code>):
           </label>
-          <div style="display: flex; gap: 8px;">
-            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/nanonigit/AmazonDeliverySync"
-              style="flex: 1; background: #090d16; border: 1.5px solid #3b82f6; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 0.88rem; outline: none;"
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/plusimpact または https://github.com/nanonigit/RepoChecker"
+              style="flex: 1; min-width: 260px; background: #090d16; border: 1.5px solid #3b82f6; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 0.88rem; outline: none;"
               onkeydown="if(event.key==='Enter') submitModalAnalyze()" />
+            <button id="modal-gh-browse-btn" onclick="browseOrgRepositories()"
+              style="background: #1e293b; border: 1px solid #60a5fa; color: #93c5fd; font-size: 0.8rem; font-weight: 800; padding: 10px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;"
+              title="親階層(組織/ユーザー)に含まれるリポジトリ一覧を表示して選択できます">
+              📂 配下一覧を表示
+            </button>
             <button id="modal-gh-submit-btn" onclick="submitModalAnalyze()"
               style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: 1px solid #60a5fa; color: #fff; font-size: 0.85rem; font-weight: 800; padding: 10px 20px; border-radius: 8px; cursor: pointer; white-space: nowrap;">
               🚀 分析開始
@@ -7051,15 +7112,33 @@ def build_portal_html(data, is_shareable=False):
           </div>
         </div>
 
-        <div style="margin-bottom: 16px;">
-          <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 6px;">💡 ワンクリックで試せるサンプル / 自分のGitHubリポジトリ:</div>
+        <div style="margin-bottom: 14px;">
+          <div style="font-size: 0.72rem; color: #34d399; font-weight: 700; margin-bottom: 6px;">🏢 上の階層（組織 / ユーザー全体エコシステム）からまとめて調べる:</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;">
+            <button class="table-view-btn" style="border-color: #10b981; color: #6ee7b7;" onclick="quickFillAndAnalyze('https://github.com/plusimpact')">🏢 https://github.com/plusimpact (組織全体・全リポジトリ)</button>
+            <button class="table-view-btn" style="border-color: #10b981; color: #6ee7b7;" onclick="quickFillAndAnalyze('https://github.com/nanonigit')">👤 https://github.com/nanonigit (個人全体・全リポジトリ)</button>
+            <button class="table-view-btn" onclick="quickBrowseOrg('https://github.com/plusimpact')">📂 plusimpact のリポジトリ一覧を開く</button>
+            <button class="table-view-btn" onclick="quickBrowseOrg('https://github.com/nanonigit')">📂 nanonigit のリポジトリ一覧を開く</button>
+          </div>
+
+          <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 6px;">📦 個別リポジトリをダイレクトに調べる:</div>
           <div style="display: flex; flex-wrap: wrap; gap: 6px;">
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/AmazonDeliverySync')">📦 nanonigit/AmazonDeliverySync</button>
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/VisualBarTimer')">⏱️ nanonigit/VisualBarTimer</button>
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/DesktopCalendar')">📅 nanonigit/DesktopCalendar</button>
-            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/DragShelf')">🗂️ nanonigit/DragShelf</button>
-            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/RepoPulse')">🐰 nanonigit/RepoPulse (このアプリ自身)</button>
+            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/RepoChecker')">🐰 nanonigit/RepoChecker (このアプリ自身)</button>
           </div>
+        </div>
+
+        <!-- Organization / User Repository Browser List -->
+        <div id="org-repos-browser-box" style="display: none; background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+            <div id="org-repos-browser-title" style="font-size: 0.8rem; font-weight: 800; color: #60a5fa;">📂 配下リポジトリ一覧</div>
+            <button class="table-view-btn" style="background: #2563eb; color: #fff; border-color: #60a5fa;" onclick="submitModalAnalyze()">
+              🏢 この組織の全体エコシステム＋全リポジトリを一括解析
+            </button>
+          </div>
+          <div id="org-repos-browser-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; max-height: 240px; overflow-y: auto;"></div>
         </div>
 
         <div id="analyze-progress-box" style="display: none; background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 14px;">
@@ -7067,8 +7146,8 @@ def build_portal_html(data, is_shareable=False):
             ⏳ リポジトリをクローン＆静的解析中...
           </div>
           <div id="analyze-progress-detail" style="font-size: 0.74rem; color: #94a3b8; line-height: 1.5;">
-            1. GitHub リポジトリの取得 (gh / git clone)<br/>
-            2. ディレクトリ構造・依存パッケージ・CVE診断<br/>
+            1. 親階層(組織/ユーザー)の全リポジトリ検出 または git clone<br/>
+            2. 全体エコシステム構成図 (ECO) ＆ 依存パッケージ・CVE診断<br/>
             3. Mermaid 構成図・シーケンス図の自動合成<br/>
             4. CodeRabbit AI ルール監査 & 要対応箇所の特定
           </div>
@@ -7109,7 +7188,7 @@ def build_portal_html(data, is_shareable=False):
         out_path = Path(__file__).resolve().parent.parent / "webui" / "index.html"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(html, encoding="utf-8")
-        print(f"Generated RepoPulse webui at {out_path}")
+        print(f"Generated RepoChecker webui at {out_path}")
 
 def main():
     data = collect_all_data()
