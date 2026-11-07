@@ -7151,7 +7151,7 @@ def build_portal_html(data, is_shareable=False):
       if (selectedDiagram && selectedDiagram.node_specs) {
         for (const [k, v] of Object.entries(selectedDiagram.node_specs)) {
           if (k.toLowerCase().includes(lower) || (v.title && v.title.toLowerCase().includes(lower))) {
-            return `${v.category || 'Component'} | ${v.tech || ''}`.replace(/\|\s*$/, '').trim();
+            return `${v.category || 'Component'} | ${v.tech || ''}`.replace(/\\|\\s*$/, '').trim();
           }
         }
       }
