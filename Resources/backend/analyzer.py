@@ -811,13 +811,19 @@ def build_mermaid_sequences(repo_name: str, components: List[Dict[str, Any]]) ->
 
     return [
         {
-            "title": f"1. {repo_name} メイン実行パイプライン",
+            "id": f"seq-{re.sub(r'[^a-zA-Z0-9]', '', repo_name).lower()}-main",
+            "short_title": f"{repo_name} メイン実行パイプライン",
+            "title": f"{repo_name} メイン実行パイプライン",
             "desc": f"{repo_name} におけるユーザー操作からコアモジュール・データ層までの標準実行シーケンスです。",
+            "diagram": seq1,
             "mermaid": seq1,
         },
         {
-            "title": "2. 非同期データ同期・エラーハンドリングフロー",
+            "id": f"seq-{re.sub(r'[^a-zA-Z0-9]', '', repo_name).lower()}-async",
+            "short_title": "非同期データ同期・エラーハンドリングフロー",
+            "title": "非同期データ同期・エラーハンドリングフロー",
             "desc": "外部API・OSサービス連携時の非同期通信と異常系リカバリのシーケンスです。",
+            "diagram": seq2,
             "mermaid": seq2,
         },
     ]
@@ -983,13 +989,22 @@ def run_coderabbit_static_audit(
 
     walkthrough = [
         {
+            "title": c["name"],
+            "desc": c["desc"],
             "path": c["path"],
             "summary": f"{c['name']}: {c['desc']}",
         }
         for c in components
     ]
 
-    has_high_or_med = any(a.get("severity") in ("high", "medium") for a in action_items)
+    crit_cnt = sum(1 for a in action_items if str(a.get("severity", "")).lower() in ("critical", "high"))
+    warn_cnt = sum(1 for a in action_items if str(a.get("severity", "")).lower() in ("warning", "medium"))
+    info_cnt = max(1, sum(1 for a in action_items if str(a.get("severity", "")).lower() in ("info", "low")))
+
+    for f_item in findings:
+        f_item.setdefault("comment", f_item.get("desc", ""))
+
+    has_high_or_med = any(a.get("severity") in ("high", "medium", "critical") for a in action_items)
     score = max(72, 98 - (len(action_items) * 6))
     status = "ACTION_REQUIRED" if has_high_or_med else "CLEAN"
 
@@ -1005,6 +1020,9 @@ def run_coderabbit_static_audit(
             )
         ),
         "stats": {
+            "critical": crit_cnt,
+            "warning": warn_cnt,
+            "info": info_cnt,
             "files_reviewed": max(1, files_reviewed),
             "Security": max(75, 100 - len(deps.get("security_advisories", [])) * 15),
             "Reliability": max(78, 96 - len(action_items) * 5),
@@ -1434,8 +1452,11 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
         "github_url": f"https://github.com/{owner}",
         "sequences": [
             {
-                "title": f"1. {owner} エコシステム全体連携シーケンス",
+                "id": f"seq-org-{owner.lower()}-ecosystem",
+                "short_title": f"{owner} エコシステム全体連携シーケンス",
+                "title": f"{owner} エコシステム全体連携シーケンス",
                 "desc": f"{owner} 配下の主要リポジトリ（{', '.join(top_rnames)}）間の連携と監査パイプラインです。",
+                "diagram": eco_seq,
                 "mermaid": eco_seq,
             }
         ],
@@ -1444,6 +1465,9 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
             "status": "ACTION_REQUIRED" if eco_action_items else "CLEAN",
             "summary": f"親階層 `https://github.com/{owner}` から全 {len(repos_meta)} リポジトリを一括検出し、エコシステム全体の構成図および各リポジトリの CodeRabbit 監査を統合しました。",
             "stats": {
+                "critical": sum(1 for a in eco_action_items if str(a.get("severity", "")).lower() in ("critical", "high")),
+                "warning": sum(1 for a in eco_action_items if str(a.get("severity", "")).lower() in ("warning", "medium")),
+                "info": max(1, len(repos_meta)),
                 "files_reviewed": len(repos_meta) * 12,
                 "Security": 92,
                 "Reliability": 88,
@@ -1451,11 +1475,16 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
                 "Performance": 91,
             },
             "walkthrough": [
-                {"path": f"{owner}/{r['name']}", "summary": r.get("description") or f"{r.get('language') or 'Code'} リポジトリ"}
+                {
+                    "title": f"{owner}/{r['name']}",
+                    "desc": r.get("description") or f"{r.get('language') or 'Code'} リポジトリ",
+                    "path": f"{owner}/{r['name']}",
+                    "summary": r.get("description") or f"{r.get('language') or 'Code'} リポジトリ",
+                }
                 for r in repos_meta[:12]
             ],
             "action_items": eco_action_items,
-            "findings": eco_action_items,
+            "findings": [{**a, "comment": a.get("desc", "")} for a in eco_action_items],
         },
     }
 
@@ -1493,6 +1522,37 @@ def load_saved_analyses() -> Dict[str, Any]:
             data.setdefault("techSpecs", {})
             data.setdefault("tableSchemas", {})
             data.setdefault("deleted_ids", [])
+            # Normalize any legacy sequence objects missing `diagram` or `id` and coderabbit stats
+            for d in data.get("diagrams", []):
+                for idx, s in enumerate(d.get("sequences", [])):
+                    if not s.get("diagram") and s.get("mermaid"):
+                        s["diagram"] = s["mermaid"]
+                    if not s.get("mermaid") and s.get("diagram"):
+                        s["mermaid"] = s["diagram"]
+                    if not s.get("id"):
+                        s["id"] = f"seq-{idx + 1}"
+                    raw_t = s.get("short_title") or s.get("title") or f"Sequence {idx + 1}"
+                    clean_t = re.sub(r"^\d+\.\s*", "", raw_t)
+                    s["short_title"] = clean_t
+                    s["title"] = clean_t
+                cr = d.get("coderabbit")
+                if isinstance(cr, dict):
+                    acts = cr.get("action_items") or []
+                    st = cr.setdefault("stats", {})
+                    if st.get("critical") is None:
+                        st["critical"] = sum(1 for a in acts if str(a.get("severity", "")).lower() in ("critical", "high"))
+                    if st.get("warning") is None:
+                        st["warning"] = sum(1 for a in acts if str(a.get("severity", "")).lower() in ("warning", "medium"))
+                    if st.get("info") is None:
+                        st["info"] = max(1, sum(1 for a in acts if str(a.get("severity", "")).lower() in ("info", "low")))
+                    for w in cr.get("walkthrough") or []:
+                        if not w.get("title"):
+                            w["title"] = w.get("path") or "Module"
+                        if not w.get("desc"):
+                            w["desc"] = w.get("summary") or ""
+                    for f in cr.get("findings") or []:
+                        if not f.get("comment"):
+                            f["comment"] = f.get("desc") or ""
             return data
         except Exception:
             pass

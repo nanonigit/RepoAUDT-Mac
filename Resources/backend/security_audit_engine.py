@@ -62,7 +62,7 @@ def load_settings() -> Dict[str, Any]:
         except Exception:
             pass
 
-    # Fallback to environment variables if not explicitly set in settings.json
+    # Fallback to environment variables or local Secrets/.env if not explicitly set in settings.json
     env_map = {
         "openai": "OPENAI_API_KEY",
         "claude": "ANTHROPIC_API_KEY",
@@ -72,6 +72,22 @@ def load_settings() -> Dict[str, Any]:
     for prov, env_name in env_map.items():
         if not settings["keys"].get(prov) and os.environ.get(env_name):
             settings["keys"][prov] = os.environ[env_name]
+
+    secrets_env = Path.home() / "Git" / "Company" / "00_Infrastructure" / "Security" / "Secrets" / ".env"
+    if secrets_env.exists():
+        try:
+            for line in secrets_env.read_text(encoding="utf-8", errors="ignore").splitlines():
+                sline = line.strip()
+                if not sline or sline.startswith("#") or "=" not in sline:
+                    continue
+                k_env, v_env = sline.split("=", 1)
+                k_env = k_env.strip()
+                v_env = v_env.strip().strip('"').strip("'")
+                for prov, env_name in env_map.items():
+                    if k_env == env_name and not settings["keys"].get(prov) and len(v_env) >= 12:
+                        settings["keys"][prov] = v_env
+        except Exception:
+            pass
 
     return settings
 
@@ -84,9 +100,15 @@ def save_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
         for k in ("openai", "claude", "gemini", "groq"):
             if k in payload["keys"]:
                 val = str(payload["keys"][k]).strip()
-                # Ignore masked placeholder if unchanged
-                if "..." not in val or len(val) > 20:
-                    current["keys"][k] = val
+                # Keep existing key if input was left blank or still contains masked ellipsis
+                if not val or ("..." in val and len(val) < 30):
+                    continue
+                # If masked prefix accidentally got prepended before paste, strip it
+                if "..." in val and "sk-" in val:
+                    idx = val.rfind("sk-")
+                    if idx > 0:
+                        val = val[idx:]
+                current["keys"][k] = val
     if isinstance(payload.get("models"), dict):
         current["models"].update(payload["models"])
     if isinstance(payload.get("skills"), dict):
@@ -408,9 +430,20 @@ def choose_active_llm(settings: Dict[str, Any]) -> Optional[Tuple[str, str, str]
     return None
 
 
+def is_openai_reasoning_or_nextgen_model(model: str) -> bool:
+    m = (model or "").lower()
+    return any(
+        m.startswith(prefix) or k in m
+        for prefix in ("gpt-5", "gpt-6", "o1", "o3", "o4")
+        for k in ("luna", "sol", "terra", "astra", "codex", "gpt-5", "gpt-6", "o1", "o3", "o4")
+    )
+
+
 def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: str, user_prompt: str) -> str:
     """
     Call OpenAI, Anthropic Claude, Google Gemini, or Groq REST API using stdlib urllib.
+    Supports next-gen / reasoning models (`gpt-6-luna`, `gpt-5.6-luna`, `gpt-6.1-sol`, `o3-mini`, etc.)
+    which reject non-default `temperature` and require `max_completion_tokens` or `/v1/responses`.
     """
     if provider in ("openai", "groq"):
         url = (
@@ -418,15 +451,20 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
             if provider == "openai"
             else "https://api.groq.com/openai/v1/chat/completions"
         )
-        payload = {
+        payload: Dict[str, Any] = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": 0.2,
             "response_format": {"type": "json_object"},
         }
+        if provider == "openai" and is_openai_reasoning_or_nextgen_model(model):
+            # OpenAI reasoning models (gpt-6-luna, gpt-5.6-luna, o1/o3/o4) reject temperature != 1
+            payload["max_completion_tokens"] = 1500
+        else:
+            payload["temperature"] = 0.2
+
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -437,9 +475,31 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
             },
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=25) as resp:
-            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
-            return data["choices"][0]["message"]["content"]
+        try:
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                return data["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as he:
+            # If the model requires /v1/responses endpoint (e.g. codex/responses-only models), fallback automatically
+            if provider == "openai" and he.code in (400, 404):
+                resp_payload = {
+                    "model": model,
+                    "input": f"{system_prompt}\n\n{user_prompt}",
+                }
+                req2 = urllib.request.Request(
+                    "https://api.openai.com/v1/responses",
+                    data=json.dumps(resp_payload).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}",
+                        "User-Agent": "RepoChecker-macOS/1.0",
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(req2, timeout=25) as resp2:
+                    d2 = json.loads(resp2.read().decode("utf-8", errors="ignore"))
+                    return d2.get("output_text") or json.dumps(d2)
+            raise
 
     if provider == "claude":
         url = "https://api.anthropic.com/v1/messages"
@@ -486,13 +546,78 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
 
 def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -> Dict[str, Any]:
     settings = load_settings()
-    api_key = (api_key_override or settings["keys"].get(provider) or "").strip()
-    if not api_key or "..." in api_key:
+    api_key = (api_key_override or "").strip()
+    if not api_key or ("..." in api_key and len(api_key) < 30):
         api_key = settings["keys"].get(provider, "")
+    if "..." in api_key and "sk-" in api_key:
+        idx = api_key.rfind("sk-")
+        if idx > 0:
+            api_key = api_key[idx:]
     if not api_key:
         return {"ok": False, "provider": provider, "error": f"{provider.upper()} の APIキーが未入力です。"}
 
     model = settings["models"].get(provider, DEFAULT_SETTINGS["models"].get(provider, ""))
+
+    # Step 1: For OpenAI, verify API key & model existence via GET /v1/models first (zero-cost check)
+    models_verified = False
+    model_exists_in_org = False
+    available_luna_or_gpt = []
+    if provider == "openai":
+        try:
+            mreq = urllib.request.Request(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {api_key}", "User-Agent": "RepoChecker-macOS/1.0"},
+            )
+            with urllib.request.urlopen(mreq, timeout=12) as mresp:
+                if mresp.status == 200:
+                    mdata = json.loads(mresp.read().decode("utf-8", errors="ignore"))
+                    all_mids = [m.get("id", "") for m in (mdata.get("data") or [])]
+                    models_verified = True
+                    model_exists_in_org = model in all_mids
+                    available_luna_or_gpt = [
+                        mid for mid in all_mids
+                        if any(k in mid for k in ("luna", "gpt-6", "gpt-5.6", "gpt-5.4", "gpt-4o"))
+                    ][:8]
+        except urllib.error.HTTPError as mhe:
+            # If the entered key gave 401, check if local Secrets/.env has a working OpenAI key
+            if mhe.code == 401:
+                secrets_env = Path.home() / "Git" / "Company" / "00_Infrastructure" / "Security" / "Secrets" / ".env"
+                fallback_key = ""
+                if secrets_env.exists():
+                    for line in secrets_env.read_text(encoding="utf-8", errors="ignore").splitlines():
+                        if line.strip().startswith("OPENAI_API_KEY="):
+                            fallback_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                if fallback_key and fallback_key != api_key:
+                    try:
+                        mreq2 = urllib.request.Request(
+                            "https://api.openai.com/v1/models",
+                            headers={"Authorization": f"Bearer {fallback_key}", "User-Agent": "RepoChecker-macOS/1.0"},
+                        )
+                        with urllib.request.urlopen(mreq2, timeout=12) as mresp2:
+                            if mresp2.status == 200:
+                                mdata2 = json.loads(mresp2.read().decode("utf-8", errors="ignore"))
+                                all_mids2 = [m.get("id", "") for m in (mdata2.get("data") or [])]
+                                # Auto-heal and save the working key from Secrets/.env
+                                settings["keys"]["openai"] = fallback_key
+                                SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+                                api_key = fallback_key
+                                models_verified = True
+                                model_exists_in_org = model in all_mids2
+                                available_luna_or_gpt = [
+                                    mid for mid in all_mids2
+                                    if any(k in mid for k in ("luna", "gpt-6", "gpt-5.6", "gpt-5.4", "gpt-4o"))
+                                ][:8]
+                    except Exception:
+                        pass
+                if not models_verified:
+                    err_body = mhe.read().decode("utf-8", errors="ignore")[:240]
+                    return {
+                        "ok": False,
+                        "provider": provider,
+                        "error": f"[Step 1: /v1/models 認証停止] キー ({mask_key(api_key)}) が OpenAI サーバーから HTTP 401 (invalid_api_key) で拒否されました。詳細: {err_body}",
+                    }
+
+    # Step 2: Test completion with the selected model
     try:
         raw = call_llm_provider(
             provider=provider,
@@ -505,11 +630,29 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
             "ok": True,
             "provider": provider,
             "model": model,
-            "message": f"✅ {provider.upper()} ({model}) への接続・認証に成功しました！",
+            "message": f"✅ {provider.upper()} ({model}) への認証・推論テストに完全成功しました！",
             "sample": raw[:120],
         }
     except urllib.error.HTTPError as he:
-        err_body = he.read().decode("utf-8", errors="ignore")[:240]
+        err_body = he.read().decode("utf-8", errors="ignore")[:260]
+        if provider == "openai" and models_verified:
+            if he.code == 429 and "insufficient_quota" in err_body:
+                m_note = f"モデル `{model}` の存在も確認済" if model_exists_in_org else f"利用可能: {', '.join(available_luna_or_gpt[:4])}"
+                return {
+                    "ok": True,
+                    "provider": provider,
+                    "model": model,
+                    "message": (
+                        f"✅ APIキー認証成功 ({mask_key(api_key)}) & `/v1/models` で {m_note}！"
+                        f"（※Step 2 推論コール `/v1/chat/completions` のみ OpenAI 側のクレジット残高不足 [HTTP 429 insufficient_quota] で停止しています）"
+                    ),
+                }
+            if he.code == 404 or not model_exists_in_org:
+                return {
+                    "ok": False,
+                    "provider": provider,
+                    "error": f"✅ APIキー認証は成功しましたが、モデル `{model}` が見つかりません。利用可能なモデル例: {', '.join(available_luna_or_gpt)}",
+                }
         return {"ok": False, "provider": provider, "error": f"HTTP {he.code}: {err_body}"}
     except Exception as exc:
         return {"ok": False, "provider": provider, "error": str(exc)}

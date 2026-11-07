@@ -3765,10 +3765,10 @@ def build_portal_html(data, is_shareable=False):
     .sequence-walkthrough-panel {
       background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(11, 17, 32, 0.98) 100%);
       border-bottom: 1px solid #1e293b;
-      padding: 10px 20px;
+      padding: 6px 16px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
       flex-shrink: 0;
       z-index: 20;
     }
@@ -4121,11 +4121,7 @@ def build_portal_html(data, is_shareable=False):
         </div>
         <div class="wt-steps-pills" id="wt-steps-pills"></div>
       </div>
-      <div class="wt-transition-card" id="wt-transition-card">
-        <div style="font-size: 0.76rem; color: #94a3b8;">
-          👆 <strong>「次へ ▶」</strong> または <strong>「▶ 自動再生」</strong>（キーボードの <code>←</code> <code>→</code> キーも対応）を押すと、シーケンス図の各ステップごとに「どの機能からどの機能へ何が遷移するか」を順番にハイライト追跡できます。
-        </div>
-      </div>
+      <div class="wt-transition-card" id="wt-transition-card" style="display: none;"></div>
     </div>
 
     <div class="canvas-layout">
@@ -5202,6 +5198,7 @@ def build_portal_html(data, is_shareable=False):
                     </div>
                   ` : ''}
                 </div>
+                ${renderAiAgentPromptWidget(repoItem.repo, act)}
               </div>
             `).join('')}
           </div>
@@ -5541,6 +5538,7 @@ def build_portal_html(data, is_shareable=False):
                     <button class="hotspot-copy-btn" onclick="copyToClipboard('${act.fix_cmd.replace(/'/g, "\'")}', this)">コピー</button>
                   </div>
                 ` : ''}
+                ${renderAiAgentPromptWidget(repoItem.repo, act)}
               </div>
             `).join('')}
           ` : '<div class="desc-text" style="color: #34d399;">🟢 緊急の要対応事項はありません</div>'}
@@ -5665,8 +5663,16 @@ def build_portal_html(data, is_shareable=False):
         findings: []
       };
 
+      const actionList = cr.action_items || [];
+      const findingList = cr.findings || [];
+      const stObj = cr.stats || {};
+      const critCount = stObj.critical !== undefined ? stObj.critical : actionList.filter(a => ['critical', 'high'].includes(String(a.severity || '').toLowerCase())).length;
+      const warnCount = stObj.warning !== undefined ? stObj.warning : actionList.filter(a => ['warning', 'medium'].includes(String(a.severity || '').toLowerCase())).length;
+      const infoCount = stObj.info !== undefined ? stObj.info : Math.max(1, actionList.filter(a => ['info', 'low'].includes(String(a.severity || '').toLowerCase())).length);
+
+      const hasAction = cr.status === 'NEEDS_ATTENTION' || cr.status === 'ACTION_REQUIRED' || actionList.length > 0;
       const scoreClass = cr.score >= 90 ? 'score-high' : (cr.score >= 80 ? 'score-med' : 'score-low');
-      const statusLabel = cr.status === 'NEEDS_ATTENTION' ? '🔴 要対応 (Action Required)' : (cr.status === 'PASSED_WITH_WARNINGS' ? '🟡 要確認 (Warnings)' : '🟢 合格 (Passed)');
+      const statusLabel = hasAction ? '🔴 要対応 (Action Required)' : (cr.status === 'PASSED_WITH_WARNINGS' ? '🟡 要確認 (Warnings)' : '🟢 合格 (Passed)');
 
       viewBreadcrumb.textContent = `plusimpact / ${repo.repo} / coderabbit-ai-review`;
 
@@ -5679,7 +5685,7 @@ def build_portal_html(data, is_shareable=False):
               <div class="cr-header-titles">
                 <h2>
                   <span>CodeRabbit AI コード品質 & セキュリティ監査レポート</span>
-                  <span style="font-size: 0.72rem; padding: 3px 8px; border-radius: 4px; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.4); color: #c7d2fe;">
+                  <span style="font-size: 0.72rem; padding: 3px 8px; border-radius: 4px; background: ${hasAction ? 'rgba(239, 68, 68, 0.2)' : 'rgba(99, 102, 241, 0.2)'}; border: 1px solid ${hasAction ? '#ef4444' : 'rgba(99, 102, 241, 0.4)'}; color: ${hasAction ? '#fca5a5' : '#c7d2fe'};">
                     ${statusLabel}
                   </span>
                 </h2>
@@ -5697,15 +5703,15 @@ def build_portal_html(data, is_shareable=False):
               <div class="cr-counts-pill-group">
                 <div class="cr-count-item crit">
                   <span>🚨 重大リスク (Critical)</span>
-                  <strong>${cr.stats.critical}件</strong>
+                  <strong>${critCount}件</strong>
                 </div>
                 <div class="cr-count-item warn">
                   <span>⚠️ 警告 (Warning)</span>
-                  <strong>${cr.stats.warning}件</strong>
+                  <strong>${warnCount}件</strong>
                 </div>
                 <div class="cr-count-item info">
                   <span>💡 改善提案 (Suggestion)</span>
-                  <strong>${cr.stats.info}件</strong>
+                  <strong>${infoCount}件</strong>
                 </div>
               </div>
             </div>
@@ -5741,6 +5747,7 @@ def build_portal_html(data, is_shareable=False):
                         <button class="hotspot-copy-btn" onclick="copyToClipboard('${act.fix_cmd.replace(/'/g, "\'")}', this)">📋 コマンドをコピー</button>
                       </div>
                     ` : ''}
+                    ${renderAiAgentPromptWidget(repo.repo, act)}
                   </div>
                 `).join('')}
               </div>
@@ -5767,10 +5774,10 @@ def build_portal_html(data, is_shareable=False):
               ${cr.walkthrough && cr.walkthrough.length > 0 ? cr.walkthrough.map((w, idx) => `
                 <div style="background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 12px 14px;">
                   <div style="font-size: 0.82rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px;">
-                    ${idx + 1}. ${w.title}
+                    ${idx + 1}. ${w.title || w.path || 'Module'}
                   </div>
                   <div style="font-size: 0.75rem; color: #94a3b8; line-height: 1.45;">
-                    ${w.desc}
+                    ${w.desc || w.summary || ''}
                   </div>
                 </div>
               `).join('') : '<div style="color: #64748b; font-size: 0.8rem;">ウォークスルー情報がありません。</div>'}
@@ -5787,8 +5794,8 @@ def build_portal_html(data, is_shareable=False):
               <div class="cr-finding-card">
                 <div class="cr-finding-header">
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="sec-legend-badge ${f.severity === 'CRITICAL' ? 'sec-legend-red' : (f.severity === 'WARNING' ? 'pill-yellow' : 'sec-legend-green')}">
-                      ${f.severity || 'INFO'}
+                    <span class="sec-legend-badge ${String(f.severity || '').toUpperCase() === 'CRITICAL' || String(f.severity || '').toUpperCase() === 'HIGH' ? 'sec-legend-red' : (String(f.severity || '').toUpperCase() === 'WARNING' || String(f.severity || '').toUpperCase() === 'MEDIUM' ? 'pill-yellow' : 'sec-legend-green')}">
+                      ${String(f.severity || 'INFO').toUpperCase()}
                     </span>
                     <span style="font-size: 0.78rem; font-weight: 700; color: #fff;">${f.title}</span>
                   </div>
@@ -5796,7 +5803,7 @@ def build_portal_html(data, is_shareable=False):
                 </div>
                 <div class="cr-finding-body">
                   <div class="cr-finding-comment">
-                    ${f.comment}
+                    ${f.comment || f.desc || ''}
                   </div>
                   ${f.diff ? `
                     <div style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 4px; font-weight: 700;">
@@ -5808,6 +5815,7 @@ def build_portal_html(data, is_shareable=False):
                       return `<span>${line}</span>`;
                     }).join('<br/>')}</pre>
                   ` : ''}
+                  ${renderAiAgentPromptWidget(repo.repo, f)}
                 </div>
               </div>
             `).join('') : '<div style="color: #64748b; font-size: 0.8rem;">指摘事項はありません。</div>'}
@@ -5833,6 +5841,38 @@ def build_portal_html(data, is_shareable=False):
     /* ==========================================================================
        Action Required Highlighting & Interactive Reason/Remedy Modal
        ========================================================================== */
+    function buildAiAgentFixPrompt(repoName, act) {
+      const targetFile = (act.file || 'src/').split(' (Target:')[0].trim();
+      const title = act.title || 'セキュリティ・品質要対応イシュー';
+      const desc = act.desc || act.comment || '検出されたリスクを修正してください。';
+      const diffHint = act.diff ? `\\n【推奨修正Diffの目安】:\\n${act.diff}` : '';
+      const cmdHint = act.fix_cmd ? `\\n【確認・適用コマンド】:\\n$ ${act.fix_cmd}` : '';
+      return `リポジトリ「${repoName}」のファイル \\\`${targetFile}\\\` における以下の要対応イシューを修正してください。\\n\\n【検知された問題】: ${title}\\n【対象ファイル・箇所】: ${targetFile}\\n【要対応の理由・リスク】: ${desc}${diffHint}${cmdHint}\\n\\n【修正要件】:\\n1. \\\`${targetFile}\\\` の該当箇所を特定し、上記のセキュリティ・堅牢性基準を満たすように安全に実装を修正してください。\\n2. 既存の関数シグネチャや呼び出し元との互換性を維持し、副作用が出ないようにしてください。\\n3. 修正後に構文チェック・型チェック・テストを実行してエラーがないことを確認してください。`;
+    }
+
+    function renderAiAgentPromptWidget(repoName, act) {
+      const promptText = buildAiAgentFixPrompt(repoName || 'Repository', act || {});
+      const encodedPrompt = encodeURIComponent(promptText);
+      const escapedHtml = promptText
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      return `
+        <div style="margin-top: 10px; background: linear-gradient(145deg, rgba(30, 27, 75, 0.78) 0%, rgba(15, 23, 42, 0.92) 100%); border: 1px solid rgba(139, 92, 246, 0.55); border-left: 3px solid #a78bfa; border-radius: 7px; padding: 9px 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
+            <span style="font-size: 0.72rem; font-weight: 800; color: #ddd6fe; display: inline-flex; align-items: center; gap: 5px;">
+              <span>🤖</span>
+              <span>AIエージェント修正指示プロンプト (Claude Code / Cursor / Codex / Antigravity 用)</span>
+            </span>
+            <button class="hotspot-copy-btn" style="background: #6d28d9; border-color: #a78bfa; color: #ffffff; padding: 3px 10px;" onclick="copyCmdFromButton(this)" data-cmd="${encodedPrompt}">
+              📋 AI修正プロンプトをコピー
+            </button>
+          </div>
+          <pre style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 0.71rem; line-height: 1.48; color: #e2e8f0; white-space: pre-wrap; word-break: break-word; background: rgba(9, 13, 22, 0.75); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 5px; padding: 8px 10px; max-height: 135px; overflow-y: auto;">${escapedHtml}</pre>
+        </div>
+      `;
+    }
+
     function getRepoActionItems(repoItem) {
       if (!repoItem) return [];
       const cr = repoItem.coderabbit || {};
@@ -6022,6 +6062,8 @@ def build_portal_html(data, is_shareable=False):
               ` : ''}
             </div>
 
+            ${renderAiAgentPromptWidget(repo.repo, act)}
+
             <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
               ${act.official_source ? `
                 <a href="${act.official_source}" target="_blank" style="color: #38bdf8; font-size: 0.72rem; text-decoration: none;">
@@ -6091,7 +6133,10 @@ def build_portal_html(data, is_shareable=False):
           const mod = document.getElementById('adm-model-' + p);
           const isCfg = s.configured && s.configured[p];
           const masked = (s.keys_masked && s.keys_masked[p]) || '';
-          if (inp) inp.value = masked;
+          if (inp) {
+            inp.value = '';
+            inp.placeholder = isCfg ? `設定済 (${masked}) — 新規キー入力で上書き` : 'APIキーを貼り付け...';
+          }
           if (st) {
             st.textContent = isCfg ? `🟢 設定済 (${masked})` : '⚪ 未設定';
             st.className = 'sec-legend-badge ' + (isCfg ? 'sec-legend-green' : '');
@@ -6652,6 +6697,7 @@ def build_portal_html(data, is_shareable=False):
                 <button class="hotspot-copy-btn" onclick="copyToClipboard('${act.fix_cmd.replace(/'/g, "\'")}', this)">📋 コマンドコピー</button>
               </div>
             ` : ''}
+            ${renderAiAgentPromptWidget(act.repo, act)}
           </div>
         `).join('')}
       `;
@@ -6773,7 +6819,8 @@ def build_portal_html(data, is_shareable=False):
       stopWalkthroughPlay();
       currentSeqSvgElement = svgElement;
       currentActiveSeqObj = activeSeq;
-      currentWalkthroughSteps = parseSequenceSteps(activeSeq ? activeSeq.diagram : '');
+      const seqMermaidStr = activeSeq ? (activeSeq.diagram || activeSeq.mermaid || '') : '';
+      currentWalkthroughSteps = parseSequenceSteps(seqMermaidStr);
       currentWalkthroughIndex = -1;
       renderWalkthroughBar();
     }
@@ -6809,45 +6856,32 @@ def build_portal_html(data, is_shareable=False):
       }
 
       if (currentWalkthroughIndex < 0 || currentWalkthroughIndex >= total) {
-        cardEl.innerHTML = `
-          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 10px; flex-wrap: wrap;">
-            <div style="font-size: 0.78rem; color: #cbd5e1;">
-              🧭 <strong>全 ${total} ステップの遷移ウォークスルー準備完了:</strong>
-              上の <strong>「次へ ▶」</strong> または <strong>「▶ 自動再生」</strong>、番号ボタン <code>1〜${total}</code>（キーボード <code>←</code> / <code>→</code> 対応）で、どの機能からどの機能へ遷移するかを1ステップずつ追跡できます。
-            </div>
-            ${total > 0 ? `<button class="wt-ctrl-btn wt-play-btn" onclick="setWalkthroughStep(0)">🚶 Step 1 から開始 ▶</button>` : ''}
-          </div>
-        `;
+        cardEl.style.display = 'none';
+        cardEl.innerHTML = '';
         return;
       }
+      cardEl.style.display = 'flex';
 
       const st = currentWalkthroughSteps[currentWalkthroughIndex];
       const flowTypeBadge = st.isSelf
-        ? '<span style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde68a; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;">🔄 内部処理 (Self)</span>'
+        ? '<span style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde68a; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;">🔄 内部処理</span>'
         : (st.isReturn
-            ? '<span style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #a7f3d0; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;">↩️ レスポンス返却</span>'
-            : '<span style="background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #bae6fd; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;">➡️ リクエスト / 機能呼び出し</span>');
+            ? '<span style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #a7f3d0; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;">↩️ 応答</span>'
+            : '<span style="background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #bae6fd; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;">➡️ 呼び出し</span>');
 
       cardEl.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
-            <div class="wt-route-flow">
-              <span style="background: #38bdf8; color: #040711; font-weight: 900; font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;">
-                STEP ${st.stepNumber} / ${total}
-              </span>
-              ${flowTypeBadge}
-              <span class="wt-node-badge from-node" title="送信元コンポーネント">📤 送信元: ${st.fromLabel}</span>
-              <span class="wt-arrow-connector">${st.isReturn ? '━━(応答)━━▶' : '━━(遷移)━━▶'}</span>
-              <span class="wt-node-badge to-node" title="遷移先コンポーネント">📥 遷移先: ${st.toLabel}</span>
-            </div>
-            ${st.note ? `<span class="wt-note-chip">📌 補足: ${st.note}</span>` : ''}
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-left: 4px;">
-            <span class="wt-msg-summary">⚡ 実行アクション: ${st.message}</span>
-            <span style="font-size: 0.74rem; color: #94a3b8;">
-              （<strong>${st.fromLabel.split(' / ')[0]}</strong> から <strong>${st.toLabel.split(' / ')[0]}</strong> へ制御・データが遷移します）
+        <div class="wt-route-flow" style="width: 100%; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="background: #38bdf8; color: #040711; font-weight: 900; font-size: 0.7rem; padding: 2px 7px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;">
+              STEP ${st.stepNumber}/${total}
             </span>
+            ${flowTypeBadge}
+            <span class="wt-node-badge from-node">📤 ${st.fromLabel}</span>
+            <span class="wt-arrow-connector">━━▶</span>
+            <span class="wt-node-badge to-node">📥 ${st.toLabel}</span>
+            <span class="wt-msg-summary">⚡ ${st.message}</span>
           </div>
+          ${st.note ? `<span class="wt-note-chip">📌 ${st.note}</span>` : ''}
         </div>
       `;
     }
@@ -7078,6 +7112,9 @@ def build_portal_html(data, is_shareable=False):
 
       if (currentRepoSeqIndex >= seqs.length) currentRepoSeqIndex = 0;
       const activeSeq = seqs[currentRepoSeqIndex];
+      const activeSeqCode = activeSeq.diagram || activeSeq.mermaid || '';
+      const activeSeqId = activeSeq.id || ('seq-' + (currentRepoSeqIndex + 1));
+      const cleanSeqTitle = (t) => String(t || '実行フロー').replace(/^\\d+\\.\\s*/, '');
 
       // Update sequence selector pill buttons dynamically for the selected repo
       const seqBar = document.getElementById('sequence-selector-bar');
@@ -7087,14 +7124,14 @@ def build_portal_html(data, is_shareable=False):
         </span>
         ${seqs.map((s, idx) => `
           <button class="seq-pill-btn ${idx === currentRepoSeqIndex ? 'active' : ''}" onclick="selectRepoSeq(${idx})">
-            ${idx + 1}. ${s.short_title || s.title}
+            ${idx + 1}. ${cleanSeqTitle(s.short_title || s.title)}
           </button>
         `).join('')}
         <span class="seq-desc-tooltip" id="seq-desc-tooltip">${activeSeq.desc || ''}</span>
       `;
 
-      viewBreadcrumb.textContent = `plusimpact / ${selectedDiagram.repo} / sequence / ${activeSeq.id}`;
-      viewTitle.textContent = `${selectedDiagram.repo} - ${activeSeq.short_title || activeSeq.title}`;
+      viewBreadcrumb.textContent = `plusimpact / ${selectedDiagram.repo} / sequence / ${activeSeqId}`;
+      viewTitle.textContent = `${selectedDiagram.repo} - ${cleanSeqTitle(activeSeq.short_title || activeSeq.title)}`;
 
       headerFreshness.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -7119,8 +7156,8 @@ def build_portal_html(data, is_shareable=False):
       const uniqueId = 'svg-seq-' + Date.now();
 
       try {
-        if (window.mermaid) {
-          mermaid.render(uniqueId, activeSeq.diagram).then(({ svg }) => {
+        if (window.mermaid && activeSeqCode) {
+          mermaid.render(uniqueId, activeSeqCode).then(({ svg }) => {
             diagramWrapper.innerHTML = svg;
             const svgElement = diagramWrapper.querySelector('svg');
             if (svgElement) {
@@ -7545,9 +7582,14 @@ def build_portal_html(data, is_shareable=False):
               <input id="adm-key-openai" type="password" placeholder="sk-proj-..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
               <button class="table-view-btn" onclick="testProviderKey('openai')" style="white-space: nowrap;">⚡ 接続テスト</button>
             </div>
-            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8; gap: 6px; flex-wrap: wrap;">
               <span>監査モデル:</span>
-              <input id="adm-model-openai" type="text" value="gpt-4o" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
+              <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                <button type="button" class="hotspot-copy-btn" style="font-size: 0.62rem; padding: 2px 6px;" onclick="document.getElementById('adm-model-openai').value='gpt-6-luna'">gpt-6-luna</button>
+                <button type="button" class="hotspot-copy-btn" style="font-size: 0.62rem; padding: 2px 6px;" onclick="document.getElementById('adm-model-openai').value='gpt-5.6-luna'">gpt-5.6-luna</button>
+                <button type="button" class="hotspot-copy-btn" style="font-size: 0.62rem; padding: 2px 6px;" onclick="document.getElementById('adm-model-openai').value='gpt-4o'">gpt-4o</button>
+                <input id="adm-model-openai" type="text" value="gpt-6-luna" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 120px;" />
+              </div>
             </div>
           </div>
 

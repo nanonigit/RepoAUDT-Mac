@@ -263,6 +263,7 @@ struct RepoCheckerApp: App {
         }
         .defaultSize(width: 1480, height: 920)
         .commands {
+            TextEditingCommands()
             CommandGroup(replacing: .newItem) {
                 Button("GitHub URLを追加分析 / リスト管理...") {
                     appDelegate.coordinator.webView?.evaluateJavaScript("openAnalyzeModal()", completionHandler: nil)
