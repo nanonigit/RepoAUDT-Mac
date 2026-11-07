@@ -5845,9 +5845,27 @@ def build_portal_html(data, is_shareable=False):
       const targetFile = (act.file || 'src/').split(' (Target:')[0].trim();
       const title = act.title || 'セキュリティ・品質要対応イシュー';
       const desc = act.desc || act.comment || '検出されたリスクを修正してください。';
-      const diffHint = act.diff ? `\\n【推奨修正Diffの目安】:\\n${act.diff}` : '';
-      const cmdHint = act.fix_cmd ? `\\n【確認・適用コマンド】:\\n$ ${act.fix_cmd}` : '';
-      return `リポジトリ「${repoName}」のファイル \\\`${targetFile}\\\` における以下の要対応イシューを修正してください。\\n\\n【検知された問題】: ${title}\\n【対象ファイル・箇所】: ${targetFile}\\n【要対応の理由・リスク】: ${desc}${diffHint}${cmdHint}\\n\\n【修正要件】:\\n1. \\\`${targetFile}\\\` の該当箇所を特定し、上記のセキュリティ・堅牢性基準を満たすように安全に実装を修正してください。\\n2. 既存の関数シグネチャや呼び出し元との互換性を維持し、副作用が出ないようにしてください。\\n3. 修正後に構文チェック・型チェック・テストを実行してエラーがないことを確認してください。`;
+      const lines = [
+        'リポジトリ「' + repoName + '」のファイル `' + targetFile + '` における以下の要対応イシューを修正してください。',
+        '',
+        '【検知された問題】: ' + title,
+        '【対象ファイル・箇所】: ' + targetFile,
+        '【要対応の理由・リスク】: ' + desc
+      ];
+      if (act.diff) {
+        lines.push('【推奨修正Diffの目安】:', act.diff);
+      }
+      if (act.fix_cmd) {
+        lines.push('【確認・適用コマンド】:', '$ ' + act.fix_cmd);
+      }
+      lines.push(
+        '',
+        '【修正要件】:',
+        '1. `' + targetFile + '` の該当箇所を特定し、上記のセキュリティ・堅牢性基準を満たすように安全に実装を修正してください。',
+        '2. 既存の関数シグネチャや呼び出し元との互換性を維持し、副作用が出ないようにしてください。',
+        '3. 修正後に構文チェック・型チェック・テストを実行してエラーがないことを確認してください。'
+      );
+      return lines.join('\\n');
     }
 
     function renderAiAgentPromptWidget(repoName, act) {
