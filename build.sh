@@ -12,6 +12,12 @@ if [[ "$MODE" != "--install" && "$MODE" != "--no-install" ]]; then
 fi
 
 mkdir -p "$DIR/build"
+
+# Clean up legacy app bundles from repository root
+for legacy in "RepoPulse" "RepoChecker" "RepoChex"; do
+    rm -rf "$DIR/$legacy.app"
+done
+
 STAGE="$(mktemp -d "$DIR/build/stage.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -41,7 +47,12 @@ ditto "$APP" "$BUNDLE_DIR"
 
 if [[ "$MODE" == "--install" ]]; then
     echo "[4/4] Installing to /Applications/$APP_NAME.app..."
+    # Terminate running instances of current and legacy apps
     pkill -x "$APP_NAME" 2>/dev/null || true
+    for legacy in "RepoPulse" "RepoChecker" "RepoChex"; do
+        pkill -x "$legacy" 2>/dev/null || true
+        rm -rf "/Applications/$legacy.app"
+    done
     pkill -f "Resources/backend/server.py" 2>/dev/null || true
     for attempt in {1..30}; do
         if ! pgrep -x "$APP_NAME" >/dev/null; then break; fi
@@ -50,7 +61,7 @@ if [[ "$MODE" == "--install" ]]; then
     rm -rf "/Applications/$APP_NAME.app"
     ditto "$BUNDLE_DIR" "/Applications/$APP_NAME.app"
     touch "/Applications/$APP_NAME.app"
-    echo "✅ Installed: /Applications/$APP_NAME.app"
+    echo "✅ Cleaned up old apps and installed: /Applications/$APP_NAME.app"
 else
     echo "✅ Built: $BUNDLE_DIR"
 fi
