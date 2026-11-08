@@ -23,17 +23,20 @@ from typing import Any, Dict, List, Optional, Tuple
 def get_app_support_dir() -> Path:
     if sys.platform == "darwin":
         base = Path.home() / "Library" / "Application Support"
-        old_base = Path.home() / "Library" / "Application Support" / "RepoChecker"
+        legacy_bases = [base / "RepoChex", base / "RepoChecker"]
     else:
         xdg = os.environ.get("XDG_CONFIG_HOME")
         base = Path(xdg) if xdg else Path.home() / ".config"
-        old_base = base / "RepoChecker"
-    app_dir = base / "RepoChex"
-    if not app_dir.exists() and old_base.exists():
-        try:
-            shutil.copytree(old_base, app_dir)
-        except Exception as e:
-            print(f"Migration from RepoChecker to RepoChex notice: {e}", file=sys.stderr)
+        legacy_bases = [base / "RepoChex", base / "RepoChecker"]
+    app_dir = base / "RepoCHK Mac"
+    if not app_dir.exists():
+        for old_dir in legacy_bases:
+            if old_dir.exists():
+                try:
+                    shutil.copytree(old_dir, app_dir)
+                    break
+                except Exception as e:
+                    print(f"Migration from {old_dir.name} to RepoCHK Mac notice: {e}", file=sys.stderr)
     return app_dir
 
 
@@ -95,6 +98,7 @@ def load_settings() -> Dict[str, Any]:
     candidate_envs = [
         APP_SUPPORT_DIR / ".env",
         Path.cwd() / ".env",
+        Path.home() / ".config" / "RepoCHK Mac" / ".env",
         Path.home() / ".config" / "RepoChex" / ".env",
     ]
     for env_file in candidate_envs:
@@ -201,7 +205,7 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
         req = urllib.request.Request(
             "https://api.osv.dev/v1/querybatch",
             data=req_body,
-            headers={"Content-Type": "application/json", "User-Agent": "RepoChex-SecuritySkill"},
+            headers={"Content-Type": "application/json", "User-Agent": "RepoCHK-SecuritySkill"},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
@@ -495,7 +499,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
-                "User-Agent": "RepoChex-macOS/1.0",
+                "User-Agent": "RepoCHK-Mac/1.0",
             },
             method="POST",
         )
@@ -516,7 +520,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
                     headers={
                         "Content-Type": "application/json",
                         "Authorization": f"Bearer {api_key}",
-                        "User-Agent": "RepoChex-macOS/1.0",
+                        "User-Agent": "RepoCHK-Mac/1.0",
                     },
                     method="POST",
                 )
@@ -540,7 +544,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
                 "Content-Type": "application/json",
                 "x-api-key": api_key,
                 "anthropic-version": "2023-06-01",
-                "User-Agent": "RepoChex-macOS/1.0",
+                "User-Agent": "RepoCHK-Mac/1.0",
             },
             method="POST",
         )
@@ -558,7 +562,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "User-Agent": "RepoChex-macOS/1.0"},
+            headers={"Content-Type": "application/json", "User-Agent": "RepoCHK-Mac/1.0"},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=25) as resp:
@@ -605,17 +609,20 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
         except urllib.error.HTTPError as mhe:
             # If the entered key gave 401, check if local Secrets/.env has a working OpenAI key
             if mhe.code == 401:
-                secrets_env = Path.home() / "Git" / "Company" / "00_Infrastructure" / "Security" / "Secrets" / ".env"
                 fallback_key = ""
-                if secrets_env.exists():
-                    for line in secrets_env.read_text(encoding="utf-8", errors="ignore").splitlines():
-                        if line.strip().startswith("OPENAI_API_KEY="):
-                            fallback_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                for env_file in candidate_envs:
+                    if env_file.exists():
+                        for line in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+                            if line.strip().startswith("OPENAI_API_KEY="):
+                                fallback_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                                break
+                    if fallback_key:
+                        break
                 if fallback_key and fallback_key != api_key:
                     try:
                         mreq2 = urllib.request.Request(
                             "https://api.openai.com/v1/models",
-                            headers={"Authorization": f"Bearer {fallback_key}", "User-Agent": "RepoChex-macOS/1.0"},
+                            headers={"Authorization": f"Bearer {fallback_key}", "User-Agent": "RepoCHK-Mac/1.0"},
                         )
                         with urllib.request.urlopen(mreq2, timeout=12) as mresp2:
                             if mresp2.status == 200:

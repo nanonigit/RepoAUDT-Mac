@@ -4451,8 +4451,8 @@ def build_portal_html(data, is_shareable=False):
   <div id="sidebar">
     <div class="brand-header">
       <div class="brand-title" style="display: flex; align-items: center; gap: 8px;">
-        <img src="app-icon.png" alt="RepoChex" style="width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
-        <div>RepoChex <span>AI Studio</span></div>
+        <img src="app-icon.png" alt="RepoCHK Mac" style="width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
+        <div>RepoCHK Mac <span>AI Studio</span></div>
       </div>
       <div class="live-status"><div class="live-dot"></div> NATIVE MACOS STUDIO (CodeRabbit + Mermaid)</div>
       <div style="margin-top: 10px; background: linear-gradient(135deg, rgba(30, 58, 138, 0.45) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid #3b82f6; border-radius: 9px; padding: 9px 10px;">
@@ -5598,7 +5598,7 @@ def build_portal_html(data, is_shareable=False):
         return;
       }
       viewTitle.textContent = `${item.repo}`;
-      const itemOwner = item.owner || (item.repo && item.repo.includes('/') ? item.repo.split('/')[0] : 'RepoChex');
+      const itemOwner = item.owner || (item.repo && item.repo.includes('/') ? item.repo.split('/')[0] : 'RepoCHK Mac');
       viewBreadcrumb.textContent = `${itemOwner} / ${item.category} / ${item.perspective}`;
 
       const fresh = calculateDaysAgo(item.pushedAt || item.updatedAt);
@@ -6637,7 +6637,7 @@ def build_portal_html(data, is_shareable=False):
       const scoreClass = cr.score >= 90 ? 'score-high' : (cr.score >= 80 ? 'score-med' : 'score-low');
       const statusLabel = hasAction ? '🔴 要対応 (Action Required)' : (cr.status === 'PASSED_WITH_WARNINGS' ? '🟡 要確認 (Warnings)' : '🟢 合格 (Passed)');
 
-      const repoOwner = repo.owner || (repo.repo && repo.repo.includes('/') ? repo.repo.split('/')[0] : 'RepoChex');
+      const repoOwner = repo.owner || (repo.repo && repo.repo.includes('/') ? repo.repo.split('/')[0] : 'RepoCHK Mac');
       viewBreadcrumb.textContent = `${repoOwner} / ${repo.repo} / coderabbit-ai-review`;
 
       crView.innerHTML = `
@@ -7103,8 +7103,8 @@ def build_portal_html(data, is_shareable=False):
       "online_count": 3,
       "services": [
         {
-          "id": "repochex_engine",
-          "name": "RepoChex Analysis Engine (Port 18765)",
+          "id": "repochk_engine",
+          "name": "RepoCHK Mac Analysis Engine (Port 18765)",
           "type": "Local Backend",
           "status": "ONLINE",
           "latency_ms": 1,
@@ -7415,7 +7415,7 @@ def build_portal_html(data, is_shareable=False):
 
     async function browseOrgRepositories() {
       const input = document.getElementById('modal-gh-url-input');
-      const rawUrl = (input && input.value.trim()) ? input.value.trim() : (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoChex');
+      const rawUrl = (input && input.value.trim()) ? input.value.trim() : (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoCHK-Mac');
       if (input && !input.value.trim()) input.value = rawUrl;
 
       const browserBox = document.getElementById('org-repos-browser-box');
@@ -7573,7 +7573,7 @@ def build_portal_html(data, is_shareable=False):
         await syncSavedAnalysesFromServer();
         const params = new URLSearchParams(window.location.search);
         if (params.get('openModal') === 'analyze') {
-          openAnalyzeModal(params.get('url') || (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoChex'));
+          openAnalyzeModal(params.get('url') || (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoCHK-Mac'));
         } else if (params.get('openModal') === 'admin') {
           openAdminSettingsModal();
         }
@@ -8239,15 +8239,15 @@ def build_portal_html(data, is_shareable=False):
 
       const nowStr = new Date().toLocaleString('ja-JP');
       const safeTitle = (act.title || 'issue').replace(/[^\\w\\d\\-\\u3000-\\u303f\\u3040-\\u309f\\u30a0-\\u30ff\\uff00-\\uff9f\\u4e00-\\u9faf]/g, '_').substring(0, 50);
-      const fileName = `RepoChex_改善レポート_${safeTitle}.md`;
+      const fileName = `RepoCHK_Mac_改善レポート_${safeTitle}.md`;
 
-      let md = `# 🛡️ RepoChex 改善・セキュリティ監査レポート\\n\\n`;
+      let md = `# 🛡️ RepoCHK Mac 改善・セキュリティ監査レポート\\n\\n`;
       md += `- **リポジトリ名**: ${repoName || '全体エコシステム'}\\n`;
       md += `- **改善項目**: ${act.title || '要対応事項'}\\n`;
       md += `- **対象ファイル / 箇所**: \\`${act.file || 'N/A'}\\`\\n`;
       md += `- **重要度**: ${act.severity || 'CRITICAL (要対応)'}\\n`;
       md += `- **出力日時**: ${nowStr}\\n`;
-      md += `- **監査エンジン**: RepoChex Architecture & Vulnerability AI Studio\\n\\n`;
+      md += `- **監査エンジン**: RepoCHK Mac Architecture & Vulnerability AI Studio\\n\\n`;
       md += `---\\n\\n`;
 
       md += `## ⚠️ 要対応の理由 (なぜ必要か / リスク分析)\\n\\n`;
@@ -8266,7 +8266,7 @@ def build_portal_html(data, is_shareable=False):
       const aiPrompt = buildAiAgentFixPrompt(repoName || 'リポジトリ', act);
       md += `## 🤖 AIエージェント修正指示プロンプト (Claude Code / Cursor / Codex / Antigravity 用)\\n\\n`;
       md += `\\`\\`\\`text\\n${aiPrompt}\\n\\`\\`\\`\\n\\n`;
-      md += `---\\n*Generated by RepoChex — Architecture & Vulnerability AI Studio*\\n`;
+      md += `---\\n*Generated by RepoCHK Mac — Architecture & Vulnerability AI Studio*\\n`;
 
       const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -8660,7 +8660,7 @@ def build_portal_html(data, is_shareable=False):
         seqBar.innerHTML = '';
       }
 
-      const diagOwner = selectedDiagram.owner || (selectedDiagram.repo && selectedDiagram.repo.includes('/') ? selectedDiagram.repo.split('/')[0] : 'RepoChex');
+      const diagOwner = selectedDiagram.owner || (selectedDiagram.repo && selectedDiagram.repo.includes('/') ? selectedDiagram.repo.split('/')[0] : 'RepoCHK Mac');
       viewBreadcrumb.textContent = `${diagOwner} / ${selectedDiagram.repo} / sequence / ${activeSeqId}`;
       viewTitle.textContent = `${selectedDiagram.repo} - ${cleanSeqTitle(activeSeq.short_title || activeSeq.title)}`;
 
@@ -8983,7 +8983,7 @@ def build_portal_html(data, is_shareable=False):
         <div style="display: flex; align-items: center; gap: 10px;">
           <span style="font-size: 1.4rem;">🔍</span>
           <div>
-            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">GitHub リポジトリ追加分析 & 保有リスト管理 (RepoChex)</h3>
+            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">GitHub リポジトリ追加分析 & 保有リスト管理 (RepoCHK Mac)</h3>
             <span style="font-size: 0.72rem; color: #93c5fd;">新しい組織URL・リポジトリURLの追加解析と、保有データの確認・不要リポジトリの削除が行えます</span>
           </div>
         </div>
@@ -8995,7 +8995,7 @@ def build_portal_html(data, is_shareable=False):
             ➕ 新しく追加・分析したい 組織URL (<code style="color: #34d399;">https://github.com/org</code>) または リポジトリURL (<code style="color: #38bdf8;">owner/repo</code>):
           </label>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/nanonigit または https://github.com/nanonigit/RepoChex"
+            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/nanonigit または https://github.com/nanonigit/RepoCHK-Mac"
               style="flex: 1; min-width: 260px; background: #090d16; border: 1.5px solid #3b82f6; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 0.88rem; outline: none;"
               onkeydown="if(event.key==='Enter') submitModalAnalyze()" />
             <button id="modal-gh-browse-btn" onclick="browseOrgRepositories()"
@@ -9021,7 +9021,7 @@ def build_portal_html(data, is_shareable=False):
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/AmazonDeliverySync')">📦 nanonigit/AmazonDeliverySync</button>
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/VisualBarTimer')">⏱️ nanonigit/VisualBarTimer</button>
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/DesktopCalendar')">📅 nanonigit/DesktopCalendar</button>
-            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/RepoChex')">🐰 nanonigit/RepoChex</button>
+            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/RepoCHK-Mac')">🐰 nanonigit/RepoCHK-Mac</button>
           </div>
         </div>
 
@@ -9097,7 +9097,7 @@ def build_portal_html(data, is_shareable=False):
 
         <!-- 4 AI Providers API Key Inputs -->
         <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;">
-          🔑 AI プロバイダー APIキー設定 <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">(ローカルの ~/Library/Application Support/RepoChex/settings.json に暗号権限 0600 で安全に保存されます)</span>
+          🔑 AI プロバイダー APIキー設定 <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">(ローカルの ~/Library/Application Support/RepoCHK Mac/settings.json に暗号権限 0600 で安全に保存されます)</span>
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(370px, 1fr)); gap: 12px; margin-bottom: 18px;">
@@ -9255,7 +9255,7 @@ def build_portal_html(data, is_shareable=False):
         out_path = Path(__file__).resolve().parent.parent / "webui" / "index.html"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(html, encoding="utf-8")
-        print(f"Generated RepoChex webui at {out_path}")
+        print(f"Generated RepoCHK Mac webui at {out_path}")
 
 def main():
     data = collect_all_data()

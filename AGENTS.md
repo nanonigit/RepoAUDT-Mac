@@ -1,14 +1,14 @@
-# RepoChex — Remote Agent Instruction & Architecture Guide
+# RepoCHK Mac — Remote Agent Instruction & Architecture Guide
 
-This document guides Google Antigravity Remote Agents (running in Google-managed cloud virtual machines) to understand, build, and extend the **RepoChex** codebase.
+This document guides Google Antigravity Remote Agents (running in Google-managed cloud virtual machines) to understand, build, and extend the **RepoCHK Mac** codebase.
 
 ---
 
 ## 1. Project Overview & Architecture
-RepoChex is a native macOS + WebUI Studio for GitHub repository architecture visualization, sequence flow tracking, and CodeRabbit AI security & code-quality auditing.
+RepoCHK Mac is a native macOS + WebUI Studio for GitHub repository architecture visualization, sequence flow tracking, and CodeRabbit AI security & code-quality auditing.
 
-- **App Name**: `RepoChex` (renamed from legacy RepoChecker across all configs, remotes, and codebases).
-- **GitHub Repository**: `https://github.com/nanonigit/RepoChex.git`
+- **App Name**: `RepoCHK Mac` (renamed from legacy RepoChex / RepoChecker across all configs, remotes, and codebases).
+- **GitHub Repository**: `https://github.com/nanonigit/RepoCHK-Mac.git`
 - **Frontend / WebUI**: `Resources/webui/index.html` (Bilingual: Japanese & English, Mermaid.js diagram viewer, PanZoom, interactive inspectors).
 - **Backend Generator & API**:
   - `Resources/backend/analyzer.py`: GitHub API & local repository scanner, AST parser, ecosystem builder, CVE & CodeRabbit issue collector.
@@ -16,8 +16,8 @@ RepoChex is a native macOS + WebUI Studio for GitHub repository architecture vis
   - `Resources/backend/server.py`: Local lightweight HTTP & REST API server (default port: `18765`).
   - `Resources/backend/security_audit_engine.py`: Vulnerability & architectural risk analysis engine.
 - **Native macOS Shell**:
-  - `Sources/RepoChexApp.swift`: SwiftUI + WKWebView native host container & backend server process manager.
-  - `build.sh`: Builds and code-signs `/Applications/RepoChex.app`.
+  - `Sources/RepoCHKMacApp.swift`: SwiftUI + WKWebView native host container & backend server process manager.
+  - `build.sh`: Builds and code-signs `/Applications/RepoCHK Mac.app`.
 
 ---
 

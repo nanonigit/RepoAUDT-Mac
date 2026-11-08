@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Universal GitHub Organization / User & Repository Analyzer for RepoChex macOS App.
+Universal GitHub Organization / User & Repository Analyzer for RepoCHK Mac App.
 Supports BOTH:
   - Parent / Organization / User URLs (e.g. https://github.com/plusimpact, https://github.com/nanonigit, plusimpact)
     -> Discovers all repositories in the org/user, builds an Ecosystem Overview diagram (<owner> (全体エコシステム) [ECO])
@@ -190,7 +190,7 @@ def list_org_or_user_repositories(owner: str, limit: int = 35) -> List[Dict[str,
     if not repos:
         for endpoint in (f"https://api.github.com/orgs/{owner}/repos?per_page={limit}&sort=pushed", f"https://api.github.com/users/{owner}/repos?per_page={limit}&sort=pushed"):
             try:
-                req = urllib.request.Request(endpoint, headers={"User-Agent": "RepoChex-macOS"})
+                req = urllib.request.Request(endpoint, headers={"User-Agent": "RepoCHK-Mac"})
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     if resp.status == 200:
                         arr = json.loads(resp.read().decode("utf-8", errors="ignore"))
