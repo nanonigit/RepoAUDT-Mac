@@ -235,6 +235,168 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
     return advisories
 
 
+SECRET_PATTERNS = [
+    (
+        "OpenAI API Key",
+        r"\b(sk-[a-zA-Z0-9_-]{20,})\b",
+        "OpenAI API 認証キー",
+        "process.env.OPENAI_API_KEY || os.environ.get('OPENAI_API_KEY')",
+    ),
+    (
+        "Anthropic Claude API Key",
+        r"\b(sk-ant-[a-zA-Z0-9_-]{20,})\b",
+        "Anthropic Claude API 認証キー",
+        "process.env.ANTHROPIC_API_KEY || os.environ.get('ANTHROPIC_API_KEY')",
+    ),
+    (
+        "Google / Gemini API Key",
+        r"\b(AIza[0-9A-Za-z\-_]{35})\b",
+        "Google Cloud / Gemini API アクセスキー",
+        "process.env.GEMINI_API_KEY || os.environ.get('GEMINI_API_KEY')",
+    ),
+    (
+        "GitHub Personal Access Token",
+        r"\b((?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}|github_pat_[A-Za-z0-9_]{40,})\b",
+        "GitHub 個人アクセストークン (PAT)",
+        "process.env.GITHUB_TOKEN || os.environ.get('GITHUB_TOKEN')",
+    ),
+    (
+        "AWS Access Key ID",
+        r"\b(AKIA[0-9A-Z]{16})\b",
+        "Amazon Web Services (AWS) アクセスキーID",
+        "process.env.AWS_ACCESS_KEY_ID || os.environ.get('AWS_ACCESS_KEY_ID')",
+    ),
+    (
+        "AWS Secret Access Key",
+        r"(?i)(?:aws_secret_access_key|aws_secret_key)\s*[:=]\s*['\"]?([A-Za-z0-9/+=]{40})['\"]?",
+        "Amazon Web Services (AWS) シークレットアクセスキー",
+        "process.env.AWS_SECRET_ACCESS_KEY || os.environ.get('AWS_SECRET_ACCESS_KEY')",
+    ),
+    (
+        "Slack Token / Webhook URL",
+        r"(xox[baprs]-[0-9]{10,}-[0-9]{10,}-[a-zA-Z0-9]{24,}|https://hooks\.slack\.com/services/T[0-9A-Z]+/B[0-9A-Z]+/[0-9a-zA-Z]+)",
+        "Slack Bot/ユーザーアクセストークンまたはIncoming Webhook URL",
+        "process.env.SLACK_WEBHOOK_URL || os.environ.get('SLACK_WEBHOOK_URL')",
+    ),
+    (
+        "Private Cryptographic Key",
+        r"(-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----)",
+        "SSH / RSA / TLS 暗号化私有鍵 (Private Key)",
+        "# キーファイルをリポジトリから除外して秘密情報管理システム(Vault/KMS)に配置",
+    ),
+    (
+        "Database / Hardcoded Password",
+        r"(?i)(?:db_password|database_password|api_secret|client_secret)\s*[:=]\s*['\"]([^'\"\s]{8,})['\"]",
+        "平文のデータベース接続パスワードまたはクライアントシークレット",
+        "process.env.DB_PASSWORD || os.environ.get('DB_PASSWORD')",
+    ),
+]
+
+
+def mask_detected_secret(secret: str) -> str:
+    s = secret.strip()
+    if len(s) <= 8:
+        return "****"
+    if s.startswith("sk-") or s.startswith("ghp_"):
+        return f"{s[:7]}****...{s[-4:]}"
+    if s.startswith("AKIA"):
+        return f"{s[:6]}****...{s[-4:]}"
+    if s.startswith("-----BEGIN"):
+        return "-----BEGIN PRIVATE KEY [REDACTED]-----"
+    return f"{s[:4]}****...{s[-4:]}"
+
+
+def scan_secrets_and_credentials(
+    repo_dir: Path,
+    match_comp: Any,
+) -> List[Dict[str, Any]]:
+    findings = []
+    repo_path = Path(repo_dir) if not isinstance(repo_dir, Path) else repo_dir
+    ignore_dirs = {
+        ".git", "node_modules", "vendor", "dist", "build", "__pycache__",
+        ".next", ".venv", "venv", ".codex", "Pods", "DerivedData"
+    }
+    ignore_exts = {
+        ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".webp",
+        ".woff", ".woff2", ".ttf", ".eot", ".mp4", ".mp3", ".pdf",
+        ".zip", ".tar", ".gz", ".lock", ".resolved", ".map"
+    }
+
+    try:
+        for file_path in repo_path.rglob("*"):
+            if not file_path.is_file():
+                continue
+            if any(part in ignore_dirs for part in file_path.parts):
+                continue
+            if file_path.suffix.lower() in ignore_exts:
+                continue
+            # Skip large files (> 500KB)
+            try:
+                if file_path.stat().st_size > 512 * 1024:
+                    continue
+            except Exception:
+                continue
+
+            try:
+                rel_path = str(file_path.relative_to(repo_path))
+            except Exception:
+                rel_path = file_path.name
+
+            # Special check: committed .env or .env.local file
+            if file_path.name in (".env", ".env.local", ".env.production", ".env.stage", "secrets.yml", "credentials.json"):
+                target_node = match_comp(rel_path)
+                findings.append({
+                    "severity": "critical",
+                    "title": f"🚨 [シークレット設定ファイル漏洩] `{file_path.name}` がリポジトリにコミットされています",
+                    "file": f"{rel_path}:1 (Target: {target_node})",
+                    "target_node": target_node,
+                    "desc": f"`{rel_path}` は本番または検証用の認証情報・APIキーが含まれるシークレット設定ファイルです。Gitリポジトリへのコミットは不正侵入の直接要因となります。直ちにGit管理対象から除外（`git rm --cached`）し、`.gitignore` に追加してください。",
+                    "diff": f"- (リポジトリ内に保持: {file_path.name})\n+ (.gitignore に追加してローカルまたはシークレットマネージャーで管理)",
+                    "fix_cmd": f"git rm --cached {rel_path} && echo '{rel_path}' >> .gitignore",
+                })
+
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+
+            lines = content.splitlines()
+            for line_no, line_str in enumerate(lines, start=1):
+                stripped = line_str.strip()
+                if not stripped or stripped.startswith("//") or stripped.startswith("#") or stripped.startswith("/*"):
+                    if "-----BEGIN" not in stripped:
+                        continue
+
+                for secret_name, pattern, desc_label, fix_replacement in SECRET_PATTERNS:
+                    # Ignore obvious test/placeholder strings
+                    low = stripped.lower()
+                    if "example" in low or "dummy" in low or "your_" in low or "<api_key>" in low:
+                        continue
+                    m = re.search(pattern, stripped)
+                    if m:
+                        raw_secret = m.group(1) if m.groups() else m.group(0)
+                        if secret_name == "Database / Hardcoded Password" and len(raw_secret) < 8:
+                            continue
+                        masked = mask_detected_secret(raw_secret)
+                        target_node = match_comp(rel_path)
+                        findings.append({
+                            "severity": "critical",
+                            "title": f"🚨 [シークレット漏洩検知] {secret_name} が平文でハードコードされています ({file_path.name}:{line_no})",
+                            "file": f"{rel_path}:{line_no} (Target: {target_node})",
+                            "target_node": target_node,
+                            "desc": f"`{rel_path}` の {line_no}行目で、{desc_label}（`{masked}`）が平文で検出されました。ソースコード内に認証情報が存在すると、閲覧権限を持つ全員に漏洩し、不正利用やデータ侵害の原因となります。直ちに該当サービスでキーを無効化（Revoke/Rotate）し、環境変数または秘密情報マネージャーへ退避してください。",
+                            "diff": f"- {stripped}\n+ {fix_replacement}",
+                            "fix_cmd": f"sed -n '{max(1, line_no-2)},{line_no+2}p' {rel_path}",
+                        })
+                        if len(findings) >= 20:
+                            return findings
+                        break
+    except Exception as e:
+        print(f"Notice during secrets scan: {e}", file=sys.stderr)
+
+    return findings
+
+
 def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     repo_dir: Path,
     components: List[Dict[str, Any]],
@@ -428,6 +590,12 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     if skills_cfg.get("osv_mcp", True) and osv_query_list:
         osv_advisories = query_osv_batch(osv_query_list)
         security_advisories.extend(osv_advisories)
+
+    # =========================================================================
+    # 5. Scan Hardcoded Secrets & Token Leaks
+    # =========================================================================
+    secret_findings = scan_secrets_and_credentials(repo_dir, match_comp)
+    sast_findings = secret_findings + sast_findings
 
     return {
         "frameworks": frameworks,

@@ -4022,6 +4022,40 @@ def build_portal_html(data, is_shareable=False):
     .zoom-btn + .zoom-btn {
       border-left: 1px solid #1e293b !important;
     }
+    .export-controls-group {
+      display: inline-flex !important;
+      align-items: center !important;
+      background: #0f172a !important;
+      border: 1px solid #334155 !important;
+      border-radius: 8px !important;
+      padding: 2px !important;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+      flex-shrink: 0 !important;
+      gap: 2px !important;
+    }
+    .btn-export {
+      background: transparent !important;
+      border: none !important;
+      color: #93c5fd !important;
+      padding: 5px 8px !important;
+      border-radius: 5px !important;
+      font-size: 0.74rem !important;
+      font-weight: 700 !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+      transition: all 0.15s ease !important;
+    }
+    .btn-export:hover {
+      background: rgba(59, 130, 246, 0.2) !important;
+      color: #bfdbfe !important;
+    }
+    .btn-export:active {
+      transform: scale(0.96) !important;
+    }
 
     /* Primary Sync Button */
     .btn-sync {
@@ -4624,6 +4658,18 @@ def build_portal_html(data, is_shareable=False):
           <span class="lang-opt active" id="lang-opt-ja">JA</span>
           <span class="lang-sep">/</span>
           <span class="lang-opt" id="lang-opt-en">EN</span>
+        </div>
+
+        <!-- Export Diagram Controls (SVG / PNG) -->
+        <div class="export-controls-group" title="ダイアグラムを画像として保存">
+          <button class="btn-export" onclick="exportDiagramAsSvg()" title="ベクトル画像 (SVG) として保存">
+            <span class="btn-icon">📐</span>
+            <span class="btn-text" data-i18n="btn_export_svg">SVG</span>
+          </button>
+          <button class="btn-export" onclick="exportDiagramAsPng()" title="高解像度画像 (PNG) として保存">
+            <span class="btn-icon">📷</span>
+            <span class="btn-text" data-i18n="btn_export_png">PNG</span>
+          </button>
         </div>
 
         <div class="zoom-controls-group" title="ダイアグラム表示倍率の操作">
@@ -6555,6 +6601,114 @@ def build_portal_html(data, is_shareable=False):
       inspContent.innerHTML = tabBody;
     }
 
+    function getCleanDiagramSvg() {
+      const container = document.getElementById('mermaid-container');
+      if (!container) return null;
+      const originalSvg = container.querySelector('svg');
+      if (!originalSvg) return null;
+
+      const svgClone = originalSvg.cloneNode(true);
+
+      let width = parseFloat(originalSvg.getAttribute('width')) || originalSvg.viewBox?.baseVal?.width || originalSvg.clientWidth || 1200;
+      let height = parseFloat(originalSvg.getAttribute('height')) || originalSvg.viewBox?.baseVal?.height || originalSvg.clientHeight || 800;
+
+      const viewport = svgClone.querySelector('.svg-pan-zoom_viewport');
+      if (viewport) {
+        viewport.removeAttribute('transform');
+        viewport.style.transform = '';
+      }
+
+      svgClone.setAttribute('width', width);
+      svgClone.setAttribute('height', height);
+      if (!svgClone.getAttribute('viewBox')) {
+        svgClone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      }
+      svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+      // Add solid dark background rectangle
+      const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bgRect.setAttribute('width', '100%');
+      bgRect.setAttribute('height', '100%');
+      bgRect.setAttribute('fill', '#090d16');
+      svgClone.insertBefore(bgRect, svgClone.firstChild);
+
+      return { svgElement: svgClone, width, height };
+    }
+
+    function exportDiagramAsSvg() {
+      const info = getCleanDiagramSvg();
+      if (!info) {
+        alert(currentLang === 'ja' ? '保存対象のダイアグラムが見つかりません。' : 'No diagram found to export.');
+        return;
+      }
+
+      const repoSlug = (selectedDiagram?.repo || 'diagram').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const modeSuffix = currentViewMode === 'seq' ? 'sequence' : 'architecture';
+      const fileName = `RepoCHK_${repoSlug}_${modeSuffix}.svg`;
+
+      const serializer = new XMLSerializer();
+      const svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + serializer.serializeToString(info.svgElement);
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+
+    function exportDiagramAsPng() {
+      const info = getCleanDiagramSvg();
+      if (!info) {
+        alert(currentLang === 'ja' ? '保存対象のダイアグラムが見つかりません。' : 'No diagram found to export.');
+        return;
+      }
+
+      const repoSlug = (selectedDiagram?.repo || 'diagram').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const modeSuffix = currentViewMode === 'seq' ? 'sequence' : 'architecture';
+      const fileName = `RepoCHK_${repoSlug}_${modeSuffix}.png`;
+
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(info.svgElement);
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.onload = () => {
+        const scale = 2; // 2x Retina resolution
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(800, info.width) * scale;
+        canvas.height = Math.max(600, info.height) * scale;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.fillStyle = '#090d16';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const pngUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = pngUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(pngUrl), 2000);
+        }, 'image/png');
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        alert(currentLang === 'ja' ? 'PNG画像レンダリングに失敗しました。SVG保存をお試しください。' : 'Failed to render PNG image. Please try exporting as SVG.');
+      };
+      img.src = url;
+    }
+
     function zoomIn() { if (currentPanZoom) currentPanZoom.zoomIn(); }
     function zoomOut() { if (currentPanZoom) currentPanZoom.zoomOut(); }
     
@@ -7784,6 +7938,8 @@ def build_portal_html(data, is_shareable=False):
         btn_settings: "設定",
         btn_add: "追加",
         btn_sync: "同期",
+        btn_export_svg: "SVG",
+        btn_export_png: "PNG",
         acc_sync_title: "⚡ 自動更新 &amp; 死活監視",
         last_updated: "🔄 最終更新:",
         health_summary_prefix: "🟢 死活監視:",
@@ -7844,6 +8000,8 @@ def build_portal_html(data, is_shareable=False):
         btn_settings: "Settings",
         btn_add: "Add Repo",
         btn_sync: "Sync",
+        btn_export_svg: "SVG",
+        btn_export_png: "PNG",
         acc_sync_title: "⚡ Auto Sync &amp; Health",
         last_updated: "🔄 Last Sync:",
         health_summary_prefix: "🟢 Health Check:",
