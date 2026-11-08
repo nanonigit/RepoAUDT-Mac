@@ -1145,7 +1145,23 @@ def analyze_repository(
             if ln.strip() and not ln.strip().startswith("#") and not ln.strip().startswith("!")
         ]
         if readme_lines:
-            desc = readme_lines[0][:160]
+            first_candidate = readme_lines[0][:180]
+            lower_candidate = first_candidate.lower()
+            if any(b in lower_candidate for b in ("bootstrapped with", "create-next-app", "create-react-app", "getting started", "npm run dev")):
+                # Generate intuitive Japanese responsibility summary
+                r_lower = repo.lower()
+                if "admin" in r_lower or "portal" in r_lower:
+                    desc = f"{owner}/{repo}: 公式Webサイト・業務管理専用ポータル (管理画面・ダッシュボードUI)"
+                elif "corporate" in r_lower or "marketing" in r_lower or "website" in r_lower:
+                    desc = f"{owner}/{repo}: 公式企業サイトおよびサービス紹介Webフロントエンド"
+                elif "backend" in r_lower or "api" in r_lower:
+                    desc = f"{owner}/{repo}: コア業務ロジック処理およびデータ永続化を担当するAPIサーバー"
+                elif "frontend" in r_lower:
+                    desc = f"{owner}/{repo}: ユーザー向け対話型Webフロントエンドアプリケーション"
+                else:
+                    desc = f"{owner}/{repo}: {meta.get('language') or 'TypeScript'} アプリケーションモジュール"
+            else:
+                desc = first_candidate
     if not desc:
         desc = f"{owner}/{repo} の自動解析アーキテクチャ構成図・シーケンスフロー・CodeRabbit監査レポート"
 

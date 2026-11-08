@@ -3156,7 +3156,81 @@ def build_portal_html(data, is_shareable=False):
       color: #94a3b8 !important;
     }
 
-    /* Responsibility Card */
+    /* Responsibility & Collapsible Section Cards in Inspector */
+    .inspector-collapsible-card {
+      background: rgba(15, 23, 42, 0.75) !important;
+      border: 1px solid rgba(56, 189, 248, 0.25) !important;
+      border-radius: 8px !important;
+      margin-bottom: 12px !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+      overflow: hidden !important;
+      transition: all 0.2s ease !important;
+    }
+    .inspector-collapsible-header {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 10px 14px !important;
+      background: rgba(30, 41, 59, 0.55) !important;
+      cursor: pointer !important;
+      user-select: none !important;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.15) !important;
+      transition: background 0.15s ease !important;
+    }
+    .inspector-collapsible-header:hover {
+      background: rgba(56, 189, 248, 0.14) !important;
+    }
+    .inspector-collapsible-title {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      font-size: 0.82rem !important;
+      font-weight: 700 !important;
+      color: #38bdf8 !important;
+      letter-spacing: 0.02em !important;
+    }
+    .inspector-collapse-arrow {
+      font-size: 0.75rem !important;
+      color: #94a3b8 !important;
+      transition: transform 0.2s ease !important;
+      display: inline-block !important;
+    }
+    .inspector-collapsible-body {
+      padding: 14px !important;
+      display: block !important;
+      transition: all 0.2s ease !important;
+    }
+    .inspector-collapsible-card.collapsed {
+      background: rgba(15, 23, 42, 0.45) !important;
+      border-color: rgba(51, 65, 85, 0.5) !important;
+    }
+    .inspector-collapsible-card.collapsed .inspector-collapsible-header {
+      border-bottom: none !important;
+      background: rgba(15, 23, 42, 0.6) !important;
+    }
+    .inspector-collapsible-card.collapsed .inspector-collapsible-body {
+      display: none !important;
+    }
+    .inspector-collapsible-card.collapsed .inspector-collapse-arrow {
+      transform: rotate(-90deg) !important;
+    }
+    .insp-toggle-all-btn {
+      background: rgba(30, 41, 59, 0.8) !important;
+      border: 1px solid #334155 !important;
+      color: #94a3b8 !important;
+      font-size: 0.7rem !important;
+      font-weight: 700 !important;
+      padding: 3px 9px !important;
+      border-radius: 5px !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease !important;
+    }
+    .insp-toggle-all-btn:hover {
+      background: rgba(56, 189, 248, 0.18) !important;
+      border-color: #38bdf8 !important;
+      color: #38bdf8 !important;
+    }
+
     .responsibility-card {
       background: rgba(15, 23, 42, 0.7) !important;
       border: 1px solid rgba(56, 189, 248, 0.25) !important;
@@ -5958,25 +6032,35 @@ def build_portal_html(data, is_shareable=False):
               ` : ''}
             </div>
 
-            <div class="responsibility-card">
-              <div class="resp-header">
-                <span>🎯</span>
-                <span>このステップの処理内容 (STEP DETAIL)</span>
+            <div class="inspector-collapsible-card" id="insp-card-seq-detail">
+              <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-seq-detail')">
+                <div class="inspector-collapsible-title">
+                  <span>🎯</span>
+                  <span>このステップの処理内容 (STEP DETAIL)</span>
+                </div>
+                <span class="inspector-collapse-arrow">▼</span>
               </div>
-              <div class="resp-content" style="white-space: pre-line;">${resp}</div>
+              <div class="inspector-collapsible-body" style="padding: 12px 14px;">
+                <div style="font-size: 0.82rem; color: #e2e8f0; line-height: 1.6; white-space: pre-line;">${resp}</div>
+              </div>
             </div>
 
-            <div class="logic-steps-card">
-              <div class="steps-header">
-                <span>⚙️</span>
-                <span>ステップ実行詳細・前後関係</span>
-              </div>
-              ${steps.map((sItem, idx) => `
-                <div class="step-item">
-                  <div class="step-num-badge">${idx + 1}</div>
-                  <div>${sItem}</div>
+            <div class="inspector-collapsible-card" id="insp-card-seq-flow">
+              <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-seq-flow')">
+                <div class="inspector-collapsible-title" style="color: #34d399;">
+                  <span>⚙️</span>
+                  <span>ステップ実行詳細・前後関係</span>
                 </div>
-              `).join('')}
+                <span class="inspector-collapse-arrow">▼</span>
+              </div>
+              <div class="inspector-collapsible-body" style="padding: 12px 14px;">
+                ${steps.map((sItem, idx) => `
+                  <div class="step-item">
+                    <div class="step-num-badge">${idx + 1}</div>
+                    <div style="word-break: break-all;">${sItem}</div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
 
             <div class="logic-steps-card" style="border-color: rgba(56, 189, 248, 0.3);">
@@ -6003,43 +6087,79 @@ def build_portal_html(data, is_shareable=False):
             ${repoContextHtml}
           `;
         } else {
+          const respContentHtml = formatSystemResponsibility(selectedNodeData.name, resp, tech);
+
           tabBody = `
             ${repoContextHtml}
             ${actionAlertHtml}
-            <div class="node-header-card">
-              <span class="node-category-tag">${category}</span>
-              <div class="node-main-title">${selectedNodeData.name}</div>
-              ${selectedNodeData.path ? `
-                <div class="node-file-chip" title="対象コードパス">
-                  <span>📁</span>
-                  <span>${selectedNodeData.path}</span>
+
+            <!-- Quick Toggle Bar for Overview Cards -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600;">各セクションの開閉 (▼/▶) でスクロールを短縮できます</span>
+              <button class="insp-toggle-all-btn" onclick="toggleAllInspectorCards(this)" title="概要タブの全セクションを一括で折りたたみ / 展開">
+                <span>すべて折りたたむ ▲</span>
+              </button>
+            </div>
+
+            <!-- Card 1: Basic Node Info -->
+            <div class="inspector-collapsible-card" id="insp-card-info">
+              <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-info')">
+                <div class="inspector-collapsible-title">
+                  <span>📌</span>
+                  <span>基本情報 &amp; 技術スタック</span>
                 </div>
-              ` : ''}
-              <div class="node-tech-row">
-                <span>⚡ 技術スタック:</span>
-                <strong style="color: #e2e8f0;">${tech}</strong>
+                <span class="inspector-collapse-arrow">▼</span>
+              </div>
+              <div class="inspector-collapsible-body" style="padding: 12px 14px;">
+                <span class="node-category-tag">${category}</span>
+                <div class="node-main-title" style="margin-top: 6px;">${selectedNodeData.name}</div>
+                ${selectedNodeData.path ? `
+                  <div class="node-file-chip" title="対象コードパス">
+                    <span>📁</span>
+                    <span>${selectedNodeData.path}</span>
+                  </div>
+                ` : ''}
+                <div class="node-tech-row" style="margin-top: 8px;">
+                  <span>⚡ 技術スタック:</span>
+                  <strong style="color: #e2e8f0;">${tech}</strong>
+                </div>
               </div>
             </div>
 
-            <div class="responsibility-card">
-              <div class="resp-header">
-                <span>🎯</span>
-                <span>システムの責務 (SYSTEM RESPONSIBILITY)</span>
+            <!-- Card 2: System Responsibility & Purpose (Clear Japanese Explanations) -->
+            <div class="inspector-collapsible-card" id="insp-card-resp">
+              <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-resp')">
+                <div class="inspector-collapsible-title">
+                  <span>🎯</span>
+                  <span>システムの役割・機能概要 (役割と責務)</span>
+                </div>
+                <span class="inspector-collapse-arrow">▼</span>
               </div>
-              <div class="resp-content">${resp}</div>
+              <div class="inspector-collapsible-body" style="padding: 12px 14px;">
+                <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">
+                  💡 <strong>システムの責務とは:</strong> このリポジトリ／モジュールがソフトウェア全体の中で果たす役割（管理画面提供、API連携、データ保存など）のことです。
+                </div>
+                ${respContentHtml}
+              </div>
             </div>
 
-            <div class="logic-steps-card">
-              <div class="steps-header">
-                <span>⚙️</span>
-                <span>主な処理ロジック (PROCESSING LOGIC)</span>
-              </div>
-              ${steps.map((st, idx) => `
-                <div class="step-item">
-                  <div class="step-num-badge">${idx + 1}</div>
-                  <div>${st}</div>
+            <!-- Card 3: Processing Logic Steps -->
+            <div class="inspector-collapsible-card" id="insp-card-logic">
+              <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-logic')">
+                <div class="inspector-collapsible-title" style="color: #34d399;">
+                  <span>⚙️</span>
+                  <span>主な処理ロジック &amp; 稼働情報 (PROCESSING LOGIC)</span>
                 </div>
-              `).join('')}
+                <span class="inspector-collapse-arrow">▼</span>
+              </div>
+              <div class="inspector-collapsible-body" style="padding: 12px 14px;">
+                ${steps.map((st, idx) => `
+                  <div class="step-item">
+                    <div class="step-num-badge">${idx + 1}</div>
+                    <div style="word-break: break-all;">${st}</div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           `;
         }
@@ -7563,6 +7683,165 @@ def build_portal_html(data, is_shareable=False):
           btnEl.style.color = '';
         }, 2000);
       });
+    }
+
+    function toggleInspectorCard(cardId) {
+      const card = document.getElementById(cardId);
+      if (card) {
+        card.classList.toggle('collapsed');
+      }
+    }
+
+    function toggleAllInspectorCards(btnEl) {
+      const cards = document.querySelectorAll('.inspector-collapsible-card');
+      if (!cards.length) return;
+      const anyCollapsed = Array.from(cards).some(c => c.classList.contains('collapsed'));
+      cards.forEach(c => c.classList.toggle('collapsed', !anyCollapsed));
+      if (btnEl) {
+        btnEl.textContent = anyCollapsed ? 'すべて折りたたむ ▲' : 'すべて展開 ▼';
+      }
+    }
+
+    function formatSystemResponsibility(nodeName, rawDesc, tech) {
+      function mdToHtml(str) {
+        if (!str) return '';
+        return str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener" style="color: #38bdf8; text-decoration: underline;">$1</a>');
+      }
+
+      const cleanName = (nodeName || '').trim();
+      const lowerName = cleanName.toLowerCase();
+      const rawText = (rawDesc || '').trim();
+      const lowerDesc = rawText.toLowerCase();
+
+      // Check if description is generic template boilerplate
+      const isBoilerplate = lowerDesc.includes('bootstrapped with') ||
+                            lowerDesc.includes('create-next-app') ||
+                            lowerDesc.includes('create-react-app') ||
+                            lowerDesc.includes('getting started') ||
+                            lowerDesc.includes('npm run dev') ||
+                            lowerDesc.includes('yarn dev') ||
+                            lowerDesc.includes('pnpm dev') ||
+                            rawText.length < 15;
+
+      let roleSummary = "";
+      let duties = [];
+      let scope = "";
+
+      if (lowerName.includes('admin') || lowerName.includes('portal')) {
+        roleSummary = `「${cleanName}」は、plusimpact における管理・運用専用のWebポータル（管理画面）です。`;
+        duties = [
+          "運用管理者向けダッシュボードおよびシステム状況確認UIの提供",
+          "Webサイト掲載コンテンツ（お知らせ・記事・設定等）の登録・編集・管理",
+          "管理者権限管理およびバックエンドAPI（Admin API）とのセキュアなデータ連携"
+        ];
+        scope = "管理者・オペレーター向けWebポータル";
+      } else if (lowerName.includes('corporate') || lowerName.includes('marketing') || lowerName.includes('website')) {
+        roleSummary = `「${cleanName}」は、plusimpact の公式企業サイトおよびサービス紹介Webフロントエンドです。`;
+        duties = [
+          "エンドユーザー・来訪者向けの高パフォーマンスなWebページ描画（SSR / SSG）",
+          "会社情報・製品案内・お問い合わせ受付フォームの提供",
+          "SEO最適化・レスポンシブデザインによるマルチデバイス対応"
+        ];
+        scope = "一般ユーザー向け公開Webサイト";
+      } else if (lowerName.includes('backend') || lowerName.includes('api') || lowerName.includes('service')) {
+        roleSummary = `「${cleanName}」は、コア業務ロジックの実行とデータ永続化を担うバックエンドAPIサーバーです。`;
+        duties = [
+          "フロントエンドからのREST / GraphQLリクエストの受付・検証・認可",
+          "データベース（PostgreSQL / MySQL等）とのトランザクション処理・データ永続化",
+          "外部AIサービス連携および非同期ジョブキューのオーケストレーション"
+        ];
+        scope = "コアビジネスロジック & API層";
+      } else if (lowerName.includes('frontend') || lowerName.includes('individual')) {
+        roleSummary = `「${cleanName}」は、一般ユーザー・受検者向けの対話型Webフロントエンドアプリケーションです。`;
+        duties = [
+          "受検者向けユーザーインターフェース（テスト画面・結果確認・音声録音）の提供",
+          "クライアント側状態管理およびリアルタイムな進捗フィードバック",
+          "APIサーバーとの認証付き非同期データ送受信"
+        ];
+        scope = "エンドユーザー向けWebアプリケーション";
+      } else if (lowerName.includes('infra') || lowerName.includes('terraform') || lowerName.includes('cdk')) {
+        roleSummary = `「${cleanName}」は、クラウド環境およびインフラ構成（IaC）をコードで一元管理するリポジトリです。`;
+        duties = [
+          "Terraform / HCL 等によるクラウドインフラのプロビジョニング",
+          "ネットワーク（VPC・サブネット・DNS・SSL/TLS証明書）およびコンテナ基盤の構成定義",
+          "ステージング・本番環境のCI/CDパイプライン・環境設定の自動化"
+        ];
+        scope = "インフラストラクチャ & CI/CD";
+      } else if (lowerName.includes('talk') || lowerName.includes('video') || lowerName.includes('personality') || lowerName.includes('execution')) {
+        roleSummary = `「${cleanName}」は、AI処理・メディア生成・アルゴリズム実行を担当するモジュールです。`;
+        duties = [
+          "対話・動画生成・音声解析などのAI/メディア処理パイプラインの実行",
+          "非同期キューによるバックグラウンドバッチ処理およびストリーミング配信",
+          "外部生成AIモデル（Gemini・Claude等）とのプロンプト連携および結果構造化"
+        ];
+        scope = "AI & メディア処理エンジン";
+      } else if (lowerName.includes('util') || lowerName.includes('design-system') || lowerName.includes('setup')) {
+        roleSummary = `「${cleanName}」は、各リポジトリから共通利用される共有ユーティリティ・基盤モジュールです。`;
+        duties = [
+          "共通UIコンポーネント・デザインシステムの提供",
+          "共通型定義・ユーティリティ関数の標準化と再利用性向上",
+          "開発環境セットアップおよび自動化ツールの提供"
+        ];
+        scope = "共有基盤 & 開発ツール";
+      } else if (rawText && !isBoilerplate) {
+        roleSummary = `「${cleanName}」は、${rawText.slice(0, 100)}`;
+        duties = [
+          "担当領域における入力データ・パラメータの検証と整合性の確保",
+          "ドメイン固有ロジックの実行および関連データベース/APIサービスとの連携",
+          "例外発生時のエラーハンドリングと安全なレスポンス返却"
+        ];
+        scope = "アーキテクチャコンポーネント";
+      } else {
+        roleSummary = `「${cleanName}」は、${tech || 'システム'} を基盤とする独立したアプリケーションモジュールです。`;
+        duties = [
+          "クライアント通信の受付および入力パラメータの妥当性検証",
+          "ドメイン固有ロジックの実行と関連データベース/サービス呼び出し",
+          "処理結果の構造化レスポンス生成とエラーハンドリング"
+        ];
+        scope = "アプリケーションモジュール";
+      }
+
+      const dutiesHtml = duties.map(d => `
+        <div style="display: flex; align-items: flex-start; gap: 7px; font-size: 0.77rem; color: #cbd5e1; margin-bottom: 5px;">
+          <span style="color: #38bdf8; font-weight: 800; line-height: 1.4; flex-shrink: 0;">✓</span>
+          <span style="line-height: 1.45;">${d}</span>
+        </div>
+      `).join('');
+
+      return `
+        <div class="resp-structured-box" style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 7px; padding: 12px;">
+          <div style="font-size: 0.84rem; font-weight: 700; color: #f8fafc; line-height: 1.55; margin-bottom: 10px; border-left: 3px solid #38bdf8; padding-left: 10px;">
+            ${roleSummary}
+          </div>
+
+          <div style="background: rgba(30, 41, 59, 0.5); border-radius: 6px; padding: 9px 11px; margin-bottom: 10px; border: 1px solid rgba(56, 189, 248, 0.12);">
+            <div style="font-size: 0.72rem; font-weight: 800; color: #38bdf8; margin-bottom: 6px; display: flex; align-items: center; gap: 5px;">
+              <span>📋</span><span>このシステムが担当する主な役割・提供機能:</span>
+            </div>
+            ${dutiesHtml}
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 0.72rem; color: #94a3b8; border-top: 1px solid rgba(51, 65, 85, 0.5); padding-top: 8px;">
+            <div><span>📌 担当領域:</span> <strong style="color: #e2e8f0;">${scope}</strong></div>
+            ${tech ? `<div><span>⚡ 技術基盤:</span> <strong style="color: #38bdf8;">${tech}</strong></div>` : ''}
+          </div>
+
+          ${(rawText && !isBoilerplate) ? `
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(51, 65, 85, 0.6); font-size: 0.74rem; color: #cbd5e1; line-height: 1.5;">
+              <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 3px;">📄 リポジトリ補足情報:</div>
+              <div>${mdToHtml(rawText)}</div>
+            </div>
+          ` : (isBoilerplate && rawText ? `
+            <div style="margin-top: 8px; font-size: 0.68rem; color: #64748b; line-height: 1.4;">
+              💡 <em>※ 元のREADME記載: ${mdToHtml(rawText.slice(0, 110))}...</em>
+            </div>
+          ` : '')}
+        </div>
+      `;
     }
 
     function toggleActionCard(idx) {
