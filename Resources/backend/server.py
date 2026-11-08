@@ -246,6 +246,50 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": str(exc)})
             return
 
+        if self.path.startswith("/api/terminal/exec"):
+            try:
+                import subprocess
+                body = json.loads(body_raw) if body_raw else {}
+                cmd = (body.get("command") or "").strip()
+                repo_name = (body.get("repo") or "").strip()
+                if not cmd:
+                    self._send_json(400, {"error": "コマンドが指定されていません。"})
+                    return
+
+                work_dir = Path.home() / "Git" / repo_name if repo_name else BACKEND_DIR.parent.parent
+                if not work_dir.exists():
+                    work_dir = BACKEND_DIR.parent.parent
+
+                t0 = time.time()
+                proc = subprocess.run(
+                    cmd,
+                    shell=True,
+                    cwd=str(work_dir),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=30,
+                    executable="/bin/bash"
+                )
+                dur = int((time.time() - t0) * 1000)
+                self._send_json(200, {
+                    "ok": proc.returncode == 0,
+                    "exit_code": proc.returncode,
+                    "output": proc.stdout or "",
+                    "cwd": str(work_dir),
+                    "duration_ms": dur
+                })
+            except subprocess.TimeoutExpired:
+                self._send_json(200, {
+                    "ok": False,
+                    "exit_code": 124,
+                    "output": "Command timed out after 30 seconds.\n",
+                    "duration_ms": 30000
+                })
+            except Exception as exc:
+                self._send_json(500, {"error": str(exc), "output": str(exc)})
+            return
+
         self._send_json(404, {"error": "Unknown API endpoint"})
 
 

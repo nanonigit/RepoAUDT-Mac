@@ -4668,6 +4668,106 @@ def build_portal_html(data, is_shareable=False):
       align-items: center;
       gap: 12px;
     }
+    /* Embedded Terminal Pane in Inspector */
+    .terminal-pane-container {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 130px);
+      background: #070b12;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      overflow: hidden;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #0d131f;
+      border-bottom: 1px solid #1e293b;
+      font-size: 0.72rem;
+    }
+    .terminal-title-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+    .terminal-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .terminal-dot-red { background: #ef4444; }
+    .terminal-dot-yellow { background: #f59e0b; }
+    .terminal-dot-green { background: #10b981; }
+    .terminal-cwd-badge {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+    }
+    .terminal-quick-chips {
+      display: flex;
+      gap: 5px;
+      padding: 6px 10px;
+      background: #090e18;
+      border-bottom: 1px solid #1e293b;
+      overflow-x: auto;
+    }
+    .term-chip {
+      background: #131c2e;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-size: 0.68rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.12s ease;
+    }
+    .term-chip:hover {
+      background: #1e293b;
+      color: #38bdf8;
+      border-color: #38bdf8;
+    }
+    .terminal-output-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      color: #e2e8f0;
+      font-size: 0.74rem;
+      line-height: 1.55;
+      user-select: text;
+    }
+    .terminal-input-row {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      background: #0a0f1d;
+      border-top: 1px solid #1e293b;
+      gap: 8px;
+    }
+    .terminal-prompt { color: #34d399; font-weight: 800; }
+    #terminal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #f8fafc;
+      font-family: inherit;
+      font-size: 0.78rem;
+    }
+    .term-run-btn {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .term-run-btn:hover { background: #3b82f6; }
 
 </style>
 </head>
@@ -4891,6 +4991,24 @@ def build_portal_html(data, is_shareable=False):
       </div>
     </div>
 
+    <!-- Beginner Easy Guide Bar (Can be dismissed or toggled) -->
+    <div class="beginner-guide-bar" id="beginner-guide-bar" style="background: linear-gradient(90deg, rgba(14, 165, 233, 0.12) 0%, rgba(99, 102, 241, 0.10) 100%); border-bottom: 1px solid rgba(56, 189, 248, 0.22); padding: 5px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 0.74rem; color: #cbd5e1; user-select: none;">
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <span style="font-weight: 800; color: #38bdf8; display: flex; align-items: center; gap: 4px;">
+          <span>🔰</span>
+          <span data-i18n="guide_title">3ステップ・かんたん使い方:</span>
+        </span>
+        <span class="guide-step"><span data-i18n="guide_step_1">① <b>左ペイン</b>でリポジトリを選択</span></span>
+        <span style="color: #475569;">➜</span>
+        <span class="guide-step"><span data-i18n="guide_step_2">② <b>中央の図</b>の箱をクリックして構造や安全性を確認</span></span>
+        <span style="color: #475569;">➜</span>
+        <span class="guide-step"><span data-i18n="guide_step_3">③ <b>右インスペクター</b>で修正プロンプトのコピーやターミナル実行</span></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <button onclick="document.getElementById('beginner-guide-bar').style.display='none'" style="background: transparent; border: none; color: #94a3b8; font-size: 0.72rem; cursor: pointer; padding: 2px 6px; border-radius: 4px;" title="ガイドを非表示">✕</button>
+      </div>
+    </div>
+
     <div class="sequence-selector-bar" id="sequence-selector-bar" style="display: none;">
         <span style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; display: flex; align-items: center; gap: 4px;">
           <span>⏱️</span> 実行フロー:
@@ -4931,11 +5049,13 @@ def build_portal_html(data, is_shareable=False):
     <div class="inspector-header">
       <h3 data-i18n="inspector_title">🔍 コンポーネント詳細インスペクター</h3>
       <div class="inspector-actions">
+        <button class="btn-icon" onclick="switchInspTab('terminal')" title="ターミナルを開く (⌘J)">💻</button>
         <button class="btn-icon" onclick="toggleInspectorWidth()" title="幅を最大化 / 元に戻す">⛶</button>
       </div>
     </div>
     <div class="inspector-tabs">
       <div class="insp-tab active" data-tab-name="overview" onclick="switchInspTab('overview')"><span data-i18n="tab_overview">📋 概要</span></div>
+      <div class="insp-tab" data-tab-name="terminal" onclick="switchInspTab('terminal')"><span data-i18n="tab_terminal">💻 ターミナル</span></div>
       <div class="insp-tab" data-tab-name="versions" onclick="switchInspTab('versions')"><span data-i18n="tab_versions">🛡️ バージョン</span></div>
       <div class="insp-tab" data-tab-name="deploy" onclick="switchInspTab('deploy')"><span data-i18n="tab_deploy">🚀 インフラ</span></div>
       <div class="insp-tab" data-tab-name="api" onclick="switchInspTab('api')"><span data-i18n="tab_api">🔌 API</span></div>
@@ -4945,12 +5065,56 @@ def build_portal_html(data, is_shareable=False):
       <div class="insp-tab" data-tab-name="files" onclick="switchInspTab('files')"><span data-i18n="tab_files">📁 ファイル</span></div>
     </div>
     <div id="inspector-body">
+      <!-- Embedded Terminal View inside Inspector (Right Pane) -->
+      <div id="insp-terminal-panel" style="display: none; height: 100%;">
+        <div class="terminal-pane-container">
+          <div class="terminal-header">
+            <div class="terminal-title-left">
+              <span class="terminal-dot terminal-dot-red"></span>
+              <span class="terminal-dot terminal-dot-yellow"></span>
+              <span class="terminal-dot terminal-dot-green"></span>
+              <span style="margin-left: 4px; font-weight: 700;">RepoCHK Shell</span>
+              <span class="terminal-cwd-badge" id="terminal-cwd-display">~/Git</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="term-chip" onclick="clearTerminalOutput()" title="出力をクリア">🧹 クリア</button>
+            </div>
+          </div>
+
+          <!-- Beginner Friendly Quick Action Chips -->
+          <div class="terminal-quick-chips">
+            <span style="font-size: 0.68rem; color: #64748b; display: flex; align-items: center; gap: 2px;">⚡ クイック:</span>
+            <button class="term-chip" onclick="runTerminalCommand('git status')">📊 Git状態</button>
+            <button class="term-chip" onclick="runTerminalCommand('git log -n 3 --oneline')">📜 コミット履歴</button>
+            <button class="term-chip" onclick="runTerminalCommand('git pull origin main')">🔄 最新取得 (pull)</button>
+            <button class="term-chip" onclick="runTerminalCommand('ls -la')">📁 ファイル一覧</button>
+            <button class="term-chip" onclick="runTerminalCommand('python3 --version && node --version')">⚙️ 環境情報</button>
+          </div>
+
+          <!-- Terminal Output Area -->
+          <div class="terminal-output-scroll" id="terminal-output-area">
+            <div style="color: #64748b; margin-bottom: 6px;">=== RepoCHK Mac Embedded Terminal (bash) ===</div>
+            <div style="color: #38bdf8; margin-bottom: 8px;">💡 上のクイックボタンを押すか、下の入力欄にコマンドを入力して [実行] できます。</div>
+          </div>
+
+          <!-- Terminal Input Row -->
+          <div class="terminal-input-row">
+            <span class="terminal-prompt">$</span>
+            <input type="text" id="terminal-input" placeholder="コマンドを入力... (例: git status, npm test, ls -la)" onkeydown="if(event.key==='Enter') submitTerminalInput()">
+            <button class="term-run-btn" onclick="submitTerminalInput()" id="terminal-exec-btn">実行 ↵</button>
+          </div>
+        </div>
+      </div>
+
       <div class="empty-state" id="insp-empty">
-        <div style="font-size: 2.2rem; margin-bottom: 12px;">👆</div>
-        <div style="font-weight: 600; color: #94a3b8; font-size: 0.95rem;" data-i18n="empty_inspector_title">ボックスをクリックしてください</div>
-        <div style="font-size: 0.8rem; margin-top: 6px; line-height: 1.5; color: #64748b;" data-i18n="empty_inspector_desc">
-          図の中の任意のボックスを選択すると、Next.js/DBのバージョン番号、脆弱性対応情報、API、環境変数、デプロイ情報が表示されます。<br><br>
-          左右の境界線をドラッグして、このパネルの幅を自由に調整できます。
+        <div style="font-size: 2.2rem; margin-bottom: 12px;">🗺️</div>
+        <div style="font-weight: 700; color: #f8fafc; font-size: 0.95rem;" data-i18n="empty_inspector_title">コンポーネントを選択してください</div>
+        <div style="font-size: 0.8rem; margin-top: 6px; line-height: 1.5; color: #94a3b8;" data-i18n="empty_inspector_desc">
+          中央の図のボックスをクリックするか、下のクイックボタンからシステムの詳細・安全性を確認できます。
+        </div>
+        <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
+          <button class="term-chip" onclick="switchInspTab('terminal')">💻 右側ターミナルを開く (⌘J)</button>
+          <button class="term-chip" onclick="switchViewMode('coderabbit')">🐰 AI品質監査を見る</button>
         </div>
       </div>
       <div id="insp-content" style="display: none;"></div>
@@ -5122,6 +5286,10 @@ def build_portal_html(data, is_shareable=False):
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
           <span style="color: #cbd5e1;" data-i18n="sc_toggle_inspector">インスペクター（右ペイン）の開閉</span>
           <kbd class="kbd-badge" style="font-size: 0.75rem;">⌘I / Ctrl+I</kbd>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
+          <span style="color: #cbd5e1;" data-i18n="sc_terminal">ターミナル（右ペイン）の開閉</span>
+          <kbd class="kbd-badge" style="font-size: 0.75rem;">⌘J / Ctrl+J</kbd>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
           <span style="color: #cbd5e1;" data-i18n="sc_settings">設定モーダルを開く</span>
@@ -5445,6 +5613,10 @@ def build_portal_html(data, is_shareable=False):
         } else if (key === 'i') {
           e.preventDefault();
           toggleInspectorPane();
+          return;
+        } else if (key === 'j') {
+          e.preventDefault();
+          toggleTerminalTab();
           return;
         }
       }
@@ -6272,9 +6444,113 @@ def build_portal_html(data, is_shareable=False):
 
     function switchInspTab(tab) {
       currentInspTab = tab;
-      document.querySelectorAll('.insp-tab').forEach(t => t.classList.remove('active'));
-      event.target.classList.add('active');
+      document.querySelectorAll('.insp-tab').forEach(t => {
+        t.classList.toggle('active', t.getAttribute('data-tab-name') === tab);
+      });
+
+      const termPanel = document.getElementById('insp-terminal-panel');
+      if (tab === 'terminal') {
+        if (inspEmpty) inspEmpty.style.display = 'none';
+        if (inspContent) inspContent.style.display = 'none';
+        if (termPanel) {
+          termPanel.style.display = 'block';
+          updateTerminalCwd();
+          setTimeout(() => {
+            const inp = document.getElementById('terminal-input');
+            if (inp) inp.focus();
+          }, 50);
+        }
+        return;
+      }
+
+      if (termPanel) termPanel.style.display = 'none';
       renderInspector();
+    }
+
+    function toggleTerminalTab() {
+      if (currentInspTab === 'terminal') {
+        switchInspTab('overview');
+      } else {
+        switchInspTab('terminal');
+      }
+    }
+
+    function updateTerminalCwd() {
+      const cwdEl = document.getElementById('terminal-cwd-display');
+      if (!cwdEl) return;
+      const rName = selectedDiagram?.repo || 'RepoCHK-Mac';
+      cwdEl.textContent = `~/Git/${rName}`;
+    }
+
+    function clearTerminalOutput() {
+      const area = document.getElementById('terminal-output-area');
+      if (area) {
+        area.innerHTML = '<div style="color: #64748b;">=== RepoCHK Mac Terminal (Cleared) ===</div>';
+      }
+    }
+
+    async function runTerminalCommand(cmd) {
+      const area = document.getElementById('terminal-output-area');
+      const execBtn = document.getElementById('terminal-exec-btn');
+      if (!area) return;
+
+      const escapedCmd = cmd.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const runId = 'term-cmd-' + Date.now();
+      area.innerHTML += `
+        <div style="margin-top: 10px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08);">
+          <div style="color: #38bdf8; font-weight: 700;">$ ${escapedCmd}</div>
+          <div id="${runId}" style="color: #94a3b8; font-size: 0.72rem; margin-top: 3px;">⏳ 実行中...</div>
+        </div>
+      `;
+      area.scrollTop = area.scrollHeight;
+
+      if (execBtn) { execBtn.disabled = true; execBtn.textContent = '⏳...'; }
+
+      try {
+        const repoName = selectedDiagram?.repo || '';
+        const resp = await fetch('/api/terminal/exec', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: cmd, repo: repoName })
+        });
+        const data = await resp.json();
+        const resEl = document.getElementById(runId);
+        if (!resEl) return;
+
+        const dur = data.duration_ms || 0;
+        const isOk = data.ok;
+        const color = isOk ? '#34d399' : '#f87171';
+        const statusText = isOk ? `✓ 完了 (${dur}ms)` : `✕ 失敗 (exit: ${data.exit_code}, ${dur}ms)`;
+
+        let out = (data.output || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        if (!out.trim()) out = '(出力なし)';
+
+        resEl.innerHTML = `
+          <div style="color: ${color}; font-weight: 700; margin-bottom: 4px;">${statusText}</div>
+          <pre style="white-space: pre-wrap; font-family: inherit; color: #f1f5f9; margin: 0; background: #030712; padding: 6px 8px; border-radius: 4px; border: 1px solid #1e293b;">${out}</pre>
+        `;
+      } catch (err) {
+        const resEl = document.getElementById(runId);
+        if (resEl) {
+          resEl.innerHTML = `<div style="color: #f87171; font-weight: 700;">✕ エラー: ${err.message}</div>`;
+        }
+      } finally {
+        if (execBtn) { execBtn.disabled = false; execBtn.textContent = '実行 ↵'; }
+        area.scrollTop = area.scrollHeight;
+      }
+    }
+
+    function submitTerminalInput() {
+      const inp = document.getElementById('terminal-input');
+      if (!inp || !inp.value.trim()) return;
+      const cmd = inp.value.trim();
+      inp.value = '';
+      runTerminalCommand(cmd);
+    }
+
+    function runFixInTerminal(cmd) {
+      switchInspTab('terminal');
+      setTimeout(() => runTerminalCommand(cmd), 100);
     }
 
     function renderInspector() {
@@ -6422,9 +6698,10 @@ def build_portal_html(data, is_shareable=False):
                         }).join('<br/>')}</pre>
                       ` : ''}
                       ${act.fix_cmd ? `
-                        <div class="hotspot-fix-box" style="margin-top: 4px;">
-                          <span class="hotspot-cmd">$ ${act.fix_cmd}</span>
+                        <div class="hotspot-fix-box" style="margin-top: 4px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                          <span class="hotspot-cmd" style="flex: 1; min-width: 140px;">$ ${act.fix_cmd}</span>
                           <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">${dict.copy_btn}</button>
+                          <button class="hotspot-copy-btn" onclick="runFixInTerminal('${encodeURIComponent(act.fix_cmd)}')" style="background: #2563eb; color: #ffffff; border-color: #3b82f6; font-weight: 700;">${dict.run_in_terminal || '▶ ターミナルで実行'}</button>
                         </div>
                       ` : ''}
                     </div>
@@ -6560,7 +6837,38 @@ def build_portal_html(data, is_shareable=False):
           const dict = I18N[currentLang] || I18N.ja;
           const respContentHtml = formatSystemResponsibility(selectedNodeData.name, resp, tech);
 
+          const alertCount = repoActions.length;
+          const safetyColor = alertCount === 0 ? '#10b981' : (alertCount > 2 ? '#ef4444' : '#f59e0b');
+          const safetyText = alertCount === 0 ? (currentLang === 'en' ? '✅ Safe (No Critical Issues)' : '✅ 安全（重大な問題なし）')
+            : (alertCount > 2 ? (currentLang === 'en' ? `🚨 Action Needed (${alertCount} items)` : `🚨 要対応 (${alertCount}件の改善推奨)`)
+            : (currentLang === 'en' ? `⚠️ Attention (${alertCount} items)` : `⚠️ 注意 (${alertCount}件)`));
+
+          const plainRoleDesc = resp.length > 150 ? resp.slice(0, 150) + '...' : resp;
+
+          const plainSummaryCardHtml = `
+            <div style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 27, 75, 0.8) 100%); border: 1px solid #3b82f6; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.15);">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 0.82rem; font-weight: 800; color: #93c5fd; display: flex; align-items: center; gap: 6px;">
+                  <span>🔰</span>
+                  <span>${dict.plain_summary_title || 'ひと目でわかるサマリー'}</span>
+                </span>
+                <span style="font-size: 0.7rem; font-weight: 800; padding: 2px 8px; border-radius: 9999px; background: ${safetyColor}22; color: ${safetyColor}; border: 1px solid ${safetyColor};">
+                  ${safetyText}
+                </span>
+              </div>
+              <div style="font-size: 0.76rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 10px;">
+                <b>${selectedNodeData.name}</b> は、システム全体の<b>${category}</b>です。${plainRoleDesc}
+              </div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button class="term-chip" onclick="switchInspTab('terminal')" style="background: #1e3a8a; border-color: #3b82f6; color: #bfdbfe;" title="ターミナルを開く (⌘J)">💻 ターミナルで操作 (⌘J)</button>
+                <button class="term-chip" onclick="switchViewMode('coderabbit')" style="background: #4c1d95; border-color: #8b5cf6; color: #ddd6fe;" title="AI監査レポートを確認">🐰 AI監査</button>
+                ${alertCount > 0 ? `<button class="term-chip" onclick="document.getElementById('action-alert-card-0')?.scrollIntoView({behavior: 'smooth'})" style="background: #881337; border-color: #f43f5e; color: #fecdd3;">🚨 要対応箇所へジャンプ</button>` : ''}
+              </div>
+            </div>
+          `;
+
           tabBody = `
+            ${plainSummaryCardHtml}
             ${repoContextHtml}
             ${actionAlertHtml}
 
@@ -8582,6 +8890,7 @@ def build_portal_html(data, is_shareable=False):
         search_placeholder: "🔍 リポジトリや機能名で検索...",
         inspector_title: "🔍 コンポーネント詳細インスペクター",
         tab_overview: "📋 概要",
+        tab_terminal: "💻 ターミナル",
         tab_versions: "🛡️ バージョン",
         tab_deploy: "🚀 インフラ",
         tab_api: "🔌 API",
@@ -8589,8 +8898,8 @@ def build_portal_html(data, is_shareable=False):
         tab_env: "⚙️ 環境変数",
         tab_integrations: "🔗 連携",
         tab_files: "📁 ファイル",
-        empty_inspector_title: "ボックスをクリックしてください",
-        empty_inspector_desc: "図の中の任意のボックスを選択すると、Next.js/DBのバージョン番号、脆弱性対応情報、API、環境変数、デプロイ情報が表示されます。<br><br>左右の境界線をドラッグして、このパネルの幅を自由に調整できます。",
+        empty_inspector_title: "コンポーネントを選択してください",
+        empty_inspector_desc: "中央の図のボックスをクリックするか、下のクイックボタンからシステムの詳細・安全性を確認できます。",
         insp_toggle_hint: "各セクションの開閉 (▼/▶) でスクロールを短縮できます",
         collapse_all: "すべて折りたたむ ▲",
         expand_all: "すべて展開 ▼",
@@ -8600,6 +8909,7 @@ def build_portal_html(data, is_shareable=False):
         how_to_fix: "🛠️ 対応方法の提案 (具体的な対策):",
         recommended_diff: "推奨コード変更 (Diff):",
         copy_btn: "📋 コピー",
+        run_in_terminal: "▶ ターミナルで実行",
         copy_prompt_btn: "📋 AI修正プロンプトをコピー",
         copied: "✓ コピー完了！",
         basic_info_title: "基本情報 &amp; 技術スタック",
@@ -8625,6 +8935,12 @@ def build_portal_html(data, is_shareable=False):
         sc_zoom: "ズーム拡大 / 縮小 / リセット",
         sc_help: "このショートカット一覧を表示",
         btn_close: "閉じる",
+        guide_title: "3ステップ・かんたん使い方:",
+        guide_step_1: "① <b>左ペイン</b>でリポジトリを選択",
+        guide_step_2: "② <b>中央の図</b>の箱をクリックして構造や安全性を確認",
+        guide_step_3: "③ <b>右インスペクター</b>で修正プロンプトのコピーやターミナル実行",
+        plain_summary_title: "ひと目でわかるサマリー",
+        sc_terminal: "ターミナル（右ペイン）の開閉",
         toast_svg_exported: "📐 SVGダイアグラムをダウンロードしました",
         toast_png_exported: "📷 高解像度PNG画像を保存しました",
         toast_sync_complete: "🔄 GitHub最新情報の同期が完了しました",
@@ -8659,6 +8975,7 @@ def build_portal_html(data, is_shareable=False):
         search_placeholder: "🔍 Search repository or feature...",
         inspector_title: "🔍 Component Inspector",
         tab_overview: "📋 Overview",
+        tab_terminal: "💻 Terminal",
         tab_versions: "🛡️ Versions",
         tab_deploy: "🚀 Infra",
         tab_api: "🔌 API",
@@ -8666,8 +8983,8 @@ def build_portal_html(data, is_shareable=False):
         tab_env: "⚙️ Env Vars",
         tab_integrations: "🔗 Links",
         tab_files: "📁 Files",
-        empty_inspector_title: "Click any component box to inspect",
-        empty_inspector_desc: "Select any box in the diagram to inspect frameworks, database versions, vulnerability alerts, API routes, environment variables, and deployment infrastructure.<br><br>Drag the splitter border to resize this panel freely.",
+        empty_inspector_title: "Select a component to inspect",
+        empty_inspector_desc: "Click any box in the diagram or use the quick buttons below to review details, safety, and live terminal operations.",
         insp_toggle_hint: "Toggle sections (▼/▶) to collapse &amp; reduce scrolling",
         collapse_all: "Collapse All ▲",
         expand_all: "Expand All ▼",
@@ -8677,6 +8994,7 @@ def build_portal_html(data, is_shareable=False):
         how_to_fix: "🛠️ Proposed Solution &amp; Remediation:",
         recommended_diff: "Recommended Code Change (Diff):",
         copy_btn: "📋 Copy",
+        run_in_terminal: "▶ Run in Terminal",
         copy_prompt_btn: "📋 Copy AI Fix Prompt",
         copied: "✓ Copied!",
         basic_info_title: "Basic Info &amp; Tech Stack",
@@ -8702,6 +9020,12 @@ def build_portal_html(data, is_shareable=False):
         sc_zoom: "Zoom In / Out / Reset",
         sc_help: "Show this Shortcuts Help",
         btn_close: "Close",
+        guide_title: "Easy 3-Step Guide:",
+        guide_step_1: "① Select repository in <b>Left Pane</b>",
+        guide_step_2: "② Click component boxes in <b>Center Diagram</b> to check safety",
+        guide_step_3: "③ Copy AI prompt or run fixes in <b>Right Terminal</b>",
+        plain_summary_title: "Quick Component Summary",
+        sc_terminal: "Toggle Terminal (Right Pane)",
         toast_svg_exported: "📐 SVG diagram downloaded",
         toast_png_exported: "📷 High-res PNG image downloaded",
         toast_sync_complete: "🔄 GitHub repository sync completed",
@@ -8748,6 +9072,7 @@ def build_portal_html(data, is_shareable=False):
       // Update inspector tab texts
       const tabKeys = {
         overview: dict.tab_overview,
+        terminal: dict.tab_terminal,
         versions: dict.tab_versions,
         deploy: dict.tab_deploy,
         api: dict.tab_api,
