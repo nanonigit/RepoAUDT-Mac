@@ -1256,6 +1256,46 @@ def build_portal_html(data, is_shareable=False):
       border-color: rgba(56, 189, 248, 0.45);
       background: rgba(56, 189, 248, 0.1);
     }
+
+    /* Bilingual Language Switcher */
+    .lang-switch-toggle {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 3px !important;
+      background: #0f172a !important;
+      border: 1px solid #334155 !important;
+      padding: 3px 7px !important;
+      border-radius: 7px !important;
+      cursor: pointer !important;
+      user-select: none !important;
+      transition: all 0.15s ease !important;
+      line-height: 1 !important;
+      font-size: 0.72rem !important;
+      font-weight: 700 !important;
+    }
+    .lang-switch-toggle:hover {
+      border-color: #38bdf8 !important;
+      background: rgba(56, 189, 248, 0.08) !important;
+    }
+    .lang-switch-globe {
+      font-size: 0.8rem !important;
+      margin-right: 2px !important;
+    }
+    .lang-opt {
+      padding: 2px 4px !important;
+      border-radius: 4px !important;
+      color: #64748b !important;
+      transition: all 0.15s ease !important;
+    }
+    .lang-opt.active {
+      color: #38bdf8 !important;
+      background: rgba(56, 189, 248, 0.18) !important;
+      font-weight: 800 !important;
+    }
+    .lang-sep {
+      color: #475569 !important;
+      font-size: 0.65rem !important;
+    }
     .pane-collapse-btn {
       background: #0f172a;
       border: 1px solid #334155;
@@ -4434,13 +4474,13 @@ def build_portal_html(data, is_shareable=False):
       <!-- Collapsible Accordion 1: 自動定期更新 & 死活監視 (▽ で開閉可能) -->
       <div class="sidebar-accordion" id="acc-group-sync">
         <div class="sidebar-accordion-header" onclick="toggleSidebarAccordion('sync')" title="自動更新・死活監視パネルを折りたたむ / 展開">
-          <span class="acc-title">⚡ 自動更新 &amp; 死活監視</span>
+          <span class="acc-title" data-i18n="acc_sync_title">⚡ 自動更新 &amp; 死活監視</span>
           <span class="acc-arrow" id="acc-arrow-sync">▼</span>
         </div>
         <div class="sidebar-accordion-body" id="acc-body-sync">
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
-              <span>🔄 最終更新:</span>
+              <span data-i18n="last_updated">🔄 最終更新:</span>
               <strong id="portal-sync-time">2026/11/07 14:32:37</strong>
             </div>
             
@@ -4451,9 +4491,9 @@ def build_portal_html(data, is_shareable=False):
                   <span class="dot-pulse dot-green"></span>
                   <span id="health-status-summary-text">🟢 死活監視: 6/6 ONLINE</span>
                 </span>
-                <span style="font-size: 0.68rem; color: #38bdf8;">詳細 ↗</span>
+                <span style="font-size: 0.68rem; color: #38bdf8;" data-i18n="health_detail_link">詳細 ↗</span>
               </div>
-              <div style="font-size: 0.68rem; color: #94a3b8; margin-top: 4px;">
+              <div style="font-size: 0.68rem; color: #94a3b8; margin-top: 4px;" id="health-status-sub-text">
                 Port 3000/3001, GitHub API, Auth0 正常稼働
               </div>
             </div>
@@ -4463,7 +4503,7 @@ def build_portal_html(data, is_shareable=False):
               <div class="auto-sync-header">
                 <div style="display: flex; align-items: center; gap: 6px;">
                   <span class="dot-pulse" id="auto-sync-pulse-dot" style="background: #38bdf8; width: 7px; height: 7px;"></span>
-                  <span style="font-size: 0.76rem; font-weight: 800; color: #e2e8f0;">⚡ 自動定期更新</span>
+                  <span style="font-size: 0.76rem; font-weight: 800; color: #e2e8f0;" data-i18n="auto_sync_label">⚡ 自動定期更新</span>
                 </div>
                 <label class="auto-sync-switch" title="自動定期更新のON/OFFを切り替え">
                   <input type="checkbox" id="auto-sync-toggle" checked onchange="toggleAutoSync(this.checked)">
@@ -4472,27 +4512,27 @@ def build_portal_html(data, is_shareable=False):
               </div>
 
               <div class="auto-sync-interval-row">
-                <span style="font-size: 0.72rem; color: #94a3b8;">間隔:</span>
+                <span style="font-size: 0.72rem; color: #94a3b8;" data-i18n="sync_interval_label">間隔:</span>
                 <div class="auto-sync-input-wrap" title="更新間隔（分）を入力">
                   <input type="number" id="auto-sync-min-input" min="1" max="1440" value="10" 
                          onchange="setAutoSyncMinutes(this.value)" oninput="setAutoSyncMinutes(this.value)">
-                  <span class="auto-sync-unit">分毎</span>
+                  <span class="auto-sync-unit" data-i18n="sync_unit_label">分毎</span>
                 </div>
                 <div class="auto-sync-presets">
-                  <button class="auto-sync-pill active" id="sync-pill-10" onclick="setAutoSyncMinutes(10)" title="10分間隔">10分</button>
-                  <button class="auto-sync-pill" id="sync-pill-30" onclick="setAutoSyncMinutes(30)" title="30分間隔">30分</button>
-                  <button class="auto-sync-pill" id="sync-pill-60" onclick="setAutoSyncMinutes(60)" title="60分間隔">60分</button>
+                  <button class="auto-sync-pill active" id="sync-pill-10" onclick="setAutoSyncMinutes(10)" title="10分間隔" data-i18n="sync_pill_10">10分</button>
+                  <button class="auto-sync-pill" id="sync-pill-30" onclick="setAutoSyncMinutes(30)" title="30分間隔" data-i18n="sync_pill_30">30分</button>
+                  <button class="auto-sync-pill" id="sync-pill-60" onclick="setAutoSyncMinutes(60)" title="60分間隔" data-i18n="sync_pill_60">60分</button>
                 </div>
               </div>
 
               <div class="auto-sync-countdown-row">
                 <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 0.7rem;">
                   <span style="color: #94a3b8; display: flex; align-items: center; gap: 4px;">
-                    <span>⏱️ 次回更新:</span>
+                    <span data-i18n="next_sync_label">⏱️ 次回更新:</span>
                     <strong id="auto-sync-countdown-text" style="color: #38bdf8; font-family: 'JetBrains Mono', monospace;">10:00</strong>
                   </span>
                   <button class="btn-quick-sync-link" onclick="triggerGitHubSync()" title="今すぐ手動で更新">
-                    <span>今すぐ更新 ↻</span>
+                    <span data-i18n="quick_sync_btn">今すぐ更新 ↻</span>
                   </button>
                 </div>
                 <div class="auto-sync-progress-bar">
@@ -4507,20 +4547,20 @@ def build_portal_html(data, is_shareable=False):
       <!-- Collapsible Accordion 2: 検索 & 鮮度フィルター (▽ で開閉可能) -->
       <div class="sidebar-accordion" id="acc-group-search">
         <div class="sidebar-accordion-header" onclick="toggleSidebarAccordion('search')" title="検索＆鮮度フィルターを折りたたむ / 展開">
-          <span class="acc-title">🔍 検索 &amp; 鮮度フィルター</span>
+          <span class="acc-title" data-i18n="acc_search_title">🔍 検索 &amp; 鮮度フィルター</span>
           <span class="acc-arrow" id="acc-arrow-search">▼</span>
         </div>
         <div class="sidebar-accordion-body" id="acc-body-search">
           <!-- Freshness Quick Filter Tabs -->
           <div class="filter-tabs-row" style="margin-top: 0;">
-            <div class="filter-pill active" onclick="setFreshnessFilter('all', this)">すべて (<span id="count-all">0</span>)</div>
-            <div class="filter-pill pill-red" onclick="setFreshnessFilter('red', this)">🔴 3日 (<span id="count-red">0</span>)</div>
-            <div class="filter-pill pill-yellow" onclick="setFreshnessFilter('yellow', this)">🟡 4〜10日 (<span id="count-yellow">0</span>)</div>
-            <div class="filter-pill" onclick="setFreshnessFilter('gray', this)">⚪ 11日+ (<span id="count-gray">0</span>)</div>
+            <div class="filter-pill active" onclick="setFreshnessFilter('all', this)"><span data-i18n="filter_all">すべて</span> (<span id="count-all">0</span>)</div>
+            <div class="filter-pill pill-red" onclick="setFreshnessFilter('red', this)"><span data-i18n="filter_3d">🔴 3日</span> (<span id="count-red">0</span>)</div>
+            <div class="filter-pill pill-yellow" onclick="setFreshnessFilter('yellow', this)"><span data-i18n="filter_10d">🟡 4〜10日</span> (<span id="count-yellow">0</span>)</div>
+            <div class="filter-pill" onclick="setFreshnessFilter('gray', this)"><span data-i18n="filter_old">⚪ 11日+</span> (<span id="count-gray">0</span>)</div>
           </div>
 
           <div class="search-box-wrap" style="margin-top: 6px;">
-            <input type="text" class="search-input" id="search-box" placeholder="🔍 リポジトリや機能名で検索..." oninput="handleSearch(this.value)">
+            <input type="text" class="search-input" id="search-box" placeholder="🔍 リポジトリや機能名で検索..." data-i18n-placeholder="search_placeholder" oninput="handleSearch(this.value)">
           </div>
         </div>
       </div>
@@ -4546,15 +4586,15 @@ def build_portal_html(data, is_shareable=False):
         <div class="view-mode-tabs">
           <button class="view-mode-btn active" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示">
             <span class="btn-icon">🗺️</span>
-            <span class="btn-text">構成図</span>
+            <span class="btn-text" data-i18n="mode_arch">構成図</span>
           </button>
           <button class="view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示">
             <span class="btn-icon">⏱️</span>
-            <span class="btn-text">シーケンス</span>
+            <span class="btn-text" data-i18n="mode_seq">シーケンス</span>
           </button>
           <button class="view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示">
             <span class="btn-icon">🐰</span>
-            <span class="btn-text">AI監査</span>
+            <span class="btn-text" data-i18n="mode_cr">AI監査</span>
           </button>
         </div>
       </div>
@@ -4563,11 +4603,11 @@ def build_portal_html(data, is_shareable=False):
       <div class="header-top-right">
         <button class="btn btn-sync btn-settings" onclick="openAdminSettingsModal()" style="background: linear-gradient(135deg, #0f766e 0%, #047857 100%) !important; border-color: #34d399 !important;" title="OpenAI / Claude / Gemini / Groq APIキーと PHP・Node.js 脆弱性監査MCP/スキルを設定します (⌘,)">
           <span class="btn-icon">⚙️</span>
-          <span class="btn-text">設定</span>
+          <span class="btn-text" data-i18n="btn_settings">設定</span>
         </button>
         <button class="btn btn-sync" onclick="openAnalyzeModal()" style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important; border-color: #a78bfa !important;" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します">
           <span class="btn-icon">➕</span>
-          <span class="btn-text">追加</span>
+          <span class="btn-text" data-i18n="btn_add">追加</span>
         </button>
         <div class="header-auto-sync-chip" id="header-auto-sync-chip" title="自動定期更新の間隔 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
           <span class="dot-pulse" id="header-sync-pulse" style="background: #34d399; width: 6px; height: 6px;"></span>
@@ -4575,8 +4615,16 @@ def build_portal_html(data, is_shareable=False):
         </div>
         <button class="btn btn-sync" id="sync-btn" onclick="triggerGitHubSync()" title="GitHub最新コミット・差分を手動同期">
           <span class="btn-icon">🔄</span>
-          <span class="btn-text">同期</span>
+          <span class="btn-text" data-i18n="btn_sync">同期</span>
         </button>
+
+        <!-- Bilingual Switcher (JA / EN) -->
+        <div class="lang-switch-toggle" onclick="toggleLanguage()" title="言語切り替え / Switch Language (日本語 ⇄ English)">
+          <span class="lang-switch-globe">🌐</span>
+          <span class="lang-opt active" id="lang-opt-ja">JA</span>
+          <span class="lang-sep">/</span>
+          <span class="lang-opt" id="lang-opt-en">EN</span>
+        </div>
 
         <div class="zoom-controls-group" title="ダイアグラム表示倍率の操作">
           <button class="zoom-btn" onclick="zoomIn()" title="ズームイン (拡大)">
@@ -4632,26 +4680,26 @@ def build_portal_html(data, is_shareable=False):
   <!-- Right Detailed Inspector Panel (Full Height - Extends from top to bottom) -->
   <div id="inspector">
     <div class="inspector-header">
-      <h3>🔍 コンポーネント詳細インスペクター</h3>
+      <h3 data-i18n="inspector_title">🔍 コンポーネント詳細インスペクター</h3>
       <div class="inspector-actions">
         <button class="btn-icon" onclick="toggleInspectorWidth()" title="幅を最大化 / 元に戻す">⛶</button>
       </div>
     </div>
     <div class="inspector-tabs">
-      <div class="insp-tab active" onclick="switchInspTab('overview')">📋 概要</div>
-      <div class="insp-tab" onclick="switchInspTab('versions')">🛡️ バージョン</div>
-      <div class="insp-tab" onclick="switchInspTab('deploy')">🚀 インフラ</div>
-      <div class="insp-tab" onclick="switchInspTab('api')">🔌 API</div>
-      <div class="insp-tab" onclick="switchInspTab('db')">🗄️ DB</div>
-      <div class="insp-tab" onclick="switchInspTab('env')">⚙️ 環境変数</div>
-      <div class="insp-tab" onclick="switchInspTab('integrations')">🔗 連携</div>
-      <div class="insp-tab" onclick="switchInspTab('files')">📁 ファイル</div>
+      <div class="insp-tab active" data-tab-name="overview" onclick="switchInspTab('overview')"><span data-i18n="tab_overview">📋 概要</span></div>
+      <div class="insp-tab" data-tab-name="versions" onclick="switchInspTab('versions')"><span data-i18n="tab_versions">🛡️ バージョン</span></div>
+      <div class="insp-tab" data-tab-name="deploy" onclick="switchInspTab('deploy')"><span data-i18n="tab_deploy">🚀 インフラ</span></div>
+      <div class="insp-tab" data-tab-name="api" onclick="switchInspTab('api')"><span data-i18n="tab_api">🔌 API</span></div>
+      <div class="insp-tab" data-tab-name="db" onclick="switchInspTab('db')"><span data-i18n="tab_db">🗄️ DB</span></div>
+      <div class="insp-tab" data-tab-name="env" onclick="switchInspTab('env')"><span data-i18n="tab_env">⚙️ 環境変数</span></div>
+      <div class="insp-tab" data-tab-name="integrations" onclick="switchInspTab('integrations')"><span data-i18n="tab_integrations">🔗 連携</span></div>
+      <div class="insp-tab" data-tab-name="files" onclick="switchInspTab('files')"><span data-i18n="tab_files">📁 ファイル</span></div>
     </div>
     <div id="inspector-body">
       <div class="empty-state" id="insp-empty">
         <div style="font-size: 2.2rem; margin-bottom: 12px;">👆</div>
-        <div style="font-weight: 600; color: #94a3b8; font-size: 0.95rem;">ボックスをクリックしてください</div>
-        <div style="font-size: 0.8rem; margin-top: 6px; line-height: 1.5; color: #64748b;">
+        <div style="font-weight: 600; color: #94a3b8; font-size: 0.95rem;" data-i18n="empty_inspector_title">ボックスをクリックしてください</div>
+        <div style="font-size: 0.8rem; margin-top: 6px; line-height: 1.5; color: #64748b;" data-i18n="empty_inspector_desc">
           図の中の任意のボックスを選択すると、Next.js/DBのバージョン番号、脆弱性対応情報、API、環境変数、デプロイ情報が表示されます。<br><br>
           左右の境界線をドラッグして、このパネルの幅を自由に調整できます。
         </div>
@@ -5822,12 +5870,13 @@ def build_portal_html(data, is_shareable=False):
       const createdStr = formatDateShort(repoItem.createdAt);
       const pushedStr = formatDateShort(repoItem.pushedAt || repoItem.updatedAt);
       const deps = repoItem.deps || { frameworks: [], databases: [], ai_sdks: [], auth: [], runtime: {}, security_advisories: [] };
+      const dict = I18N[currentLang] || I18N.ja;
 
       const repoContextHtml = `
         <div class="repo-context-card">
           <div class="repo-context-header">
             <div><strong>📦 ${repoItem.repo}</strong> <span style="color: #64748b;">(${repoItem.category})</span></div>
-            <a href="${repoItem.github_url}" target="_blank" class="gh-link-btn">GitHubで開く ↗</a>
+            <a href="${repoItem.github_url}" target="_blank" class="gh-link-btn">${dict.open_github}</a>
           </div>
           <div style="display: flex; gap: 10px; align-items: center; color: #94a3b8;">
             <span>🐣 作成: ${createdStr}</span>
@@ -5846,7 +5895,7 @@ def build_portal_html(data, is_shareable=False):
                   </a>
                 </span>
                 <button class="btn-toggle-commit" onclick="toggleCommitDiff('${repoItem.repo_slug}')">
-                  <span id="commit-toggle-icon-${repoItem.repo_slug}">▼</span> 変更内容の詳細
+                  <span id="commit-toggle-icon-${repoItem.repo_slug}">▼</span> ${dict.commit_diff_detail}
                 </button>
               </div>
               <div style="color: #f1f5f9; font-weight: 600; line-height: 1.35;">${repoItem.commit_subject}</div>
@@ -5904,11 +5953,11 @@ def build_portal_html(data, is_shareable=False):
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid rgba(239, 68, 68, 0.3); padding-bottom: 8px; flex-wrap: wrap; gap: 6px;">
               <span style="font-size: 0.85rem; font-weight: 900; color: #fca5a5; display: flex; align-items: center; gap: 6px;">
                 <span>🚨</span>
-                <span>要対応アラート (${repoActions.length}件)</span>
+                <span>${dict.action_required_title} (${repoActions.length})</span>
               </span>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <button class="table-view-btn" onclick="toggleAllActionItems(this)" style="font-size: 0.68rem; padding: 3px 8px; background: rgba(239, 68, 68, 0.2); border-color: #f87171; color: #fca5a5;">
-                  すべて展開 ▼
+                  ${dict.expand_all}
                 </button>
                 <span class="sec-legend-badge sec-legend-red">ACTION REQUIRED</span>
               </div>
@@ -5932,19 +5981,19 @@ def build_portal_html(data, is_shareable=False):
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;" onclick="event.stopPropagation()">
                       <button class="action-report-dl-btn" onclick="downloadSingleActionReport('${actJsonStr}', '${repoNameStr}')" title="この改善点の詳細レポート (.md) をダウンロード保存">
-                        📥 レポートDL
+                        ${dict.report_dl}
                       </button>
                     </div>
                   </div>
                   <div class="action-alert-body" id="action-alert-body-${idx}">
                     <div style="background: rgba(15, 23, 42, 0.75); border-left: 3px solid #f87171; padding: 8px 10px; border-radius: 6px; margin-bottom: 8px;">
-                      <div style="font-size: 0.7rem; font-weight: 800; color: #f87171; margin-bottom: 3px;">⚠️ 要対応の理由 (なぜ必要か):</div>
+                      <div style="font-size: 0.7rem; font-weight: 800; color: #f87171; margin-bottom: 3px;">${dict.why_needed}</div>
                       <div style="font-size: 0.78rem; color: #f1f5f9; line-height: 1.5;">${act.desc}</div>
                     </div>
                     <div style="background: rgba(6, 78, 59, 0.35); border-left: 3px solid #34d399; padding: 8px 10px; border-radius: 6px;">
-                      <div style="font-size: 0.7rem; font-weight: 800; color: #34d399; margin-bottom: 4px;">🛠️ 対応方法の提案 (具体的な対策):</div>
+                      <div style="font-size: 0.7rem; font-weight: 800; color: #34d399; margin-bottom: 4px;">${dict.how_to_fix}</div>
                       ${act.diff ? `
-                        <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 4px;">推奨コード変更 (Diff):</div>
+                        <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 4px;">${dict.recommended_diff}</div>
                         <pre class="cr-diff-container" style="margin: 0 0 8px 0; font-size: 0.72rem;">${act.diff.split(String.fromCharCode(10)).map(line => {
                           if (line.startsWith('+')) return `<span class="cr-diff-add">${line}</span>`;
                           if (line.startsWith('-')) return `<span class="cr-diff-del">${line}</span>`;
@@ -5954,7 +6003,7 @@ def build_portal_html(data, is_shareable=False):
                       ${act.fix_cmd ? `
                         <div class="hotspot-fix-box" style="margin-top: 4px;">
                           <span class="hotspot-cmd">$ ${act.fix_cmd}</span>
-                          <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">📋 コピー</button>
+                          <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">${dict.copy_btn}</button>
                         </div>
                       ` : ''}
                     </div>
@@ -6087,6 +6136,7 @@ def build_portal_html(data, is_shareable=False):
             ${repoContextHtml}
           `;
         } else {
+          const dict = I18N[currentLang] || I18N.ja;
           const respContentHtml = formatSystemResponsibility(selectedNodeData.name, resp, tech);
 
           tabBody = `
@@ -6095,9 +6145,9 @@ def build_portal_html(data, is_shareable=False):
 
             <!-- Quick Toggle Bar for Overview Cards -->
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-              <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600;">各セクションの開閉 (▼/▶) でスクロールを短縮できます</span>
-              <button class="insp-toggle-all-btn" onclick="toggleAllInspectorCards(this)" title="概要タブの全セクションを一括で折りたたみ / 展開">
-                <span>すべて折りたたむ ▲</span>
+              <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600;">${dict.insp_toggle_hint}</span>
+              <button class="insp-toggle-all-btn" onclick="toggleAllInspectorCards(this)" title="Toggle all sections">
+                <span>${dict.collapse_all}</span>
               </button>
             </div>
 
@@ -6106,7 +6156,7 @@ def build_portal_html(data, is_shareable=False):
               <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-info')">
                 <div class="inspector-collapsible-title">
                   <span>📌</span>
-                  <span>基本情報 &amp; 技術スタック</span>
+                  <span>${dict.basic_info_title}</span>
                 </div>
                 <span class="inspector-collapse-arrow">▼</span>
               </div>
@@ -6120,24 +6170,24 @@ def build_portal_html(data, is_shareable=False):
                   </div>
                 ` : ''}
                 <div class="node-tech-row" style="margin-top: 8px;">
-                  <span>⚡ 技術スタック:</span>
+                  <span>${dict.tech_stack}</span>
                   <strong style="color: #e2e8f0;">${tech}</strong>
                 </div>
               </div>
             </div>
 
-            <!-- Card 2: System Responsibility & Purpose (Clear Japanese Explanations) -->
+            <!-- Card 2: System Responsibility & Purpose (Clear Explanations) -->
             <div class="inspector-collapsible-card" id="insp-card-resp">
               <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-resp')">
                 <div class="inspector-collapsible-title">
                   <span>🎯</span>
-                  <span>システムの役割・機能概要 (役割と責務)</span>
+                  <span>${dict.resp_title}</span>
                 </div>
                 <span class="inspector-collapse-arrow">▼</span>
               </div>
               <div class="inspector-collapsible-body" style="padding: 12px 14px;">
                 <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">
-                  💡 <strong>システムの責務とは:</strong> このリポジトリ／モジュールがソフトウェア全体の中で果たす役割（管理画面提供、API連携、データ保存など）のことです。
+                  ${dict.resp_hint}
                 </div>
                 ${respContentHtml}
               </div>
@@ -6148,7 +6198,7 @@ def build_portal_html(data, is_shareable=False):
               <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-logic')">
                 <div class="inspector-collapsible-title" style="color: #34d399;">
                   <span>⚙️</span>
-                  <span>主な処理ロジック &amp; 稼働情報 (PROCESSING LOGIC)</span>
+                  <span>${dict.logic_title}</span>
                 </div>
                 <span class="inspector-collapse-arrow">▼</span>
               </div>
@@ -7483,6 +7533,7 @@ def build_portal_html(data, is_shareable=False):
       } catch (e) {}
     }
     window.addEventListener('DOMContentLoaded', () => {
+      setLanguage(currentLang);
       setTimeout(async () => {
         await syncSavedAnalysesFromServer();
         const params = new URLSearchParams(window.location.search);
@@ -7685,6 +7736,206 @@ def build_portal_html(data, is_shareable=False):
       });
     }
 
+    let currentLang = 'ja';
+    try {
+      currentLang = localStorage.getItem('repochex_lang') || 'ja';
+    } catch (_) {}
+
+    const I18N = {
+      ja: {
+        mode_arch: "構成図",
+        mode_seq: "シーケンス",
+        mode_cr: "AI監査",
+        btn_settings: "設定",
+        btn_add: "追加",
+        btn_sync: "同期",
+        acc_sync_title: "⚡ 自動更新 &amp; 死活監視",
+        last_updated: "🔄 最終更新:",
+        health_summary_prefix: "🟢 死活監視:",
+        health_detail_link: "詳細 ↗",
+        auto_sync_label: "⚡ 自動定期更新",
+        sync_interval_label: "間隔:",
+        sync_unit_label: "分毎",
+        sync_pill_10: "10分",
+        sync_pill_30: "30分",
+        sync_pill_60: "60分",
+        next_sync_label: "⏱️ 次回更新:",
+        quick_sync_btn: "今すぐ更新 ↻",
+        acc_search_title: "🔍 検索 &amp; 鮮度フィルター",
+        filter_all: "すべて",
+        filter_3d: "🔴 3日",
+        filter_10d: "🟡 4〜10日",
+        filter_old: "⚪ 11日+",
+        search_placeholder: "🔍 リポジトリや機能名で検索...",
+        inspector_title: "🔍 コンポーネント詳細インスペクター",
+        tab_overview: "📋 概要",
+        tab_versions: "🛡️ バージョン",
+        tab_deploy: "🚀 インフラ",
+        tab_api: "🔌 API",
+        tab_db: "🗄️ DB",
+        tab_env: "⚙️ 環境変数",
+        tab_integrations: "🔗 連携",
+        tab_files: "📁 ファイル",
+        empty_inspector_title: "ボックスをクリックしてください",
+        empty_inspector_desc: "図の中の任意のボックスを選択すると、Next.js/DBのバージョン番号、脆弱性対応情報、API、環境変数、デプロイ情報が表示されます。<br><br>左右の境界線をドラッグして、このパネルの幅を自由に調整できます。",
+        insp_toggle_hint: "各セクションの開閉 (▼/▶) でスクロールを短縮できます",
+        collapse_all: "すべて折りたたむ ▲",
+        expand_all: "すべて展開 ▼",
+        action_required_title: "要対応アラート",
+        report_dl: "📥 レポートDL",
+        why_needed: "⚠️ 要対応の理由 (なぜ必要か):",
+        how_to_fix: "🛠️ 対応方法の提案 (具体的な対策):",
+        recommended_diff: "推奨コード変更 (Diff):",
+        copy_btn: "📋 コピー",
+        copy_prompt_btn: "📋 AI修正プロンプトをコピー",
+        copied: "✓ コピー完了！",
+        basic_info_title: "基本情報 &amp; 技術スタック",
+        tech_stack: "⚡ 技術スタック:",
+        target_path: "📁 対象コードパス:",
+        resp_title: "システムの役割・機能概要 (役割と責務)",
+        resp_hint: "💡 <strong>システムの責務とは:</strong> このリポジトリ／モジュールがソフトウェア全体の中で果たす役割（管理画面提供、API連携、データ保存など）のことです。",
+        resp_duties_label: "このシステムが担当する主な役割・提供機能:",
+        resp_scope_label: "担当領域:",
+        resp_tech_label: "技術基盤:",
+        resp_readme_label: "リポジトリ補足情報:",
+        logic_title: "主な処理ロジック &amp; 稼働情報 (PROCESSING LOGIC)",
+        open_github: "GitHubで開く ↗",
+        commit_diff_detail: "変更内容の詳細",
+      },
+      en: {
+        mode_arch: "Architecture",
+        mode_seq: "Sequence",
+        mode_cr: "AI Review",
+        btn_settings: "Settings",
+        btn_add: "Add Repo",
+        btn_sync: "Sync",
+        acc_sync_title: "⚡ Auto Sync &amp; Health",
+        last_updated: "🔄 Last Sync:",
+        health_summary_prefix: "🟢 Health Check:",
+        health_detail_link: "Details ↗",
+        auto_sync_label: "⚡ Auto Periodic Sync",
+        sync_interval_label: "Interval:",
+        sync_unit_label: "min",
+        sync_pill_10: "10m",
+        sync_pill_30: "30m",
+        sync_pill_60: "60m",
+        next_sync_label: "⏱️ Next Sync:",
+        quick_sync_btn: "Sync Now ↻",
+        acc_search_title: "🔍 Search &amp; Freshness",
+        filter_all: "All",
+        filter_3d: "🔴 ≤ 3d",
+        filter_10d: "🟡 4-10d",
+        filter_old: "⚪ 11d+",
+        search_placeholder: "🔍 Search repository or feature...",
+        inspector_title: "🔍 Component Inspector",
+        tab_overview: "📋 Overview",
+        tab_versions: "🛡️ Versions",
+        tab_deploy: "🚀 Infra",
+        tab_api: "🔌 API",
+        tab_db: "🗄️ DB",
+        tab_env: "⚙️ Env Vars",
+        tab_integrations: "🔗 Links",
+        tab_files: "📁 Files",
+        empty_inspector_title: "Click any component box to inspect",
+        empty_inspector_desc: "Select any box in the diagram to inspect frameworks, database versions, vulnerability alerts, API routes, environment variables, and deployment infrastructure.<br><br>Drag the splitter border to resize this panel freely.",
+        insp_toggle_hint: "Toggle sections (▼/▶) to collapse &amp; reduce scrolling",
+        collapse_all: "Collapse All ▲",
+        expand_all: "Expand All ▼",
+        action_required_title: "Action Required Alerts",
+        report_dl: "📥 Download Report",
+        why_needed: "⚠️ Why This Action is Required:",
+        how_to_fix: "🛠️ Proposed Solution &amp; Remediation:",
+        recommended_diff: "Recommended Code Change (Diff):",
+        copy_btn: "📋 Copy",
+        copy_prompt_btn: "📋 Copy AI Fix Prompt",
+        copied: "✓ Copied!",
+        basic_info_title: "Basic Info &amp; Tech Stack",
+        tech_stack: "⚡ Tech Stack:",
+        target_path: "📁 Code Path:",
+        resp_title: "System Responsibility &amp; Feature Overview",
+        resp_hint: "💡 <strong>System Responsibility:</strong> The primary domain duties, system role, and operational capabilities this module fulfills in the architecture.",
+        resp_duties_label: "Primary Domain Roles &amp; Capabilities:",
+        resp_scope_label: "Domain Scope:",
+        resp_tech_label: "Tech Foundation:",
+        resp_readme_label: "Repository Notes:",
+        logic_title: "Key Processing Logic &amp; Status (PROCESSING LOGIC)",
+        open_github: "Open on GitHub ↗",
+        commit_diff_detail: "Commit Diff Details",
+      }
+    };
+
+    function toggleLanguage() {
+      const nextLang = currentLang === 'ja' ? 'en' : 'ja';
+      setLanguage(nextLang);
+    }
+
+    function setLanguage(lang) {
+      currentLang = lang;
+      try {
+        localStorage.setItem('repochex_lang', lang);
+      } catch (_) {}
+
+      // Update switcher pills
+      const optJa = document.getElementById('lang-opt-ja');
+      const optEn = document.getElementById('lang-opt-en');
+      if (optJa) optJa.classList.toggle('active', lang === 'ja');
+      if (optEn) optEn.classList.toggle('active', lang === 'en');
+
+      // Update all elements with data-i18n
+      const dict = I18N[lang] || I18N.ja;
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key]) {
+          el.innerHTML = dict[key];
+        }
+      });
+
+      // Update placeholders
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (dict[key]) {
+          el.setAttribute('placeholder', dict[key]);
+        }
+      });
+
+      // Update inspector tab texts
+      const tabKeys = {
+        overview: dict.tab_overview,
+        versions: dict.tab_versions,
+        deploy: dict.tab_deploy,
+        api: dict.tab_api,
+        db: dict.tab_db,
+        env: dict.tab_env,
+        integrations: dict.tab_integrations,
+        files: dict.tab_files
+      };
+      document.querySelectorAll('.insp-tab').forEach(tab => {
+        const tName = tab.getAttribute('data-tab-name');
+        if (tName && tabKeys[tName]) {
+          tab.innerHTML = tabKeys[tName];
+        }
+      });
+
+      // Update empty state text
+      const emptyTitle = document.querySelector('#insp-empty div:nth-child(2)');
+      const emptyDesc = document.querySelector('#insp-empty div:nth-child(3)');
+      if (emptyTitle) emptyTitle.innerHTML = dict.empty_inspector_title;
+      if (emptyDesc) emptyDesc.innerHTML = dict.empty_inspector_desc;
+
+      // Update sub text in health card
+      const healthSub = document.getElementById('health-status-sub-text');
+      if (healthSub) {
+        healthSub.textContent = lang === 'en'
+          ? "Port 3000/3001, GitHub API, Auth0 Operational"
+          : "Port 3000/3001, GitHub API, Auth0 正常稼働";
+      }
+
+      // Re-render currently selected inspector node if open
+      if (typeof selectedNodeData !== 'undefined' && selectedNodeData) {
+        renderInspector();
+      }
+    }
+
     function toggleInspectorCard(cardId) {
       const card = document.getElementById(cardId);
       if (card) {
@@ -7697,8 +7948,9 @@ def build_portal_html(data, is_shareable=False):
       if (!cards.length) return;
       const anyCollapsed = Array.from(cards).some(c => c.classList.contains('collapsed'));
       cards.forEach(c => c.classList.toggle('collapsed', !anyCollapsed));
+      const dict = I18N[currentLang] || I18N.ja;
       if (btnEl) {
-        btnEl.textContent = anyCollapsed ? 'すべて折りたたむ ▲' : 'すべて展開 ▼';
+        btnEl.textContent = anyCollapsed ? dict.collapse_all : dict.expand_all;
       }
     }
 
@@ -7712,6 +7964,8 @@ def build_portal_html(data, is_shareable=False):
           .replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener" style="color: #38bdf8; text-decoration: underline;">$1</a>');
       }
 
+      const dict = I18N[currentLang] || I18N.ja;
+      const isEn = currentLang === 'en';
       const cleanName = (nodeName || '').trim();
       const lowerName = cleanName.toLowerCase();
       const rawText = (rawDesc || '').trim();
@@ -7731,78 +7985,154 @@ def build_portal_html(data, is_shareable=False):
       let duties = [];
       let scope = "";
 
-      if (lowerName.includes('admin') || lowerName.includes('portal')) {
-        roleSummary = `「${cleanName}」は、plusimpact における管理・運用専用のWebポータル（管理画面）です。`;
-        duties = [
-          "運用管理者向けダッシュボードおよびシステム状況確認UIの提供",
-          "Webサイト掲載コンテンツ（お知らせ・記事・設定等）の登録・編集・管理",
-          "管理者権限管理およびバックエンドAPI（Admin API）とのセキュアなデータ連携"
-        ];
-        scope = "管理者・オペレーター向けWebポータル";
-      } else if (lowerName.includes('corporate') || lowerName.includes('marketing') || lowerName.includes('website')) {
-        roleSummary = `「${cleanName}」は、plusimpact の公式企業サイトおよびサービス紹介Webフロントエンドです。`;
-        duties = [
-          "エンドユーザー・来訪者向けの高パフォーマンスなWebページ描画（SSR / SSG）",
-          "会社情報・製品案内・お問い合わせ受付フォームの提供",
-          "SEO最適化・レスポンシブデザインによるマルチデバイス対応"
-        ];
-        scope = "一般ユーザー向け公開Webサイト";
-      } else if (lowerName.includes('backend') || lowerName.includes('api') || lowerName.includes('service')) {
-        roleSummary = `「${cleanName}」は、コア業務ロジックの実行とデータ永続化を担うバックエンドAPIサーバーです。`;
-        duties = [
-          "フロントエンドからのREST / GraphQLリクエストの受付・検証・認可",
-          "データベース（PostgreSQL / MySQL等）とのトランザクション処理・データ永続化",
-          "外部AIサービス連携および非同期ジョブキューのオーケストレーション"
-        ];
-        scope = "コアビジネスロジック & API層";
-      } else if (lowerName.includes('frontend') || lowerName.includes('individual')) {
-        roleSummary = `「${cleanName}」は、一般ユーザー・受検者向けの対話型Webフロントエンドアプリケーションです。`;
-        duties = [
-          "受検者向けユーザーインターフェース（テスト画面・結果確認・音声録音）の提供",
-          "クライアント側状態管理およびリアルタイムな進捗フィードバック",
-          "APIサーバーとの認証付き非同期データ送受信"
-        ];
-        scope = "エンドユーザー向けWebアプリケーション";
-      } else if (lowerName.includes('infra') || lowerName.includes('terraform') || lowerName.includes('cdk')) {
-        roleSummary = `「${cleanName}」は、クラウド環境およびインフラ構成（IaC）をコードで一元管理するリポジトリです。`;
-        duties = [
-          "Terraform / HCL 等によるクラウドインフラのプロビジョニング",
-          "ネットワーク（VPC・サブネット・DNS・SSL/TLS証明書）およびコンテナ基盤の構成定義",
-          "ステージング・本番環境のCI/CDパイプライン・環境設定の自動化"
-        ];
-        scope = "インフラストラクチャ & CI/CD";
-      } else if (lowerName.includes('talk') || lowerName.includes('video') || lowerName.includes('personality') || lowerName.includes('execution')) {
-        roleSummary = `「${cleanName}」は、AI処理・メディア生成・アルゴリズム実行を担当するモジュールです。`;
-        duties = [
-          "対話・動画生成・音声解析などのAI/メディア処理パイプラインの実行",
-          "非同期キューによるバックグラウンドバッチ処理およびストリーミング配信",
-          "外部生成AIモデル（Gemini・Claude等）とのプロンプト連携および結果構造化"
-        ];
-        scope = "AI & メディア処理エンジン";
-      } else if (lowerName.includes('util') || lowerName.includes('design-system') || lowerName.includes('setup')) {
-        roleSummary = `「${cleanName}」は、各リポジトリから共通利用される共有ユーティリティ・基盤モジュールです。`;
-        duties = [
-          "共通UIコンポーネント・デザインシステムの提供",
-          "共通型定義・ユーティリティ関数の標準化と再利用性向上",
-          "開発環境セットアップおよび自動化ツールの提供"
-        ];
-        scope = "共有基盤 & 開発ツール";
-      } else if (rawText && !isBoilerplate) {
-        roleSummary = `「${cleanName}」は、${rawText.slice(0, 100)}`;
-        duties = [
-          "担当領域における入力データ・パラメータの検証と整合性の確保",
-          "ドメイン固有ロジックの実行および関連データベース/APIサービスとの連携",
-          "例外発生時のエラーハンドリングと安全なレスポンス返却"
-        ];
-        scope = "アーキテクチャコンポーネント";
+      if (isEn) {
+        if (lowerName.includes('admin') || lowerName.includes('portal')) {
+          roleSummary = `"${cleanName}" serves as the dedicated web administration and operations portal for plusimpact.`;
+          duties = [
+            "Executive operations dashboard and real-time system monitoring interface",
+            "Content publishing and resource management (announcements, articles, system configs)",
+            "Role-based access control and secure integration with backend Admin APIs"
+          ];
+          scope = "Admin & Operations Portal";
+        } else if (lowerName.includes('corporate') || lowerName.includes('marketing') || lowerName.includes('website')) {
+          roleSummary = `"${cleanName}" is the public-facing corporate website and product service showcase front-end.`;
+          duties = [
+            "High-performance server-side & static rendering (SSR / SSG) for visitors and clients",
+            "Company profile, product discovery, and demo request lead generation forms",
+            "Responsive design with modern accessibility and SEO optimization"
+          ];
+          scope = "Public Web Front-end";
+        } else if (lowerName.includes('backend') || lowerName.includes('api') || lowerName.includes('service')) {
+          roleSummary = `"${cleanName}" is the core backend API service handling domain business logic and data persistence.`;
+          duties = [
+            "Accepts, validates, and authorizes incoming REST / GraphQL / WebSocket requests",
+            "Manages transactional relational database operations (PostgreSQL / Knex)",
+            "Orchestrates external AI model inference and asynchronous BullMQ job queues"
+          ];
+          scope = "Core Business Logic & API Service";
+        } else if (lowerName.includes('frontend') || lowerName.includes('individual')) {
+          roleSummary = `"${cleanName}" provides the candidate-facing interactive web application.`;
+          duties = [
+            "Interactive UI for assessments, speech recording, and real-time test progress",
+            "Client-side state management with immediate user feedback",
+            "Secure, authenticated bi-directional communication with backend APIs"
+          ];
+          scope = "End-User Web Application";
+        } else if (lowerName.includes('infra') || lowerName.includes('terraform') || lowerName.includes('cdk')) {
+          roleSummary = `"${cleanName}" defines and provisions cloud infrastructure as code (IaC).`;
+          duties = [
+            "Cloud resource provisioning via Terraform / HCL modules",
+            "Network topologies (VPC, subnets, route tables, SSL certificates) and container orchestration",
+            "Automated multi-stage deployment and CI/CD pipelines"
+          ];
+          scope = "Cloud Infrastructure & CI/CD";
+        } else if (lowerName.includes('talk') || lowerName.includes('video') || lowerName.includes('personality') || lowerName.includes('execution')) {
+          roleSummary = `"${cleanName}" is the specialized AI, media processing, and algorithmic execution engine.`;
+          duties = [
+            "Executes domain-specific AI workflows (dialogue generation, video rendering, speech recognition)",
+            "Background asynchronous pipeline processing and stream delivery",
+            "Prompt orchestration with Gemini and Claude models with structured schema outputs"
+          ];
+          scope = "AI & Media Execution Engine";
+        } else if (lowerName.includes('util') || lowerName.includes('design-system') || lowerName.includes('setup')) {
+          roleSummary = `"${cleanName}" provides shared utilities and core design system components.`;
+          duties = [
+            "Shared reusable UI component libraries and design tokens",
+            "Common TypeScript type definitions and utility helper functions",
+            "Developer tooling and streamlined onboarding setup scripts"
+          ];
+          scope = "Shared Utilities & Design System";
+        } else if (rawText && !isBoilerplate) {
+          roleSummary = `"${cleanName}" - ${rawText.slice(0, 120)}`;
+          duties = [
+            "Validates domain inputs and maintains architectural invariants",
+            "Executes domain logic and coordinates with underlying services and persistence stores",
+            "Robust exception handling with graceful error recovery"
+          ];
+          scope = "Architecture Component";
+        } else {
+          roleSummary = `"${cleanName}" is an independent architecture component built with ${tech || 'modern technologies'}.`;
+          duties = [
+            "Handles domain requests and verifies schema contracts",
+            "Coordinates domain processing with database and downstream dependencies",
+            "Generates structured responses and provides centralized telemetry logging"
+          ];
+          scope = "Application Module";
+        }
       } else {
-        roleSummary = `「${cleanName}」は、${tech || 'システム'} を基盤とする独立したアプリケーションモジュールです。`;
-        duties = [
-          "クライアント通信の受付および入力パラメータの妥当性検証",
-          "ドメイン固有ロジックの実行と関連データベース/サービス呼び出し",
-          "処理結果の構造化レスポンス生成とエラーハンドリング"
-        ];
-        scope = "アプリケーションモジュール";
+        if (lowerName.includes('admin') || lowerName.includes('portal')) {
+          roleSummary = `「${cleanName}」は、plusimpact における管理・運用専用のWebポータル（管理画面）です。`;
+          duties = [
+            "運用管理者向けダッシュボードおよびシステム状況確認UIの提供",
+            "Webサイト掲載コンテンツ（お知らせ・記事・設定等）の登録・編集・管理",
+            "管理者権限管理およびバックエンドAPI（Admin API）とのセキュアなデータ連携"
+          ];
+          scope = "管理者・オペレーター向けWebポータル";
+        } else if (lowerName.includes('corporate') || lowerName.includes('marketing') || lowerName.includes('website')) {
+          roleSummary = `「${cleanName}」は、plusimpact の公式企業サイトおよびサービス紹介Webフロントエンドです。`;
+          duties = [
+            "エンドユーザー・来訪者向けの高パフォーマンスなWebページ描画（SSR / SSG）",
+            "会社情報・製品案内・お問い合わせ受付フォームの提供",
+            "SEO最適化・レスポンシブデザインによるマルチデバイス対応"
+          ];
+          scope = "一般ユーザー向け公開Webサイト";
+        } else if (lowerName.includes('backend') || lowerName.includes('api') || lowerName.includes('service')) {
+          roleSummary = `「${cleanName}」は、コア業務ロジックの実行とデータ永続化を担うバックエンドAPIサーバーです。`;
+          duties = [
+            "フロントエンドからのREST / GraphQLリクエストの受付・検証・認可",
+            "データベース（PostgreSQL / MySQL等）とのトランザクション処理・データ永続化",
+            "外部AIサービス連携および非同期ジョブキューのオーケストレーション"
+          ];
+          scope = "コアビジネスロジック & API層";
+        } else if (lowerName.includes('frontend') || lowerName.includes('individual')) {
+          roleSummary = `「${cleanName}」は、一般ユーザー・受検者向けの対話型Webフロントエンドアプリケーションです。`;
+          duties = [
+            "受検者向けユーザーインターフェース（テスト画面・結果確認・音声録音）の提供",
+            "クライアント側状態管理およびリアルタイムな進捗フィードバック",
+            "APIサーバーとの認証付き非同期データ送受信"
+          ];
+          scope = "エンドユーザー向けWebアプリケーション";
+        } else if (lowerName.includes('infra') || lowerName.includes('terraform') || lowerName.includes('cdk')) {
+          roleSummary = `「${cleanName}」は、クラウド環境およびインフラ構成（IaC）をコードで一元管理するリポジトリです。`;
+          duties = [
+            "Terraform / HCL 等によるクラウドインフラのプロビジョニング",
+            "ネットワーク（VPC・サブネット・DNS・SSL/TLS証明書）およびコンテナ基盤の構成定義",
+            "ステージング・本番環境のCI/CDパイプライン・環境設定の自動化"
+          ];
+          scope = "インフラストラクチャ & CI/CD";
+        } else if (lowerName.includes('talk') || lowerName.includes('video') || lowerName.includes('personality') || lowerName.includes('execution')) {
+          roleSummary = `「${cleanName}」は、AI処理・メディア生成・アルゴリズム実行を担当するモジュールです。`;
+          duties = [
+            "対話・動画生成・音声解析などのAI/メディア処理パイプラインの実行",
+            "非同期キューによるバックグラウンドバッチ処理およびストリーミング配信",
+            "外部生成AIモデル（Gemini・Claude等）とのプロンプト連携および結果構造化"
+          ];
+          scope = "AI & メディア処理エンジン";
+        } else if (lowerName.includes('util') || lowerName.includes('design-system') || lowerName.includes('setup')) {
+          roleSummary = `「${cleanName}」は、各リポジトリから共通利用される共有ユーティリティ・基盤モジュールです。`;
+          duties = [
+            "共通UIコンポーネント・デザインシステムの提供",
+            "共通型定義・ユーティリティ関数の標準化と再利用性向上",
+            "開発環境セットアップおよび自動化ツールの提供"
+          ];
+          scope = "共有基盤 & 開発ツール";
+        } else if (rawText && !isBoilerplate) {
+          roleSummary = `「${cleanName}」は、${rawText.slice(0, 100)}`;
+          duties = [
+            "担当領域における入力データ・パラメータの検証と整合性の確保",
+            "ドメイン固有ロジックの実行および関連データベース/APIサービスとの連携",
+            "例外発生時のエラーハンドリングと安全なレスポンス返却"
+          ];
+          scope = "アーキテクチャコンポーネント";
+        } else {
+          roleSummary = `「${cleanName}」は、${tech || 'システム'} を基盤とする独立したアプリケーションモジュールです。`;
+          duties = [
+            "クライアント通信の受付および入力パラメータの妥当性検証",
+            "ドメイン固有ロジックの実行と関連データベース/サービス呼び出し",
+            "処理結果の構造化レスポンス生成とエラーハンドリング"
+          ];
+          scope = "アプリケーションモジュール";
+        }
       }
 
       const dutiesHtml = duties.map(d => `
@@ -7820,24 +8150,24 @@ def build_portal_html(data, is_shareable=False):
 
           <div style="background: rgba(30, 41, 59, 0.5); border-radius: 6px; padding: 9px 11px; margin-bottom: 10px; border: 1px solid rgba(56, 189, 248, 0.12);">
             <div style="font-size: 0.72rem; font-weight: 800; color: #38bdf8; margin-bottom: 6px; display: flex; align-items: center; gap: 5px;">
-              <span>📋</span><span>このシステムが担当する主な役割・提供機能:</span>
+              <span>📋</span><span>${dict.resp_duties_label}</span>
             </div>
             ${dutiesHtml}
           </div>
 
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 0.72rem; color: #94a3b8; border-top: 1px solid rgba(51, 65, 85, 0.5); padding-top: 8px;">
-            <div><span>📌 担当領域:</span> <strong style="color: #e2e8f0;">${scope}</strong></div>
-            ${tech ? `<div><span>⚡ 技術基盤:</span> <strong style="color: #38bdf8;">${tech}</strong></div>` : ''}
+            <div><span>${dict.resp_scope_label}</span> <strong style="color: #e2e8f0;">${scope}</strong></div>
+            ${tech ? `<div><span>${dict.resp_tech_label}</span> <strong style="color: #38bdf8;">${tech}</strong></div>` : ''}
           </div>
 
           ${(rawText && !isBoilerplate) ? `
             <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(51, 65, 85, 0.6); font-size: 0.74rem; color: #cbd5e1; line-height: 1.5;">
-              <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 3px;">📄 リポジトリ補足情報:</div>
+              <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 3px;">${dict.resp_readme_label}</div>
               <div>${mdToHtml(rawText)}</div>
             </div>
           ` : (isBoilerplate && rawText ? `
             <div style="margin-top: 8px; font-size: 0.68rem; color: #64748b; line-height: 1.4;">
-              💡 <em>※ 元のREADME記載: ${mdToHtml(rawText.slice(0, 110))}...</em>
+              💡 <em>※ ${isEn ? 'Original README excerpt' : '元のREADME記載'}: ${mdToHtml(rawText.slice(0, 110))}...</em>
             </div>
           ` : '')}
         </div>
