@@ -3306,6 +3306,196 @@
       border-color: #3b82f6;
     }
 
+    /* Modern Raycast/Linear Style Elements */
+    .kbd-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', -apple-system, monospace;
+      font-size: 0.64rem;
+      font-weight: 700;
+      color: #94a3b8;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 1px 5px;
+      line-height: 1.2;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.4);
+      user-select: none;
+    }
+    .header-kbd {
+      margin-left: 6px;
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.4);
+      background: rgba(56, 189, 248, 0.1);
+    }
+    .current-repo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.8);
+      border-radius: 8px;
+      padding: 4px 10px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+      font-size: 0.78rem;
+    }
+    .current-repo-badge:hover {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: #38bdf8;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
+    }
+    .repo-badge-icon { font-size: 0.85rem; }
+    .repo-badge-name { font-weight: 700; color: #f8fafc; }
+    .repo-badge-sep { color: #475569; font-size: 0.75rem; }
+    .repo-badge-mode { font-weight: 600; color: #38bdf8; }
+
+    /* Toast Notifications System */
+    #toast-container {
+      position: fixed;
+      top: 18px;
+      right: 20px;
+      z-index: 999999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast-msg {
+      pointer-events: auto;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid #38bdf8;
+      border-radius: 8px;
+      padding: 10px 16px;
+      color: #f8fafc;
+      font-size: 0.82rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.6);
+      backdrop-filter: blur(12px);
+      animation: toastSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .toast-msg.toast-success { border-color: #34d399; }
+    .toast-msg.toast-info { border-color: #38bdf8; }
+    .toast-msg.toast-warning { border-color: #fbbf24; }
+    .toast-msg.fade-out {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.95);
+    }
+    @keyframes toastSlideIn {
+      from { opacity: 0; transform: translateY(-12px) scale(0.94); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Raycast / Linear Style Command Palette */
+    #cmd-palette-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 7, 14, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 100000;
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 12vh;
+      animation: fadeIn 0.15s ease-out;
+    }
+    #cmd-palette-box {
+      width: 600px;
+      max-width: 90vw;
+      background: #0f172a;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 12px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255,255,255,0.05);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .cmd-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #1e293b;
+      background: #0b1120;
+    }
+    .cmd-search-icon { font-size: 1.1rem; color: #64748b; }
+    #cmd-palette-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #f8fafc;
+      font-size: 0.95rem;
+      font-weight: 500;
+      outline: none;
+      font-family: inherit;
+    }
+    #cmd-palette-input::placeholder { color: #64748b; }
+    .cmd-results-list {
+      max-height: 380px;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .cmd-section-header {
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      padding: 6px 10px 4px;
+    }
+    .cmd-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      color: #cbd5e1;
+      font-size: 0.82rem;
+      transition: background 0.1s ease, color 0.1s ease;
+    }
+    .cmd-item:hover, .cmd-item.active {
+      background: rgba(56, 189, 248, 0.14);
+      color: #f8fafc;
+    }
+    .cmd-item.active {
+      box-shadow: inset 2px 0 0 #38bdf8;
+    }
+    .cmd-item-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .cmd-item-icon { font-size: 1rem; width: 20px; text-align: center; }
+    .cmd-item-title { font-weight: 600; }
+    .cmd-item-desc { font-size: 0.72rem; color: #64748b; margin-left: 6px; }
+    .cmd-item-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .cmd-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: #090e1a;
+      border-top: 1px solid #1e293b;
+      font-size: 0.72rem;
+      color: #64748b;
+    }
+    .cmd-footer-keys {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
 </style>
 </head>
 <body>
@@ -3342,7 +3532,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/08 10:25:51</strong>
+              <strong id="portal-sync-time">2026/11/08 10:56:14</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -3420,8 +3610,9 @@
             <div class="filter-pill" onclick="setFreshnessFilter('gray', this)"><span data-i18n="filter_old">⚪ 11日+</span> (<span id="count-gray">0</span>)</div>
           </div>
 
-          <div class="search-box-wrap" style="margin-top: 6px;">
-            <input type="text" class="search-input" id="search-box" placeholder="🔍 リポジトリや機能名で検索..." data-i18n-placeholder="search_placeholder" oninput="handleSearch(this.value)">
+          <div class="search-box-wrap" style="margin-top: 6px; position: relative;">
+            <input type="text" class="search-input" id="search-box" placeholder="🔍 リポジトリや機能名で検索..." data-i18n-placeholder="search_placeholder" oninput="handleSearch(this.value)" style="padding-right: 42px;">
+            <kbd class="kbd-badge" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer;" onclick="openCommandPalette()" title="コマンドパレットを開く (⌘K)">⌘K</kbd>
           </div>
         </div>
       </div>
@@ -3458,10 +3649,22 @@
             <span class="btn-text" data-i18n="mode_cr">AI監査</span>
           </button>
         </div>
+
+        <!-- Header Central Context Breadcrumb (Raycast / Linear style) -->
+        <div class="current-repo-badge" id="current-repo-badge" onclick="openCommandPalette()" title="クイックコマンドパレットを開く (⌘K)">
+          <span class="repo-badge-icon">📁</span>
+          <span class="repo-badge-name" id="badge-repo-name">RepoCHK Mac</span>
+          <span class="repo-badge-sep">/</span>
+          <span class="repo-badge-mode" id="badge-mode-name">構成図</span>
+          <kbd class="kbd-badge header-kbd">⌘K</kbd>
+        </div>
       </div>
 
       <!-- Right: Action Buttons + Zoom Controls + Toggle Inspector (Reopen Button shown when collapsed) -->
       <div class="header-top-right">
+        <button class="pane-toggle-btn" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)">
+          <span style="font-size: 0.82rem;">⌨️</span>
+        </button>
         <button class="btn btn-sync btn-settings" onclick="openAdminSettingsModal()" style="background: linear-gradient(135deg, #0f766e 0%, #047857 100%) !important; border-color: #34d399 !important;" title="OpenAI / Claude / Gemini / Groq APIキーと PHP・Node.js 脆弱性監査MCP/スキルを設定します (⌘,)">
           <span class="btn-icon">⚙️</span>
           <span class="btn-text" data-i18n="btn_settings">設定</span>
@@ -3699,6 +3902,92 @@
     </div>
   </div>
 
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Raycast / Linear Style Command Palette (⌘K) -->
+  <div id="cmd-palette-backdrop" onclick="if(event.target===this)closeCommandPalette()">
+    <div id="cmd-palette-box">
+      <div class="cmd-input-wrap">
+        <span class="cmd-search-icon">🔍</span>
+        <input type="text" id="cmd-palette-input" placeholder="コマンドまたはリポジトリを検索..." data-i18n-placeholder="cmd_placeholder" oninput="handleCommandPaletteInput(this.value)">
+        <kbd class="kbd-badge">ESC</kbd>
+      </div>
+      <div class="cmd-results-list" id="cmd-palette-results">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="cmd-footer">
+        <span id="cmd-footer-count">38 items available</span>
+        <div class="cmd-footer-keys">
+          <span><kbd class="kbd-badge">↑</kbd> <kbd class="kbd-badge">↓</kbd> 移動</span>
+          <span><kbd class="kbd-badge">↵</kbd> 実行</span>
+          <span><kbd class="kbd-badge">ESC</kbd> 閉じる</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard Shortcuts Help Modal (?) -->
+  <div class="modal-backdrop" id="shortcuts-modal" onclick="if(event.target===this)closeShortcutsModal()">
+    <div class="modal-box" style="max-width: 540px; text-align: left;">
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.2rem;">⌨️</span>
+          <strong style="color: #f8fafc; font-size: 1rem;" data-i18n="shortcuts_title">キーボードショートカット一覧</strong>
+        </div>
+        <button class="btn" onclick="closeShortcutsModal()" style="padding: 3px 8px; font-size: 0.75rem;">✕ 閉じる</button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.8rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
+          <span style="color: #cbd5e1;" data-i18n="sc_cmd_palette">コマンドパレットを開く / クイック移動</span>
+          <kbd class="kbd-badge" style="font-size: 0.75rem;">⌘K / Ctrl+K</kbd>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
+          <span style="color: #cbd5e1;" data-i18n="sc_toggle_sidebar">サイドバー（左ペイン）の開閉</span>
+          <kbd class="kbd-badge" style="font-size: 0.75rem;">⌘B / Ctrl+B</kbd>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
+          <span style="color: #cbd5e1;" data-i18n="sc_toggle_inspector">インスペクター（右ペイン）の開閉</span>
+          <kbd class="kbd-badge" style="font-size: 0.75rem;">⌘I / Ctrl+I</kbd>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
+          <span style="color: #cbd5e1;" data-i18n="sc_settings">設定モーダルを開く</span>
+          <kbd class="kbd-badge" style="font-size: 0.75rem;">⌘, / Ctrl+,</kbd>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
+          <span style="color: #cbd5e1;" data-i18n="sc_modes">ビューモード切替 (構成図 / シーケンス / 監査)</span>
+          <div style="display: flex; gap: 4px;">
+            <kbd class="kbd-badge">1</kbd>
+            <kbd class="kbd-badge">2</kbd>
+            <kbd class="kbd-badge">3</kbd>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
+          <span style="color: #cbd5e1;" data-i18n="sc_seq_step">シーケンス進行 / 前のステップ</span>
+          <div style="display: flex; gap: 4px;">
+            <kbd class="kbd-badge">←</kbd>
+            <kbd class="kbd-badge">→</kbd>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
+          <span style="color: #cbd5e1;" data-i18n="sc_zoom">ズーム拡大 / 縮小 / リセット</span>
+          <div style="display: flex; gap: 4px;">
+            <kbd class="kbd-badge">+</kbd>
+            <kbd class="kbd-badge">-</kbd>
+            <kbd class="kbd-badge">0</kbd>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
+          <span style="color: #cbd5e1;" data-i18n="sc_help">このショートカット一覧を表示</span>
+          <kbd class="kbd-badge">?</kbd>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
+        <button class="btn" onclick="closeShortcutsModal()" data-i18n="btn_close">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     if (window.mermaid) {
       mermaid.initialize({
@@ -3925,18 +4214,102 @@
       restoreAccordionStates();
     }
 
-    // ⌘B / Ctrl+B: toggle left pane, ⌘I / Ctrl+I: toggle right pane
+    // Global Keyboard Shortcuts (⌘K, ⌘B, ⌘I, ⌘,, 1, 2, 3, ?, +/-, Esc)
     document.addEventListener('keydown', (e) => {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      // Command Palette navigation when open
+      if (cmdPaletteOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeCommandPalette();
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (cmdPaletteActiveIndex < cmdFilteredItems.length - 1) {
+            cmdPaletteActiveIndex++;
+            renderCommandPaletteResults();
+          }
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (cmdPaletteActiveIndex > 0) {
+            cmdPaletteActiveIndex--;
+            renderCommandPaletteResults();
+          }
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          executeCommandPaletteItem(cmdPaletteActiveIndex);
+          return;
+        }
+        return;
+      }
+
+      // ⌘K / Ctrl+K: Open Command Palette
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        openCommandPalette();
+        return;
+      }
+
+      // ⌘, / Ctrl+,: Open Admin Settings
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        openAdminSettingsModal();
+        return;
+      }
+
+      // ⌘B / Ctrl+B: toggle sidebar, ⌘I / Ctrl+I: toggle inspector
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        const key = e.key.toLowerCase();
+        if (key === 'b') {
+          e.preventDefault();
+          toggleSidebarPane();
+          return;
+        } else if (key === 'i') {
+          e.preventDefault();
+          toggleInspectorPane();
+          return;
+        }
+      }
+
+      // Check if user is typing in an input
       const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
-      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') return;
-      const key = e.key.toLowerCase();
-      if (key === 'b') {
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') {
+        if (e.key === 'Escape') {
+          document.activeElement.blur();
+        }
+        return;
+      }
+
+      // '?' key: open shortcuts help
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
-        toggleSidebarPane();
-      } else if (key === 'i') {
+        openShortcutsModal();
+        return;
+      }
+
+      // '1', '2', '3': Switch view modes
+      if (e.key === '1') {
         e.preventDefault();
-        toggleInspectorPane();
+        switchViewMode('arch');
+      } else if (e.key === '2') {
+        e.preventDefault();
+        switchViewMode('seq');
+      } else if (e.key === '3') {
+        e.preventDefault();
+        switchViewMode('coderabbit');
+      }
+
+      // '+' or '=': Zoom in, '-': Zoom out, '0': Reset zoom
+      if (e.key === '+' || e.key === '=') {
+        zoomIn();
+      } else if (e.key === '-') {
+        zoomOut();
+      } else if (e.key === '0') {
+        resetZoom();
       }
     });
 
@@ -4461,6 +4834,7 @@
       const item = diagrams[index];
       selectedDiagram = item;
       currentRepoSeqIndex = 0; // Reset seq index for the newly selected repo
+      updateHeaderBreadcrumbs();
 
       if (currentViewMode === 'seq') {
         renderCurrentRepoSequence();
@@ -5462,6 +5836,242 @@
       return { svgElement: svgClone, width, height };
     }
 
+    // Toast Notification System
+    function showToast(message, type = 'info', duration = 3000) {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const toast = document.createElement('div');
+      toast.className = `toast-msg toast-${type}`;
+      const icon = type === 'success' ? '✓' : type === 'warning' ? '⚠️' : 'ℹ️';
+      toast.innerHTML = `<span style="font-size: 1rem;">${icon}</span><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 250);
+      }, duration);
+    }
+
+    // Header Breadcrumb Updater
+    function updateHeaderBreadcrumbs() {
+      const repoNameEl = document.getElementById('badge-repo-name');
+      const modeNameEl = document.getElementById('badge-mode-name');
+      if (repoNameEl && selectedDiagram) {
+        repoNameEl.textContent = selectedDiagram.repo || 'RepoCHK Mac';
+      }
+      if (modeNameEl) {
+        const dict = I18N[currentLang] || I18N.ja;
+        const modeLabel = currentViewMode === 'seq' ? dict.mode_seq : currentViewMode === 'coderabbit' ? dict.mode_cr : dict.mode_arch;
+        modeNameEl.textContent = modeLabel;
+      }
+    }
+
+    // Command Palette Logic (Raycast / Linear style)
+    let cmdPaletteOpen = false;
+    let cmdPaletteActiveIndex = 0;
+    let cmdFilteredItems = [];
+
+    function getAllCommandPaletteItems() {
+      const dict = I18N[currentLang] || I18N.ja;
+      const items = [];
+
+      // 1. Actions & View Modes
+      items.push({
+        id: 'mode_arch',
+        category: currentLang === 'ja' ? 'ビュー切替' : 'View Modes',
+        title: `${dict.mode_arch} (${currentLang === 'ja' ? 'アーキテクチャ構成図' : 'Architecture Diagram'})`,
+        icon: '🗺️',
+        desc: '1',
+        action: () => switchViewMode('arch')
+      });
+      items.push({
+        id: 'mode_seq',
+        category: currentLang === 'ja' ? 'ビュー切替' : 'View Modes',
+        title: `${dict.mode_seq} (${currentLang === 'ja' ? '時系列シーケンス' : 'Sequence Flow'})`,
+        icon: '⏱️',
+        desc: '2',
+        action: () => switchViewMode('seq')
+      });
+      items.push({
+        id: 'mode_cr',
+        category: currentLang === 'ja' ? 'ビュー切替' : 'View Modes',
+        title: `${dict.mode_cr} (${currentLang === 'ja' ? 'CodeRabbit AI品質・セキュリティ監査' : 'AI Security Audit'})`,
+        icon: '🐰',
+        desc: '3',
+        action: () => switchViewMode('coderabbit')
+      });
+
+      // Quick Actions
+      items.push({
+        id: 'export_svg',
+        category: currentLang === 'ja' ? 'クイックアクション' : 'Quick Actions',
+        title: `${dict.btn_export_svg} (${currentLang === 'ja' ? 'ベクトルSVGエクスポート' : 'Export Diagram as SVG'})`,
+        icon: '📐',
+        desc: 'SVG',
+        action: () => exportDiagramAsSvg()
+      });
+      items.push({
+        id: 'export_png',
+        category: currentLang === 'ja' ? 'クイックアクション' : 'Quick Actions',
+        title: `${dict.btn_export_png} (${currentLang === 'ja' ? 'Retina高解像度PNG保存' : 'Export 2x High-res PNG'})`,
+        icon: '📷',
+        desc: 'PNG',
+        action: () => exportDiagramAsPng()
+      });
+      items.push({
+        id: 'sync_now',
+        category: currentLang === 'ja' ? 'クイックアクション' : 'Quick Actions',
+        title: `${dict.quick_sync_btn} (${currentLang === 'ja' ? 'GitHub最新コミット同期' : 'Sync latest commits'})`,
+        icon: '🔄',
+        desc: 'Sync',
+        action: () => triggerGitHubSync()
+      });
+      items.push({
+        id: 'toggle_lang',
+        category: currentLang === 'ja' ? 'クイックアクション' : 'Quick Actions',
+        title: `${currentLang === 'ja' ? 'Switch to English (英語表示に切替)' : '日本語に切り替え (Switch to Japanese)'}`,
+        icon: '🌐',
+        desc: 'JA/EN',
+        action: () => toggleLanguage()
+      });
+      items.push({
+        id: 'open_settings',
+        category: currentLang === 'ja' ? '設定 & ツール' : 'Settings & Tools',
+        title: `${dict.btn_settings} (${currentLang === 'ja' ? 'LLM APIキー・監査エンジン設定' : 'API Keys & Settings'})`,
+        icon: '⚙️',
+        desc: '⌘,',
+        action: () => openAdminSettingsModal()
+      });
+      items.push({
+        id: 'open_add',
+        category: currentLang === 'ja' ? '設定 & ツール' : 'Settings & Tools',
+        title: `${dict.btn_add} (${currentLang === 'ja' ? '新規GitHubリポジトリ分析' : 'Analyze new repository'})`,
+        icon: '➕',
+        desc: 'Add',
+        action: () => openAnalyzeModal()
+      });
+      items.push({
+        id: 'open_shortcuts',
+        category: currentLang === 'ja' ? '設定 & ツール' : 'Settings & Tools',
+        title: `${dict.shortcuts_title}`,
+        icon: '⌨️',
+        desc: '?',
+        action: () => openShortcutsModal()
+      });
+
+      // 2. All Repositories
+      diagrams.forEach((d, idx) => {
+        items.push({
+          id: `repo_${idx}`,
+          category: currentLang === 'ja' ? 'リポジトリへジャンプ' : 'Jump to Repository',
+          title: d.repo,
+          icon: '📁',
+          desc: d.category || 'Repository',
+          action: () => selectDiagram(idx)
+        });
+      });
+
+      return items;
+    }
+
+    function openCommandPalette() {
+      const modal = document.getElementById('cmd-palette-backdrop');
+      const input = document.getElementById('cmd-palette-input');
+      if (!modal || !input) return;
+      cmdPaletteOpen = true;
+      modal.style.display = 'flex';
+      input.value = '';
+      cmdPaletteActiveIndex = 0;
+      handleCommandPaletteInput('');
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function closeCommandPalette() {
+      const modal = document.getElementById('cmd-palette-backdrop');
+      if (modal) modal.style.display = 'none';
+      cmdPaletteOpen = false;
+    }
+
+    function handleCommandPaletteInput(query) {
+      const q = (query || '').toLowerCase().trim();
+      const all = getAllCommandPaletteItems();
+      if (!q) {
+        cmdFilteredItems = all;
+      } else {
+        cmdFilteredItems = all.filter(it =>
+          it.title.toLowerCase().includes(q) ||
+          (it.desc && it.desc.toLowerCase().includes(q)) ||
+          it.category.toLowerCase().includes(q)
+        );
+      }
+      cmdPaletteActiveIndex = 0;
+      renderCommandPaletteResults();
+    }
+
+    function renderCommandPaletteResults() {
+      const listEl = document.getElementById('cmd-palette-results');
+      const countEl = document.getElementById('cmd-footer-count');
+      if (!listEl) return;
+      if (countEl) countEl.textContent = `${cmdFilteredItems.length} items`;
+
+      if (cmdFilteredItems.length === 0) {
+        listEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #64748b; font-size: 0.85rem;">${currentLang === 'ja' ? '一致するコマンドやリポジトリがありません' : 'No matching commands or repositories'}</div>`;
+        return;
+      }
+
+      let html = '';
+      let currentCat = '';
+      cmdFilteredItems.forEach((it, idx) => {
+        if (it.category !== currentCat) {
+          currentCat = it.category;
+          html += `<div class="cmd-section-header">${currentCat}</div>`;
+        }
+        const isActive = idx === cmdPaletteActiveIndex;
+        html += `
+          <div class="cmd-item ${isActive ? 'active' : ''}" onclick="executeCommandPaletteItem(${idx})" onmouseenter="setCommandPaletteActiveIndex(${idx})">
+            <div class="cmd-item-left">
+              <span class="cmd-item-icon">${it.icon}</span>
+              <span class="cmd-item-title">${it.title}</span>
+            </div>
+            <div class="cmd-item-right">
+              ${it.desc ? `<kbd class="kbd-badge">${it.desc}</kbd>` : ''}
+            </div>
+          </div>
+        `;
+      });
+      listEl.innerHTML = html;
+
+      // Ensure active item is scrolled into view
+      const activeEl = listEl.querySelector('.cmd-item.active');
+      if (activeEl) {
+        activeEl.scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    function setCommandPaletteActiveIndex(idx) {
+      cmdPaletteActiveIndex = idx;
+      const items = document.querySelectorAll('#cmd-palette-results .cmd-item');
+      items.forEach((el, i) => el.classList.toggle('active', i === idx));
+    }
+
+    function executeCommandPaletteItem(idx) {
+      const item = cmdFilteredItems[idx];
+      if (item) {
+        closeCommandPalette();
+        setTimeout(() => item.action(), 50);
+      }
+    }
+
+    // Shortcuts Modal
+    function openShortcutsModal() {
+      const modal = document.getElementById('shortcuts-modal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeShortcutsModal() {
+      const modal = document.getElementById('shortcuts-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
     function exportDiagramAsSvg() {
       const info = getCleanDiagramSvg();
       if (!info) {
@@ -5485,6 +6095,9 @@
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+      const dict = I18N[currentLang] || I18N.ja;
+      showToast(dict.toast_svg_exported || 'SVG downloaded', 'success');
     }
 
     function exportDiagramAsPng() {
@@ -5527,6 +6140,9 @@
           a.click();
           document.body.removeChild(a);
           setTimeout(() => URL.revokeObjectURL(pngUrl), 2000);
+
+          const dict = I18N[currentLang] || I18N.ja;
+          showToast(dict.toast_png_exported || 'PNG downloaded', 'success');
         }, 'image/png');
       };
       img.onerror = () => {
@@ -5586,6 +6202,7 @@
         if (crView) crView.style.display = 'block';
         renderCodeRabbitView();
       }
+      updateHeaderBreadcrumbs();
     }
 
 
@@ -6820,6 +7437,21 @@
         logic_title: "主な処理ロジック &amp; 稼働情報 (PROCESSING LOGIC)",
         open_github: "GitHubで開く ↗",
         commit_diff_detail: "変更内容の詳細",
+        cmd_placeholder: "コマンドまたはリポジトリを検索 (⌘K)...",
+        shortcuts_title: "キーボードショートカット一覧",
+        sc_cmd_palette: "コマンドパレットを開く / クイック移動",
+        sc_toggle_sidebar: "サイドバー（左ペイン）の開閉",
+        sc_toggle_inspector: "インスペクター（右ペイン）の開閉",
+        sc_settings: "設定モーダルを開く",
+        sc_modes: "ビューモード切替 (構成図 / シーケンス / 監査)",
+        sc_seq_step: "シーケンス進行 / 前のステップ",
+        sc_zoom: "ズーム拡大 / 縮小 / リセット",
+        sc_help: "このショートカット一覧を表示",
+        btn_close: "閉じる",
+        toast_svg_exported: "📐 SVGダイアグラムをダウンロードしました",
+        toast_png_exported: "📷 高解像度PNG画像を保存しました",
+        toast_sync_complete: "🔄 GitHub最新情報の同期が完了しました",
+        toast_lang_switched: "🌐 言語を切り替えました",
       },
       en: {
         mode_arch: "Architecture",
@@ -6882,12 +7514,29 @@
         logic_title: "Key Processing Logic &amp; Status (PROCESSING LOGIC)",
         open_github: "Open on GitHub ↗",
         commit_diff_detail: "Commit Diff Details",
+        cmd_placeholder: "Search commands or repositories (⌘K)...",
+        shortcuts_title: "Keyboard Shortcuts",
+        sc_cmd_palette: "Open Command Palette / Quick Jump",
+        sc_toggle_sidebar: "Toggle Sidebar (Left Pane)",
+        sc_toggle_inspector: "Toggle Inspector (Right Pane)",
+        sc_settings: "Open Settings Modal",
+        sc_modes: "Switch View Mode (Arch / Seq / Review)",
+        sc_seq_step: "Sequence Next / Prev Step",
+        sc_zoom: "Zoom In / Out / Reset",
+        sc_help: "Show this Shortcuts Help",
+        btn_close: "Close",
+        toast_svg_exported: "📐 SVG diagram downloaded",
+        toast_png_exported: "📷 High-res PNG image downloaded",
+        toast_sync_complete: "🔄 GitHub repository sync completed",
+        toast_lang_switched: "🌐 Switched language",
       }
     };
 
     function toggleLanguage() {
       const nextLang = currentLang === 'ja' ? 'en' : 'ja';
       setLanguage(nextLang);
+      const dict = I18N[nextLang] || I18N.ja;
+      showToast(dict.toast_lang_switched || (nextLang === 'ja' ? '🌐 日本語に切り替えました' : '🌐 Switched to English'), 'info');
     }
 
     function setLanguage(lang) {
@@ -6955,6 +7604,7 @@
       if (typeof selectedNodeData !== 'undefined' && selectedNodeData) {
         renderInspector();
       }
+      updateHeaderBreadcrumbs();
     }
 
     function toggleInspectorCard(cardId) {
