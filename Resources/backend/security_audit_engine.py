@@ -20,14 +20,24 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChex"
-OLD_APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChecker"
-if not APP_SUPPORT_DIR.exists() and OLD_APP_SUPPORT_DIR.exists():
-    try:
-        shutil.copytree(OLD_APP_SUPPORT_DIR, APP_SUPPORT_DIR)
-    except Exception as e:
-        print(f"Migration from RepoChecker to RepoChex notice: {e}", file=sys.stderr)
+def get_app_support_dir() -> Path:
+    if sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+        old_base = Path.home() / "Library" / "Application Support" / "RepoChecker"
+    else:
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        base = Path(xdg) if xdg else Path.home() / ".config"
+        old_base = base / "RepoChecker"
+    app_dir = base / "RepoChex"
+    if not app_dir.exists() and old_base.exists():
+        try:
+            shutil.copytree(old_base, app_dir)
+        except Exception as e:
+            print(f"Migration from RepoChecker to RepoChex notice: {e}", file=sys.stderr)
+    return app_dir
 
+
+APP_SUPPORT_DIR = get_app_support_dir()
 SETTINGS_FILE = APP_SUPPORT_DIR / "settings.json"
 
 
@@ -82,21 +92,26 @@ def load_settings() -> Dict[str, Any]:
         if not settings["keys"].get(prov) and os.environ.get(env_name):
             settings["keys"][prov] = os.environ[env_name]
 
-    secrets_env = Path.home() / "Git" / "Company" / "00_Infrastructure" / "Security" / "Secrets" / ".env"
-    if secrets_env.exists():
-        try:
-            for line in secrets_env.read_text(encoding="utf-8", errors="ignore").splitlines():
-                sline = line.strip()
-                if not sline or sline.startswith("#") or "=" not in sline:
-                    continue
-                k_env, v_env = sline.split("=", 1)
-                k_env = k_env.strip()
-                v_env = v_env.strip().strip('"').strip("'")
-                for prov, env_name in env_map.items():
-                    if k_env == env_name and not settings["keys"].get(prov) and len(v_env) >= 12:
-                        settings["keys"][prov] = v_env
-        except Exception:
-            pass
+    candidate_envs = [
+        APP_SUPPORT_DIR / ".env",
+        Path.cwd() / ".env",
+        Path.home() / ".config" / "RepoChex" / ".env",
+    ]
+    for env_file in candidate_envs:
+        if env_file.exists():
+            try:
+                for line in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+                    sline = line.strip()
+                    if not sline or sline.startswith("#") or "=" not in sline:
+                        continue
+                    k_env, v_env = sline.split("=", 1)
+                    k_env = k_env.strip()
+                    v_env = v_env.strip().strip('"').strip("'")
+                    for prov, env_name in env_map.items():
+                        if k_env == env_name and not settings["keys"].get(prov) and len(v_env) >= 12:
+                            settings["keys"][prov] = v_env
+            except Exception:
+                pass
 
     return settings
 

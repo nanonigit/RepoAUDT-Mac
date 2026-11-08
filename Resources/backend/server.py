@@ -17,7 +17,7 @@ import urllib.request
 from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 BACKEND_DIR = Path(__file__).resolve().parent
 WEBUI_DIR = BACKEND_DIR.parent / "webui"
@@ -91,23 +91,43 @@ class RepoChexRequestHandler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         pass
 
+    def _get_allowed_origin(self) -> Optional[str]:
+        origin = self.headers.get("Origin")
+        if not origin:
+            return None
+        # Allow local loopback origins and WKWebView null/file origins
+        if origin in ("null", "file://") or origin.startswith("http://127.0.0.1:") or origin.startswith("http://localhost:"):
+            return origin
+        return None
+
     def _send_json(self, status_code: int, payload: Dict[str, Any]) -> None:
         raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        allowed_origin = self._get_allowed_origin()
+        if allowed_origin:
+            self.send_header("Access-Control-Allow-Origin", allowed_origin)
+            self.send_header("Vary", "Origin")
         self.end_headers()
         self.wfile.write(raw)
 
     def do_OPTIONS(self) -> None:
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        allowed_origin = self._get_allowed_origin()
+        if allowed_origin:
+            self.send_header("Access-Control-Allow-Origin", allowed_origin)
+            self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def do_GET(self) -> None:
+        origin = self.headers.get("Origin")
+        if origin and not self._get_allowed_origin():
+            self._send_json(403, {"error": "Cross-Origin request forbidden"})
+            return
+
         if self.path.startswith("/api/state"):
             state = analyzer.load_saved_analyses()
             self._send_json(200, state)
@@ -121,6 +141,10 @@ class RepoChexRequestHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
+        origin = self.headers.get("Origin")
+        if origin and not self._get_allowed_origin():
+            self._send_json(403, {"error": "Cross-Origin request forbidden"})
+            return
         length = int(self.headers.get("Content-Length", "0"))
         body_raw = self.rfile.read(length).decode("utf-8", errors="ignore") if length > 0 else "{}"
 
@@ -157,7 +181,8 @@ class RepoChexRequestHandler(SimpleHTTPRequestHandler):
                     "ok": True,
                     "last_sync_time": now_str,
                     "synced_targets": synced_targets,
-                    "message": f"最新データの同期が完了しました ({now_str})"
+                    "message": f"Sync completed ({now_str})",
+                    "message_ja": f"最新データの同期が完了しました ({now_str})"
                 })
             except Exception as exc:
                 self._send_json(500, {"status": "error", "message": str(exc)})

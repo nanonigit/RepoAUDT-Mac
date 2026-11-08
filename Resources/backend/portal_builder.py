@@ -7,7 +7,7 @@ import datetime
 from datetime import datetime
 from pathlib import Path
 
-BASE_DIR = Path('/Users/naoki/Git/plusimpact')
+BASE_DIR = Path(os.environ.get("REPOCHEX_SCAN_DIR") or Path.cwd())
 
 TABLE_SCHEMAS = {
     'companies': {
@@ -4868,7 +4868,7 @@ def build_portal_html(data, is_shareable=False):
     let isSidebarResizing = false;
 
     // Resizer Logic (Right Inspector Splitter)
-    const savedWidth = localStorage.getItem('plusimpact_inspector_width');
+    const savedWidth = localStorage.getItem('repochex_inspector_width') || localStorage.getItem('plusimpact_inspector_width');
     if (savedWidth) {
       inspector.style.width = savedWidth + 'px';
     }
@@ -4883,7 +4883,7 @@ def build_portal_html(data, is_shareable=False):
 
     resizer.addEventListener('dblclick', () => {
       inspector.style.width = '500px';
-      localStorage.setItem('plusimpact_inspector_width', '500');
+      localStorage.setItem('repochex_inspector_width', '500');
       if (currentPanZoom) {
         currentPanZoom.resize();
         currentPanZoom.fit();
@@ -4892,7 +4892,7 @@ def build_portal_html(data, is_shareable=False):
     });
 
     // Sidebar Resizer Logic (Left Sidebar Splitter)
-    const savedSidebarWidth = localStorage.getItem('plusimpact_sidebar_width');
+    const savedSidebarWidth = localStorage.getItem('repochex_sidebar_width') || localStorage.getItem('plusimpact_sidebar_width');
     if (savedSidebarWidth) {
       sidebar.style.width = savedSidebarWidth + 'px';
     }
@@ -4907,7 +4907,7 @@ def build_portal_html(data, is_shareable=False):
 
     sidebarResizer.addEventListener('dblclick', () => {
       sidebar.style.width = '320px';
-      localStorage.setItem('plusimpact_sidebar_width', '320');
+      localStorage.setItem('repochex_sidebar_width', '320');
       if (currentPanZoom) {
         currentPanZoom.resize();
         currentPanZoom.fit();
@@ -4922,7 +4922,7 @@ def build_portal_html(data, is_shareable=False):
         const maxW = Math.floor(window.innerWidth * 0.45);
         if (newWidth >= minW && newWidth <= maxW) {
           sidebar.style.width = newWidth + 'px';
-          localStorage.setItem('plusimpact_sidebar_width', newWidth);
+          localStorage.setItem('repochex_sidebar_width', newWidth);
           if (currentPanZoom) {
             currentPanZoom.resize();
           }
@@ -4933,7 +4933,7 @@ def build_portal_html(data, is_shareable=False):
         const maxW = Math.floor(window.innerWidth * 0.75);
         if (newWidth >= minW && newWidth <= maxW) {
           inspector.style.width = newWidth + 'px';
-          localStorage.setItem('plusimpact_inspector_width', newWidth);
+          localStorage.setItem('repochex_inspector_width', newWidth);
           if (currentPanZoom) {
             currentPanZoom.resize();
           }
@@ -4967,7 +4967,7 @@ def build_portal_html(data, is_shareable=False):
       const isWide = currentW > 650;
       const targetW = isWide ? 500 : Math.floor(window.innerWidth * 0.65);
       inspector.style.width = targetW + 'px';
-      localStorage.setItem('plusimpact_inspector_width', targetW);
+      localStorage.setItem('repochex_inspector_width', targetW);
       if (currentPanZoom) {
         setTimeout(() => currentPanZoom.resize(), 80);
       }
@@ -5298,7 +5298,7 @@ def build_portal_html(data, is_shareable=False):
           </div>
         `;
         document.getElementById('vm-fixed-ver').textContent = '修正バージョン: ' + (adv.fixed_in || '最新版へアップデート');
-        document.getElementById('vm-cmd-code').textContent = adv.remediation_cmd || `cd ~/Git/plusimpact && npm update ${adv.pkg}`;
+        document.getElementById('vm-cmd-code').textContent = adv.remediation_cmd || `npm update ${adv.pkg}`;
 
         const list = document.getElementById('vm-sources-list');
         list.innerHTML = (adv.sources || []).map(s => `
@@ -5598,7 +5598,8 @@ def build_portal_html(data, is_shareable=False):
         return;
       }
       viewTitle.textContent = `${item.repo}`;
-      viewBreadcrumb.textContent = `plusimpact / ${item.category} / ${item.perspective}`;
+      const itemOwner = item.owner || (item.repo && item.repo.includes('/') ? item.repo.split('/')[0] : 'RepoChex');
+      viewBreadcrumb.textContent = `${itemOwner} / ${item.category} / ${item.perspective}`;
 
       const fresh = calculateDaysAgo(item.pushedAt || item.updatedAt);
       const createdStr = formatDateShort(item.createdAt);
@@ -6353,8 +6354,8 @@ def build_portal_html(data, is_shareable=False):
 
           <div class="section-title" style="margin-top: 14px;">🛠️ 脆弱性診断 & セキュリティコマンド</div>
           <div class="audit-cmd-box">
-            <code>cd ~/Git/plusimpact/${repoItem.repo_slug} && npm audit</code>
-            <button class="btn-copy-cmd" onclick="navigator.clipboard.writeText('cd ~/Git/plusimpact/${repoItem.repo_slug} && npm audit'); alert('監査コマンドをコピーしました！');">コピー</button>
+            <code>npm audit</code>
+            <button class="btn-copy-cmd" onclick="navigator.clipboard.writeText('npm audit'); alert('監査コマンドをコピーしました！');">コピー</button>
           </div>
           <div style="margin-top: 6px; text-align: right;">
             <a href="${repoItem.github_url}/security/dependabot" target="_blank" class="gh-link-btn" style="font-size: 0.68rem;">Dependabot アラート一覧 ↗</a>
@@ -6636,7 +6637,8 @@ def build_portal_html(data, is_shareable=False):
       const scoreClass = cr.score >= 90 ? 'score-high' : (cr.score >= 80 ? 'score-med' : 'score-low');
       const statusLabel = hasAction ? '🔴 要対応 (Action Required)' : (cr.status === 'PASSED_WITH_WARNINGS' ? '🟡 要確認 (Warnings)' : '🟢 合格 (Passed)');
 
-      viewBreadcrumb.textContent = `plusimpact / ${repo.repo} / coderabbit-ai-review`;
+      const repoOwner = repo.owner || (repo.repo && repo.repo.includes('/') ? repo.repo.split('/')[0] : 'RepoChex');
+      viewBreadcrumb.textContent = `${repoOwner} / ${repo.repo} / coderabbit-ai-review`;
 
       crView.innerHTML = `
         <div class="cr-dashboard-grid">
@@ -7095,7 +7097,40 @@ def build_portal_html(data, is_shareable=False):
     /* ==========================================================================
        Health & Uptime Monitoring
        ========================================================================== */
-    let healthData = {"checked_at": "2026/11/07 16:21:23", "total": 6, "online_count": 6, "services": [{"id": "omm_root", "name": "OMM Viewer (Root)", "type": "Local HTTP Service", "status": "ONLINE", "latency_ms": 0, "details": "Port 3000 is actively listening (Latency: 0ms)", "checked_at": "2026/11/07 16:21:23"}, {"id": "omm_backend", "name": "OMM Viewer (maice-backend)", "type": "Local HTTP Service", "status": "ONLINE", "latency_ms": 0, "details": "Port 3001 is actively listening (Latency: 0ms)", "checked_at": "2026/11/07 16:21:23"}, {"id": "portal_local", "name": "Architecture Portal Server", "type": "Local HTTP Server", "status": "ONLINE", "latency_ms": 0, "details": "Port 8080 is actively listening (Latency: 0ms)", "checked_at": "2026/11/07 16:21:23"}, {"id": "github_api", "name": "GitHub API (plusimpact)", "type": "External Cloud API", "status": "ONLINE", "latency_ms": 516, "details": "HTTP 200 (Latency: 516ms)", "checked_at": "2026/11/07 16:21:23"}, {"id": "auth0_status", "name": "Auth0 Identity Service", "type": "Identity Provider", "status": "ONLINE", "latency_ms": 639, "details": "HTTP 200 (Latency: 639ms)", "checked_at": "2026/11/07 16:21:23"}, {"id": "launchagent_sync", "name": "Git Auto-Sync Daemon", "type": "Background LaunchAgent", "status": "ONLINE", "latency_ms": 1, "details": "LaunchAgent scheduled (Every 4 hours)", "checked_at": "2026/11/07 16:21:23"}]};
+    let healthData = {
+      "checked_at": new Date().toLocaleString(),
+      "total": 3,
+      "online_count": 3,
+      "services": [
+        {
+          "id": "repochex_engine",
+          "name": "RepoChex Analysis Engine (Port 18765)",
+          "type": "Local Backend",
+          "status": "ONLINE",
+          "latency_ms": 1,
+          "details": "HTTP 200 OK (127.0.0.1:18765)",
+          "checked_at": new Date().toLocaleString()
+        },
+        {
+          "id": "github_api",
+          "name": "GitHub REST / GraphQL API",
+          "type": "External Cloud API",
+          "status": "ONLINE",
+          "latency_ms": 12,
+          "details": "HTTP 200 OK (api.github.com)",
+          "checked_at": new Date().toLocaleString()
+        },
+        {
+          "id": "gh_cli",
+          "name": "GitHub CLI & Git Credentials",
+          "type": "Local Auth Provider",
+          "status": "ONLINE",
+          "latency_ms": 2,
+          "details": "Authenticated (Ready)",
+          "checked_at": new Date().toLocaleString()
+        }
+      ]
+    };
 
     
     
@@ -7380,7 +7415,7 @@ def build_portal_html(data, is_shareable=False):
 
     async function browseOrgRepositories() {
       const input = document.getElementById('modal-gh-url-input');
-      const rawUrl = (input && input.value.trim()) ? input.value.trim() : 'https://github.com/plusimpact';
+      const rawUrl = (input && input.value.trim()) ? input.value.trim() : (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoChex');
       if (input && !input.value.trim()) input.value = rawUrl;
 
       const browserBox = document.getElementById('org-repos-browser-box');
@@ -7538,7 +7573,7 @@ def build_portal_html(data, is_shareable=False):
         await syncSavedAnalysesFromServer();
         const params = new URLSearchParams(window.location.search);
         if (params.get('openModal') === 'analyze') {
-          openAnalyzeModal('https://github.com/plusimpact');
+          openAnalyzeModal(params.get('url') || (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoChex'));
         } else if (params.get('openModal') === 'admin') {
           openAdminSettingsModal();
         }
@@ -7987,7 +8022,7 @@ def build_portal_html(data, is_shareable=False):
 
       if (isEn) {
         if (lowerName.includes('admin') || lowerName.includes('portal')) {
-          roleSummary = `"${cleanName}" serves as the dedicated web administration and operations portal for plusimpact.`;
+          roleSummary = `"${cleanName}" serves as the dedicated web administration and operations portal.`;
           duties = [
             "Executive operations dashboard and real-time system monitoring interface",
             "Content publishing and resource management (announcements, articles, system configs)",
@@ -8061,7 +8096,7 @@ def build_portal_html(data, is_shareable=False):
         }
       } else {
         if (lowerName.includes('admin') || lowerName.includes('portal')) {
-          roleSummary = `「${cleanName}」は、plusimpact における管理・運用専用のWebポータル（管理画面）です。`;
+          roleSummary = `「${cleanName}」は、本システムにおける管理・運用専用のWebポータル（管理画面）です。`;
           duties = [
             "運用管理者向けダッシュボードおよびシステム状況確認UIの提供",
             "Webサイト掲載コンテンツ（お知らせ・記事・設定等）の登録・編集・管理",
@@ -8069,7 +8104,7 @@ def build_portal_html(data, is_shareable=False):
           ];
           scope = "管理者・オペレーター向けWebポータル";
         } else if (lowerName.includes('corporate') || lowerName.includes('marketing') || lowerName.includes('website')) {
-          roleSummary = `「${cleanName}」は、plusimpact の公式企業サイトおよびサービス紹介Webフロントエンドです。`;
+          roleSummary = `「${cleanName}」は、公式Webサイトおよびサービス紹介Webフロントエンドです。`;
           duties = [
             "エンドユーザー・来訪者向けの高パフォーマンスなWebページ描画（SSR / SSG）",
             "会社情報・製品案内・お問い合わせ受付フォームの提供",
@@ -8625,7 +8660,8 @@ def build_portal_html(data, is_shareable=False):
         seqBar.innerHTML = '';
       }
 
-      viewBreadcrumb.textContent = `plusimpact / ${selectedDiagram.repo} / sequence / ${activeSeqId}`;
+      const diagOwner = selectedDiagram.owner || (selectedDiagram.repo && selectedDiagram.repo.includes('/') ? selectedDiagram.repo.split('/')[0] : 'RepoChex');
+      viewBreadcrumb.textContent = `${diagOwner} / ${selectedDiagram.repo} / sequence / ${activeSeqId}`;
       viewTitle.textContent = `${selectedDiagram.repo} - ${cleanSeqTitle(activeSeq.short_title || activeSeq.title)}`;
 
       headerFreshness.innerHTML = `
@@ -8959,7 +8995,7 @@ def build_portal_html(data, is_shareable=False):
             ➕ 新しく追加・分析したい 組織URL (<code style="color: #34d399;">https://github.com/org</code>) または リポジトリURL (<code style="color: #38bdf8;">owner/repo</code>):
           </label>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/plusimpact または https://github.com/nanonigit/RepoChex"
+            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/nanonigit または https://github.com/nanonigit/RepoChex"
               style="flex: 1; min-width: 260px; background: #090d16; border: 1.5px solid #3b82f6; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 0.88rem; outline: none;"
               onkeydown="if(event.key==='Enter') submitModalAnalyze()" />
             <button id="modal-gh-browse-btn" onclick="browseOrgRepositories()"
@@ -8977,9 +9013,7 @@ def build_portal_html(data, is_shareable=False):
         <div style="margin-bottom: 14px;">
           <div style="font-size: 0.72rem; color: #34d399; font-weight: 700; margin-bottom: 6px;">🏢 上の階層（組織 / ユーザー全体エコシステム）からまとめて追加:</div>
           <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-            <button class="table-view-btn" style="border-color: #10b981; color: #6ee7b7;" onclick="quickFillAndAnalyze('https://github.com/plusimpact')">🏢 https://github.com/plusimpact (組織全体を追加)</button>
-            <button class="table-view-btn" style="border-color: #10b981; color: #6ee7b7;" onclick="quickFillAndAnalyze('https://github.com/nanonigit')">👤 https://github.com/nanonigit (個人全体を追加)</button>
-            <button class="table-view-btn" onclick="quickBrowseOrg('https://github.com/plusimpact')">📂 plusimpact の配下一覧</button>
+            <button class="table-view-btn" style="border-color: #10b981; color: #6ee7b7;" onclick="quickFillAndAnalyze('https://github.com/nanonigit')">👤 https://github.com/nanonigit (全体を追加)</button>
             <button class="table-view-btn" onclick="quickBrowseOrg('https://github.com/nanonigit')">📂 nanonigit の配下一覧</button>
           </div>
           <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 6px;">📦 個別リポジトリをダイレクトに追加:</div>
@@ -9214,7 +9248,7 @@ def build_portal_html(data, is_shareable=False):
         )
         html = html.replace('● ONLINE (Local Standalone)', '● STANDALONE (Shareable Snapshot)')
         html = re.sub(r'⚡ 自動同期:.*?(?=</div>)', '⚡ スタンドアロン配布版 (チーム共有用)', html)
-        out_path = BASE_DIR / "architecture_portal_shareable.html"
+        out_path = Path.cwd() / "architecture_portal_shareable.html"
         out_path.write_text(html, encoding="utf-8")
         print(f"Generated shareable standalone portal at {out_path}")
     else:

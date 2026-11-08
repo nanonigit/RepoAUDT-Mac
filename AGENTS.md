@@ -16,7 +16,7 @@ RepoChex is a native macOS + WebUI Studio for GitHub repository architecture vis
   - `Resources/backend/server.py`: Local lightweight HTTP & REST API server (default port: `18765`).
   - `Resources/backend/security_audit_engine.py`: Vulnerability & architectural risk analysis engine.
 - **Native macOS Shell**:
-  - `Sources/AppDelegate.swift`, `Sources/MainWindowController.swift`: Swift WKWebView native host container.
+  - `Sources/RepoChexApp.swift`: SwiftUI + WKWebView native host container & backend server process manager.
   - `build.sh`: Builds and code-signs `/Applications/RepoChex.app`.
 
 ---

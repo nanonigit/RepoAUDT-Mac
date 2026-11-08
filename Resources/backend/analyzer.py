@@ -23,14 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import security_audit_engine
 
 
-APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChex"
-OLD_APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChecker"
-if not APP_SUPPORT_DIR.exists() and OLD_APP_SUPPORT_DIR.exists():
-    try:
-        shutil.copytree(OLD_APP_SUPPORT_DIR, APP_SUPPORT_DIR)
-    except Exception as e:
-        print(f"Migration from RepoChecker to RepoChex notice: {e}", file=sys.stderr)
-
+APP_SUPPORT_DIR = security_audit_engine.APP_SUPPORT_DIR
 REPOS_CACHE_DIR = APP_SUPPORT_DIR / "repos"
 STATE_FILE = APP_SUPPORT_DIR / "analyzed_repos.json"
 
