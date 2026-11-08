@@ -124,6 +124,45 @@ class RepoCheckerRequestHandler(SimpleHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         body_raw = self.rfile.read(length).decode("utf-8", errors="ignore") if length > 0 else "{}"
 
+        if self.path.startswith("/api/sync"):
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                target_url = (body.get("url") or body.get("target") or "").strip()
+                now_str = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+
+                state = analyzer.load_saved_analyses()
+                diagrams = state.get("diagrams", [])
+                synced_targets = []
+
+                if target_url:
+                    res = analyzer.analyze_any_github_target(target_url)
+                    analyzer.save_analysis_result(res)
+                    synced_targets.append(target_url)
+                else:
+                    # Sync registered ecosystem or standalone repos
+                    processed = set()
+                    for d in diagrams:
+                        url = d.get("github_url") or ""
+                        if url and url not in processed:
+                            processed.add(url)
+                            try:
+                                res = analyzer.analyze_any_github_target(url)
+                                analyzer.save_analysis_result(res)
+                                synced_targets.append(d.get("repo", url))
+                            except Exception as e_sub:
+                                print(f"Warning syncing {url}: {e_sub}", flush=True)
+
+                self._send_json(200, {
+                    "status": "success",
+                    "ok": True,
+                    "last_sync_time": now_str,
+                    "synced_targets": synced_targets,
+                    "message": f"最新データの同期が完了しました ({now_str})"
+                })
+            except Exception as exc:
+                self._send_json(500, {"status": "error", "message": str(exc)})
+            return
+
         if self.path.startswith("/api/analyze"):
             try:
                 body = json.loads(body_raw)

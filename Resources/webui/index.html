@@ -82,21 +82,187 @@
       border-color: rgba(56, 189, 248, 0.45);
       background: rgba(56, 189, 248, 0.1);
     }
-    .pane-close-btn {
-      background: transparent;
-      border: 1px solid transparent;
-      color: #64748b;
-      font-size: 0.85rem;
-      line-height: 1;
-      padding: 4px 7px;
+    .pane-collapse-btn {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 8px;
       border-radius: 6px;
       cursor: pointer;
-      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
     }
-    .pane-close-btn:hover {
-      color: #f8fafc;
-      background: rgba(239, 68, 68, 0.2);
-      border-color: rgba(239, 68, 68, 0.45);
+    .pane-collapse-btn:hover {
+      color: #38bdf8 !important;
+      border-color: #38bdf8 !important;
+      background: rgba(56, 189, 248, 0.12) !important;
+    }
+
+    /* Auto Sync Periodic Update Widget */
+    .auto-sync-card {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(14, 116, 144, 0.15) 100%);
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: border-color 0.2s ease;
+    }
+    .auto-sync-card:hover {
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .auto-sync-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .auto-sync-switch {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 18px;
+    }
+    .auto-sync-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .auto-sync-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: .2s;
+      border-radius: 18px;
+    }
+    .auto-sync-slider:before {
+      position: absolute;
+      content: "";
+      height: 12px;
+      width: 12px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 50%;
+    }
+    .auto-sync-switch input:checked + .auto-sync-slider {
+      background-color: #0284c7;
+    }
+    .auto-sync-switch input:checked + .auto-sync-slider:before {
+      transform: translateX(16px);
+    }
+    .auto-sync-interval-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .auto-sync-input-wrap {
+      display: inline-flex;
+      align-items: center;
+      background: #090e1a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 2px 6px;
+      gap: 4px;
+    }
+    .auto-sync-input-wrap:focus-within {
+      border-color: #38bdf8;
+    }
+    .auto-sync-input-wrap input {
+      width: 44px;
+      background: transparent;
+      border: none;
+      color: #38bdf8;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-align: center;
+      outline: none;
+    }
+    .auto-sync-unit {
+      font-size: 0.68rem;
+      color: #94a3b8;
+    }
+    .auto-sync-presets {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .auto-sync-pill {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.67rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .auto-sync-pill:hover, .auto-sync-pill.active {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+    .auto-sync-countdown-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-top: 4px;
+      border-top: 1px dashed rgba(51, 65, 85, 0.6);
+    }
+    .btn-quick-sync-link {
+      background: transparent;
+      border: none;
+      color: #38bdf8;
+      font-size: 0.68rem;
+      cursor: pointer;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .btn-quick-sync-link:hover {
+      text-decoration: underline;
+      color: #7dd3fc;
+    }
+    .auto-sync-progress-bar {
+      width: 100%;
+      height: 3px;
+      background: #1e293b;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .auto-sync-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0284c7, #38bdf8);
+      transition: width 1s linear;
+    }
+    .header-auto-sync-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid #334155;
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      color: #cbd5e1;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .header-auto-sync-chip:hover {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
     }
 
     /* Draggable Resizer Bar between Sidebar and Main Content */
@@ -2848,7 +3014,10 @@
       <div class="brand-title" style="display: flex; align-items: center; gap: 8px;">
         <img src="app-icon.png" alt="RepoChecker" style="width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
         <div>RepoChecker <span>AI Studio</span></div>
-        <button class="pane-close-btn" onclick="setSidebarCollapsed(true)" title="左ペインを閉じる (⌘B)" style="margin-left: auto;">✕</button>
+        <button class="pane-collapse-btn" onclick="setSidebarCollapsed(true)" title="サイドバーを折りたたむ (⌘B)" style="margin-left: auto;">
+          <span>◀</span>
+          <span>折りたたむ</span>
+        </button>
       </div>
       <div class="live-status"><div class="live-dot"></div> NATIVE MACOS STUDIO (CodeRabbit + Mermaid)</div>
       <div style="margin-top: 10px; background: linear-gradient(135deg, rgba(30, 58, 138, 0.45) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid #3b82f6; border-radius: 9px; padding: 9px 10px;">
@@ -2871,7 +3040,7 @@
       <div class="sync-meta-box">
         <div class="sync-timestamp-row">
           <span>🔄 最終更新:</span>
-          <strong id="portal-sync-time">2026/11/08 03:02:50</strong>
+          <strong id="portal-sync-time">2026/11/08 10:07:09</strong>
         </div>
         
     <!-- Live Uptime & Health Monitoring Widget -->
@@ -2888,8 +3057,47 @@
       </div>
     </div>
 
-        <div class="sync-badge-sched">
-          <span>⚡ 自動同期: 4時間毎 (LaunchAgent常駐)</span>
+        <!-- Interactive Auto-Sync / Periodic Update Widget -->
+        <div class="auto-sync-card">
+          <div class="auto-sync-header">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="dot-pulse" id="auto-sync-pulse-dot" style="background: #38bdf8; width: 7px; height: 7px;"></span>
+              <span style="font-size: 0.76rem; font-weight: 800; color: #e2e8f0;">⚡ 自動定期更新</span>
+            </div>
+            <label class="auto-sync-switch" title="自動定期更新のON/OFFを切り替え">
+              <input type="checkbox" id="auto-sync-toggle" checked onchange="toggleAutoSync(this.checked)">
+              <span class="auto-sync-slider"></span>
+            </label>
+          </div>
+
+          <div class="auto-sync-interval-row">
+            <span style="font-size: 0.72rem; color: #94a3b8;">間隔:</span>
+            <div class="auto-sync-input-wrap" title="更新間隔（分）を入力">
+              <input type="number" id="auto-sync-min-input" min="1" max="1440" value="10" 
+                     onchange="setAutoSyncMinutes(this.value)" oninput="setAutoSyncMinutes(this.value)">
+              <span class="auto-sync-unit">分毎</span>
+            </div>
+            <div class="auto-sync-presets">
+              <button class="auto-sync-pill active" id="sync-pill-10" onclick="setAutoSyncMinutes(10)" title="10分間隔">10分</button>
+              <button class="auto-sync-pill" id="sync-pill-30" onclick="setAutoSyncMinutes(30)" title="30分間隔">30分</button>
+              <button class="auto-sync-pill" id="sync-pill-60" onclick="setAutoSyncMinutes(60)" title="60分間隔">60分</button>
+            </div>
+          </div>
+
+          <div class="auto-sync-countdown-row">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 0.7rem;">
+              <span style="color: #94a3b8; display: flex; align-items: center; gap: 4px;">
+                <span>⏱️ 次回更新:</span>
+                <strong id="auto-sync-countdown-text" style="color: #38bdf8; font-family: 'JetBrains Mono', monospace;">10:00</strong>
+              </span>
+              <button class="btn-quick-sync-link" onclick="triggerGitHubSync()" title="今すぐ手動で更新">
+                <span>今すぐ更新 ↻</span>
+              </button>
+            </div>
+            <div class="auto-sync-progress-bar">
+              <div class="auto-sync-progress-fill" id="auto-sync-progress-fill" style="width: 100%;"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2931,6 +3139,10 @@
             <span>➕</span>
             <span>GitHub URLを追加分析</span>
           </button>
+          <div class="header-auto-sync-chip" id="header-auto-sync-chip" title="自動定期更新の間隔 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
+            <span class="dot-pulse" id="header-sync-pulse" style="background: #34d399; width: 6px; height: 6px;"></span>
+            <span id="header-sync-chip-text">自動更新: 10分毎 (10:00)</span>
+          </div>
           <button class="btn btn-sync" id="sync-btn" onclick="triggerGitHubSync()" title="GitHub最新コミット・差分を手動同期">
             <span>🔄</span>
             <span>GitHub最新同期</span>
@@ -3008,41 +3220,44 @@
         <div class="canvas-hint">💡 ボックスをクリックすると右側に詳細情報が表示されます（境界線をドラッグして幅を調節可能）</div>
       </div>
       <div id="coderabbit-view" style="display: none;"></div>
+    </div>
+  </div>
 
-      <!-- Draggable Splitter Handle -->
-      <div id="resizer" title="ドラッグして左右の幅を調節 (ダブルクリックで初期化)"></div>
+  <!-- Draggable Splitter Handle (Full Height) -->
+  <div id="resizer" title="ドラッグして左右の幅を調節 (ダブルクリックで初期化)"></div>
 
-      <!-- Right Detailed Inspector Panel -->
-      <div id="inspector">
-        <div class="inspector-header">
-          <h3>🔍 コンポーネント詳細インスペクター</h3>
-          <div class="inspector-actions">
-            <button class="btn-icon" onclick="toggleInspectorWidth()" title="幅を最大化 / 元に戻す">⛶</button>
-            <button class="pane-close-btn" onclick="setInspectorCollapsed(true)" title="右ペインを閉じる (⌘I)">✕</button>
-          </div>
-        </div>
-        <div class="inspector-tabs">
-          <div class="insp-tab active" onclick="switchInspTab('overview')">📋 概要</div>
-          <div class="insp-tab" onclick="switchInspTab('versions')">🛡️ バージョン</div>
-          <div class="insp-tab" onclick="switchInspTab('deploy')">🚀 インフラ</div>
-          <div class="insp-tab" onclick="switchInspTab('api')">🔌 API</div>
-          <div class="insp-tab" onclick="switchInspTab('db')">🗄️ DB</div>
-          <div class="insp-tab" onclick="switchInspTab('env')">⚙️ 環境変数</div>
-          <div class="insp-tab" onclick="switchInspTab('integrations')">🔗 連携</div>
-          <div class="insp-tab" onclick="switchInspTab('files')">📁 ファイル</div>
-        </div>
-        <div id="inspector-body">
-          <div class="empty-state" id="insp-empty">
-            <div style="font-size: 2.2rem; margin-bottom: 12px;">👆</div>
-            <div style="font-weight: 600; color: #94a3b8; font-size: 0.95rem;">ボックスをクリックしてください</div>
-            <div style="font-size: 0.8rem; margin-top: 6px; line-height: 1.5; color: #64748b;">
-              図の中の任意のボックスを選択すると、Next.js/DBのバージョン番号、脆弱性対応情報、API、環境変数、デプロイ情報が表示されます。<br><br>
-              左右の境界線をドラッグして、このパネルの幅を自由に調整できます。
-            </div>
-          </div>
-          <div id="insp-content" style="display: none;"></div>
+  <!-- Right Detailed Inspector Panel (Full Height - Extends from top to bottom) -->
+  <div id="inspector">
+    <div class="inspector-header">
+      <h3>🔍 コンポーネント詳細インスペクター</h3>
+      <div class="inspector-actions">
+        <button class="btn-icon" onclick="toggleInspectorWidth()" title="幅を最大化 / 元に戻す">⛶</button>
+        <button class="pane-collapse-btn" onclick="setInspectorCollapsed(true)" title="右ペインを閉じる (⌘I)">
+          <span>閉じる</span>
+          <span>▶</span>
+        </button>
+      </div>
+    </div>
+    <div class="inspector-tabs">
+      <div class="insp-tab active" onclick="switchInspTab('overview')">📋 概要</div>
+      <div class="insp-tab" onclick="switchInspTab('versions')">🛡️ バージョン</div>
+      <div class="insp-tab" onclick="switchInspTab('deploy')">🚀 インフラ</div>
+      <div class="insp-tab" onclick="switchInspTab('api')">🔌 API</div>
+      <div class="insp-tab" onclick="switchInspTab('db')">🗄️ DB</div>
+      <div class="insp-tab" onclick="switchInspTab('env')">⚙️ 環境変数</div>
+      <div class="insp-tab" onclick="switchInspTab('integrations')">🔗 連携</div>
+      <div class="insp-tab" onclick="switchInspTab('files')">📁 ファイル</div>
+    </div>
+    <div id="inspector-body">
+      <div class="empty-state" id="insp-empty">
+        <div style="font-size: 2.2rem; margin-bottom: 12px;">👆</div>
+        <div style="font-weight: 600; color: #94a3b8; font-size: 0.95rem;">ボックスをクリックしてください</div>
+        <div style="font-size: 0.8rem; margin-top: 6px; line-height: 1.5; color: #64748b;">
+          図の中の任意のボックスを選択すると、Next.js/DBのバージョン番号、脆弱性対応情報、API、環境変数、デプロイ情報が表示されます。<br><br>
+          左右の境界線をドラッグして、このパネルの幅を自由に調整できます。
         </div>
       </div>
+      <div id="insp-content" style="display: none;"></div>
     </div>
   </div>
 
@@ -3385,12 +3600,134 @@
 
     restorePaneCollapseState();
 
+    // Auto Periodic Sync System
+    let autoSyncEnabled = localStorage.getItem('repochecker_auto_sync_enabled') !== '0';
+    let autoSyncIntervalMinutes = parseInt(localStorage.getItem('repochecker_auto_sync_interval') || '10', 10);
+    if (isNaN(autoSyncIntervalMinutes) || autoSyncIntervalMinutes < 1) autoSyncIntervalMinutes = 10;
+    let autoSyncRemainingSeconds = autoSyncIntervalMinutes * 60;
+    let autoSyncTimerId = null;
+
+    function formatSecondsToMMSS(totalSeconds) {
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = totalSeconds % 60;
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function updateAutoSyncChipText() {
+      const chipText = document.getElementById('header-sync-chip-text');
+      const pulse = document.getElementById('header-sync-pulse');
+      const sidebarCountdown = document.getElementById('auto-sync-countdown-text');
+      const progressBar = document.getElementById('auto-sync-progress-fill');
+      const toggle = document.getElementById('auto-sync-toggle');
+      const minInput = document.getElementById('auto-sync-min-input');
+      const pulseDot = document.getElementById('auto-sync-pulse-dot');
+
+      if (toggle && toggle.checked !== autoSyncEnabled) toggle.checked = autoSyncEnabled;
+      if (minInput && parseInt(minInput.value, 10) !== autoSyncIntervalMinutes) minInput.value = autoSyncIntervalMinutes;
+      if (pulseDot) pulseDot.style.background = autoSyncEnabled ? '#38bdf8' : '#64748b';
+
+      if (!autoSyncEnabled) {
+        if (chipText) chipText.textContent = '自動更新: 停止中';
+        if (pulse) pulse.style.background = '#64748b';
+        if (sidebarCountdown) sidebarCountdown.textContent = '停止中';
+        if (progressBar) progressBar.style.width = '0%';
+        return;
+      }
+
+      const formatted = formatSecondsToMMSS(autoSyncRemainingSeconds);
+      if (chipText) chipText.textContent = `自動更新: ${autoSyncIntervalMinutes}分毎 (${formatted})`;
+      if (pulse) pulse.style.background = '#34d399';
+      if (sidebarCountdown) sidebarCountdown.textContent = formatted;
+      if (progressBar) {
+        const pct = Math.max(0, Math.min(100, (autoSyncRemainingSeconds / (autoSyncIntervalMinutes * 60)) * 100));
+        progressBar.style.width = pct + '%';
+      }
+    }
+
+    function resetAutoSyncCountdown() {
+      autoSyncRemainingSeconds = autoSyncIntervalMinutes * 60;
+      updateAutoSyncChipText();
+    }
+
+    function setAutoSyncMinutes(val) {
+      const num = parseInt(val, 10);
+      if (isNaN(num) || num < 1) return;
+      autoSyncIntervalMinutes = Math.min(1440, Math.max(1, num));
+      localStorage.setItem('repochecker_auto_sync_interval', autoSyncIntervalMinutes);
+
+      const inp = document.getElementById('auto-sync-min-input');
+      if (inp && parseInt(inp.value, 10) !== autoSyncIntervalMinutes) {
+        inp.value = autoSyncIntervalMinutes;
+      }
+
+      ['10', '30', '60'].forEach(p => {
+        const btn = document.getElementById('sync-pill-' + p);
+        if (btn) btn.classList.toggle('active', parseInt(p, 10) === autoSyncIntervalMinutes);
+      });
+
+      resetAutoSyncCountdown();
+    }
+
+    function toggleAutoSync(enabled) {
+      autoSyncEnabled = Boolean(enabled);
+      localStorage.setItem('repochecker_auto_sync_enabled', autoSyncEnabled ? '1' : '0');
+      const toggle = document.getElementById('auto-sync-toggle');
+      if (toggle) toggle.checked = autoSyncEnabled;
+      const pulseDot = document.getElementById('auto-sync-pulse-dot');
+      if (pulseDot) pulseDot.style.background = autoSyncEnabled ? '#38bdf8' : '#64748b';
+
+      if (autoSyncEnabled) {
+        resetAutoSyncCountdown();
+        startAutoSyncTimer();
+      } else {
+        updateAutoSyncChipText();
+      }
+    }
+
+    function startAutoSyncTimer() {
+      if (autoSyncTimerId) clearInterval(autoSyncTimerId);
+      autoSyncTimerId = setInterval(() => {
+        if (!autoSyncEnabled) return;
+        autoSyncRemainingSeconds--;
+        if (autoSyncRemainingSeconds <= 0) {
+          resetAutoSyncCountdown();
+          triggerGitHubSync(true);
+        } else {
+          updateAutoSyncChipText();
+        }
+      }, 1000);
+    }
+
+    function showAutoSyncToast(msg) {
+      let toast = document.getElementById('auto-sync-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'auto-sync-toast';
+        toast.style.cssText = 'position: fixed; bottom: 24px; right: 24px; background: rgba(15, 23, 42, 0.95); border: 1.5px solid #38bdf8; color: #f8fafc; padding: 10px 16px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 99999; display: flex; align-items: center; gap: 8px; transition: opacity 0.3s ease; backdrop-filter: blur(8px);';
+        document.body.appendChild(toast);
+      }
+      toast.innerHTML = `<span style="font-size: 1rem;">⚡</span><span>${msg}</span>`;
+      toast.style.opacity = '1';
+      toast.style.display = 'flex';
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => { toast.style.display = 'none'; }, 300);
+      }, 4500);
+    }
+
     // Sync from GitHub
-    async function triggerGitHubSync() {
+    async function triggerGitHubSync(isAuto = false) {
       const syncBtn = document.getElementById('sync-btn');
-      syncBtn.disabled = true;
-      syncBtn.innerHTML = '<span class="modal-spinner" style="width: 14px; height: 14px; border-width: 2px;"></span> 同期中...';
-      syncBtn.classList.add('loading');
+      const headerChipText = document.getElementById('header-sync-chip-text');
+      const origBtnHtml = syncBtn ? syncBtn.innerHTML : '';
+      if (syncBtn) {
+        syncBtn.disabled = true;
+        syncBtn.innerHTML = '<span class="modal-spinner" style="width: 14px; height: 14px; border-width: 2px;"></span> 同期中...';
+        syncBtn.classList.add('loading');
+      }
+      if (headerChipText) {
+        headerChipText.textContent = '🔄 同期実行中...';
+      }
 
       const modal = document.getElementById('sync-modal');
       const title = document.getElementById('modal-title-text');
@@ -3398,45 +3735,72 @@
       const spinner = document.getElementById('modal-spinner');
       const actionRow = document.getElementById('modal-action-row');
 
-      spinner.style.display = 'inline-block';
-      actionRow.style.display = 'none';
-      title.textContent = 'GitHubリポジトリ更新 & 全図再生成中...';
-      desc.textContent = '全29リポジトリの最新コードを取り込み、Next.js/DBバージョン、API、環境変数、アーキテクチャ図を最新情報に更新しています...';
-      modal.style.display = 'flex';
+      if (!isAuto && modal) {
+        spinner.style.display = 'inline-block';
+        actionRow.style.display = 'none';
+        title.textContent = 'GitHubリポジトリ更新 & 全図再生成中...';
+        desc.textContent = 'リポジトリの最新コードを取り込み、Next.js/DBバージョン、API、環境変数、アーキテクチャ図を最新情報に更新しています...';
+        modal.style.display = 'flex';
+      }
 
       try {
-        const res = await fetch('http://127.0.0.1:3939/api/sync', {
+        const targetUrl = (selectedDiagram && selectedDiagram.github_url) ? selectedDiagram.github_url : null;
+        const res = await fetch('/api/sync', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: targetUrl })
         });
         const data = await res.json();
-        if (res.ok && data.status === 'success') {
-          spinner.style.display = 'none';
-          title.textContent = '✨ 最新アーキテクチャに更新完了！';
-          desc.textContent = `最新のコードベースとライブラリバージョンを正常に反映しました（完了日時: ${data.last_sync_time}）。画面を再読み込みします...`;
-          setTimeout(() => {
-            window.location.reload();
-          }, 1000);
+        if (res.ok && (data.status === 'success' || data.ok)) {
+          const syncTime = data.last_sync_time || new Date().toLocaleString('ja-JP');
+          const timeEl = document.getElementById('portal-sync-time');
+          if (timeEl) timeEl.textContent = syncTime;
+
+          if (!isAuto && modal) {
+            spinner.style.display = 'none';
+            title.textContent = '✨ 最新アーキテクチャに更新完了！';
+            desc.textContent = `最新のコードベースとライブラリバージョンを正常に反映しました（完了日時: ${syncTime}）。画面を更新します...`;
+            setTimeout(() => {
+              window.location.reload();
+            }, 1200);
+          } else {
+            showAutoSyncToast(`✨ 自動更新完了 (${autoSyncIntervalMinutes}分毎): 最新データを同期しました (${syncTime})`);
+            resetAutoSyncCountdown();
+            try {
+              const stateRes = await fetch('/api/state');
+              if (stateRes.ok) {
+                const newState = await stateRes.json();
+                if (newState && Array.isArray(newState.diagrams)) {
+                  diagrams = newState.diagrams;
+                  renderNav();
+                }
+              }
+            } catch (_) {}
+          }
         } else {
           throw new Error(data.message || '同期処理でエラーが発生しました');
         }
       } catch (err) {
-        spinner.style.display = 'none';
-        title.textContent = '⚠️ バックグラウンド更新サービス未検出';
-        desc.innerHTML = `
-          ローカル同期デーモン（127.0.0.1:3939）がオフラインです。<br><br>
-          ターミナルで以下のコマンドを実行して即座に最新化できます：<br>
-          <div class="audit-cmd-box" style="margin: 8px 0;">
-            <code>~/Git/plusimpact/update.sh</code>
-            <button class="btn-copy-cmd" onclick="navigator.clipboard.writeText('~/Git/plusimpact/update.sh'); alert('コマンドをコピーしました！');">コピー</button>
-          </div>
-        `;
-        actionRow.style.display = 'flex';
-        syncBtn.disabled = false;
-        syncBtn.innerHTML = '🔄 更新';
-        syncBtn.classList.remove('loading');
+        if (!isAuto && modal) {
+          spinner.style.display = 'none';
+          title.textContent = '⚠️ 同期エラー';
+          desc.innerHTML = `最新同期中にエラーが発生しました:<br><code style="color: #f87171;">${err.message}</code>`;
+          actionRow.style.display = 'flex';
+        } else {
+          console.warn('Auto-sync notice:', err);
+        }
+      } finally {
+        if (syncBtn) {
+          syncBtn.disabled = false;
+          syncBtn.innerHTML = origBtnHtml || '<span>🔄</span><span>GitHub最新同期</span>';
+          syncBtn.classList.remove('loading');
+        }
+        updateAutoSyncChipText();
       }
     }
+
+    startAutoSyncTimer();
+    updateAutoSyncChipText();
 
     let currentVulnAdv = null;
     function openVulnModal(advJsonStr) {
