@@ -7258,7 +7258,7 @@ def build_portal_html(data, is_shareable=False):
       const fileName = `RepoCHK_${repoSlug}_${modeSuffix}.svg`;
 
       const serializer = new XMLSerializer();
-      const svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + serializer.serializeToString(info.svgElement);
+      const svgString = '<?xml version="1.0" encoding="UTF-8"?>\\n' + serializer.serializeToString(info.svgElement);
       const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -8235,7 +8235,9 @@ def build_portal_html(data, is_shareable=False):
         openAnalyzeModal();
         return;
       }
-      runGitHubRepoAnalysis(input.value.trim());
+      const val = input.value.trim();
+      openAnalyzeModal(val);
+      runGitHubRepoAnalysis(val);
     }
 
     function submitModalAnalyze() {
@@ -8295,6 +8297,9 @@ def build_portal_html(data, is_shareable=False):
 
         const sideInput = document.getElementById('sidebar-gh-url-input');
         if (sideInput) sideInput.value = '';
+
+        const msg = currentLang === 'ja' ? '✅ リポジトリの分析が完了しました！' : '✅ Repository analyzed successfully!';
+        showToast(msg, 'success');
       } catch (err) {
         if (progTitle) {
           progTitle.style.color = '#f87171';
