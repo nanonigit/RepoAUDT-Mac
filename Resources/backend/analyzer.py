@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Universal GitHub Organization / User & Repository Analyzer for RepoChecker macOS App.
+Universal GitHub Organization / User & Repository Analyzer for RepoChex macOS App.
 Supports BOTH:
   - Parent / Organization / User URLs (e.g. https://github.com/plusimpact, https://github.com/nanonigit, plusimpact)
     -> Discovers all repositories in the org/user, builds an Ecosystem Overview diagram (<owner> (全体エコシステム) [ECO])
@@ -13,7 +13,9 @@ Supports BOTH:
 import json
 import os
 import re
+import shutil
 import subprocess
+import sys
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -21,7 +23,14 @@ from typing import Any, Dict, List, Optional, Tuple
 import security_audit_engine
 
 
-APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChecker"
+APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChex"
+OLD_APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChecker"
+if not APP_SUPPORT_DIR.exists() and OLD_APP_SUPPORT_DIR.exists():
+    try:
+        shutil.copytree(OLD_APP_SUPPORT_DIR, APP_SUPPORT_DIR)
+    except Exception as e:
+        print(f"Migration from RepoChecker to RepoChex notice: {e}", file=sys.stderr)
+
 REPOS_CACHE_DIR = APP_SUPPORT_DIR / "repos"
 STATE_FILE = APP_SUPPORT_DIR / "analyzed_repos.json"
 
@@ -188,7 +197,7 @@ def list_org_or_user_repositories(owner: str, limit: int = 35) -> List[Dict[str,
     if not repos:
         for endpoint in (f"https://api.github.com/orgs/{owner}/repos?per_page={limit}&sort=pushed", f"https://api.github.com/users/{owner}/repos?per_page={limit}&sort=pushed"):
             try:
-                req = urllib.request.Request(endpoint, headers={"User-Agent": "RepoChecker-macOS"})
+                req = urllib.request.Request(endpoint, headers={"User-Agent": "RepoChex-macOS"})
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     if resp.status == 200:
                         arr = json.loads(resp.read().decode("utf-8", errors="ignore"))

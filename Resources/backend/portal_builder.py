@@ -1231,13 +1231,28 @@ def build_portal_html(data, is_shareable=False):
     body.inspector-collapsed #resizer {
       display: none !important;
     }
+    /* Only show toolbar toggle buttons when the corresponding pane is collapsed so there are never duplicate buttons side-by-side */
+    body:not(.sidebar-collapsed) #btn-toggle-sidebar {
+      display: none !important;
+    }
+    body.sidebar-collapsed #btn-toggle-sidebar {
+      display: inline-flex !important;
+    }
+
+    body:not(.inspector-collapsed) #btn-toggle-inspector {
+      display: none !important;
+    }
+    body.inspector-collapsed #btn-toggle-inspector {
+      display: inline-flex !important;
+    }
+
     .pane-toggle-btn {
       background: #0f172a;
       border: 1px solid #334155;
       color: #94a3b8;
-      font-size: 0.74rem;
+      font-size: 0.82rem;
       font-weight: 700;
-      padding: 5px 10px;
+      padding: 5px 9px;
       border-radius: 7px;
       cursor: pointer;
       display: inline-flex;
@@ -1245,6 +1260,7 @@ def build_portal_html(data, is_shareable=False):
       gap: 5px;
       white-space: nowrap;
       transition: all 0.15s ease;
+      line-height: 1;
     }
     .pane-toggle-btn:hover {
       color: #f8fafc;
@@ -1259,9 +1275,9 @@ def build_portal_html(data, is_shareable=False):
       background: #0f172a;
       border: 1px solid #334155;
       color: #94a3b8;
-      font-size: 0.72rem;
-      font-weight: 600;
-      padding: 3px 8px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 4px 8px;
       border-radius: 6px;
       cursor: pointer;
       display: inline-flex;
@@ -1269,6 +1285,7 @@ def build_portal_html(data, is_shareable=False):
       gap: 4px;
       transition: all 0.15s ease;
       white-space: nowrap;
+      line-height: 1;
     }
     .pane-collapse-btn:hover {
       color: #38bdf8 !important;
@@ -1898,6 +1915,7 @@ def build_portal_html(data, is_shareable=False):
       width: 500px;
       min-width: 300px;
       max-width: 80%;
+      height: 100vh;
       background: var(--inspector-bg);
       border-left: 1px solid var(--border-subtle);
       display: flex;
@@ -1907,7 +1925,9 @@ def build_portal_html(data, is_shareable=False):
       box-shadow: -6px 0 24px rgba(0, 0, 0, 0.45);
     }
     .inspector-header {
-      padding: 12px 18px;
+      padding: 10px 18px;
+      min-height: 54px;
+      box-sizing: border-box;
       background: #0f172a;
       border-bottom: 1px solid var(--border-subtle);
       display: flex;
@@ -3877,85 +3897,58 @@ def build_portal_html(data, is_shareable=False):
       overflow: visible !important;
     }
 
-    /* Tier 1: Title, Metadata & Sync Button */
-    .header-top-tier {
+    .header-bar {
+      padding: 8px 14px !important;
+      height: 54px !important;
+      min-height: 54px !important;
+      max-height: 54px !important;
+      background: #0f172a !important;
+      border-bottom: 1px solid var(--border-subtle) !important;
       display: flex !important;
       align-items: center !important;
       justify-content: space-between !important;
-      gap: 12px !important;
-      flex-wrap: wrap !important;
-      width: 100% !important;
-    }
-    .header-title-group {
-      display: flex !important;
-      flex-direction: column !important;
-      gap: 3px !important;
-      min-width: 0 !important;
-      flex: 1 1 auto !important;
-    }
-    .title-row-container {
-      display: flex !important;
-      align-items: center !important;
       gap: 10px !important;
-      flex-wrap: wrap !important;
-    }
-    .header-bar h2 {
-      font-size: 1.15rem !important;
-      font-weight: 800 !important;
-      color: #ffffff !important;
-      white-space: nowrap !important;
-      margin: 0 !important;
-      letter-spacing: -0.01em !important;
-    }
-    .header-dates-strip {
-      display: inline-flex !important;
-      align-items: center !important;
-      gap: 8px !important;
-      font-size: 0.72rem !important;
-      flex-wrap: wrap !important;
+      flex-shrink: 0 !important;
+      box-sizing: border-box !important;
+      flex-wrap: nowrap !important;
+      overflow: hidden !important;
     }
     .header-top-right {
       display: flex !important;
       align-items: center !important;
+      gap: 6px !important;
+      flex-wrap: nowrap !important;
+      margin-left: auto !important;
       flex-shrink: 0 !important;
-    }
-
-    /* Tier 2: View Switcher Tabs & Zoom Controls */
-    .header-bottom-tier {
-      display: flex !important;
-      align-items: center !important;
-      justify-content: space-between !important;
-      gap: 12px !important;
-      flex-wrap: wrap !important;
-      width: 100% !important;
-      padding-top: 8px !important;
-      border-top: 1px solid rgba(30, 41, 59, 0.7) !important;
     }
     .view-mode-container {
       display: flex !important;
       align-items: center !important;
-      flex-wrap: wrap !important;
+      flex-wrap: nowrap !important;
+      gap: 8px !important;
       min-width: 0 !important;
+      flex-shrink: 0 !important;
     }
     .view-mode-tabs {
       display: inline-flex !important;
-      flex-wrap: wrap !important;
+      flex-wrap: nowrap !important;
       background: #040711 !important;
       border: 1px solid #1e293b !important;
       border-radius: 8px !important;
       padding: 3px !important;
-      gap: 4px !important;
+      gap: 3px !important;
+      flex-shrink: 0 !important;
     }
     .view-mode-btn {
-      padding: 6px 12px !important;
-      font-size: 0.76rem !important;
+      padding: 5px 10px !important;
+      font-size: 0.74rem !important;
       white-space: nowrap !important;
       flex-shrink: 0 !important;
     }
     .header-actions {
       display: flex !important;
       align-items: center !important;
-      gap: 8px !important;
+      gap: 6px !important;
       flex-shrink: 0 !important;
       margin-left: auto !important;
     }
@@ -3966,12 +3959,23 @@ def build_portal_html(data, is_shareable=False):
       border: 1px solid #334155 !important;
       border-radius: 8px !important;
       padding: 2px !important;
+      flex-shrink: 0 !important;
     }
     .zoom-btn {
-      padding: 5px 10px !important;
-      font-size: 0.74rem !important;
+      padding: 4px 8px !important;
+      font-size: 0.76rem !important;
       white-space: nowrap !important;
       flex-shrink: 0 !important;
+      border: none !important;
+      background: transparent !important;
+      color: #94a3b8 !important;
+      cursor: pointer !important;
+      border-radius: 4px !important;
+      transition: all 0.15s ease !important;
+    }
+    .zoom-btn:hover {
+      background: #1e293b !important;
+      color: #38bdf8 !important;
     }
 
 
@@ -4185,11 +4189,10 @@ def build_portal_html(data, is_shareable=False):
   <div id="sidebar">
     <div class="brand-header">
       <div class="brand-title" style="display: flex; align-items: center; gap: 8px;">
-        <img src="app-icon.png" alt="RepoChecker" style="width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
-        <div>RepoChecker <span>AI Studio</span></div>
-        <button class="pane-collapse-btn" onclick="setSidebarCollapsed(true)" title="サイドバーを折りたたむ (⌘B)" style="margin-left: auto;">
-          <span>◀</span>
-          <span>折りたたむ</span>
+        <img src="app-icon.png" alt="RepoChex" style="width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
+        <div>RepoChex <span>AI Studio</span></div>
+        <button class="pane-collapse-btn" onclick="setSidebarCollapsed(true)" title="左ペインを折りたたむ (⌘B)" style="margin-left: auto;">
+          <span>◀</span><span>◧</span>
         </button>
       </div>
       <div class="live-status"><div class="live-dot"></div> NATIVE MACOS STUDIO (CodeRabbit + Mermaid)</div>
@@ -4294,72 +4297,64 @@ def build_portal_html(data, is_shareable=False):
 
   <div id="main-content">
     <div class="header-bar">
-      <!-- Tier 1: Repository Identity, Freshness Badges & GitHub Sync -->
-      <div class="header-top-tier">
-        <div class="header-title-group">
-          <div class="breadcrumb" id="view-breadcrumb">plusimpact / ecosystem</div>
-          <div class="title-row-container">
-            <h2 id="view-title">plusimpact (全体エコシステム)</h2>
-            <div id="header-freshness-container"></div>
-          </div>
-        </div>
-        <div class="header-top-right" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <button class="btn btn-sync" onclick="openAdminSettingsModal()" style="background: linear-gradient(135deg, #0f766e 0%, #047857 100%) !important; border-color: #34d399 !important;" title="OpenAI / Claude / Gemini / Groq APIキーと PHP・Node.js 脆弱性監査MCP/スキルを設定します (⌘,)">
-            <span>⚙️</span>
-            <span>管理・AI/脆弱性監査設定</span>
+      <!-- Hidden Title Elements for JS compatibility -->
+      <div style="display: none;">
+        <div id="view-breadcrumb"></div>
+        <h2 id="view-title"></h2>
+        <div id="header-freshness-container"></div>
+      </div>
+
+      <!-- Left: Toggle Sidebar + View Mode Tabs (Architecture, Sequence, CodeRabbit) -->
+      <div class="view-mode-container">
+        <button class="pane-toggle-btn pane-open" id="btn-toggle-sidebar" onclick="toggleSidebarPane()" title="左ペインを開閉 (⌘B)"><span>◀</span> <span>◧</span></button>
+        <div class="view-mode-tabs">
+          <button class="view-mode-btn active" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示">
+            <span>🗺️</span>
+            <span>構成図 (Architecture)</span>
           </button>
-          <button class="btn btn-sync" onclick="openAnalyzeModal()" style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important; border-color: #a78bfa !important;" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します">
-            <span>➕</span>
-            <span>GitHub URLを追加分析</span>
+          <button class="view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示">
+            <span>⏱️</span>
+            <span>シーケンス図 (Sequence)</span>
           </button>
-          <div class="header-auto-sync-chip" id="header-auto-sync-chip" title="自動定期更新の間隔 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
-            <span class="dot-pulse" id="header-sync-pulse" style="background: #34d399; width: 6px; height: 6px;"></span>
-            <span id="header-sync-chip-text">自動更新: 10分毎 (10:00)</span>
-          </div>
-          <button class="btn btn-sync" id="sync-btn" onclick="triggerGitHubSync()" title="GitHub最新コミット・差分を手動同期">
-            <span>🔄</span>
-            <span>GitHub最新同期</span>
+          <button class="view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示">
+            <span>🐰</span>
+            <span>CodeRabbit 監視 (AI Review)</span>
           </button>
         </div>
       </div>
 
-      <!-- Tier 2: View Mode Switcher & Canvas Zoom Controls -->
-      <div class="header-bottom-tier">
-        <div class="view-mode-container">
-          <button class="pane-toggle-btn pane-open" id="btn-toggle-sidebar" onclick="toggleSidebarPane()" title="左ペイン（リポジトリ一覧）を開閉 (⌘B)">◧ 左ペイン</button>
-          <div class="view-mode-tabs">
-            <button class="view-mode-btn active" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示">
-              <span>🗺️</span>
-              <span>構成図 (Architecture)</span>
-            </button>
-            <button class="view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示">
-              <span>⏱️</span>
-              <span>シーケンス図 (Sequence)</span>
-            </button>
-            <button class="view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示">
-              <span>🐰</span>
-              <span>CodeRabbit 監視 (AI Review)</span>
-            </button>
-          </div>
+      <!-- Right: Action Buttons + Zoom Controls + Toggle Inspector (Reopen Button shown when collapsed) -->
+      <div class="header-top-right">
+        <button class="btn btn-sync" onclick="openAdminSettingsModal()" style="background: linear-gradient(135deg, #0f766e 0%, #047857 100%) !important; border-color: #34d399 !important;" title="OpenAI / Claude / Gemini / Groq APIキーと PHP・Node.js 脆弱性監査MCP/スキルを設定します (⌘,)">
+          <span>⚙️</span>
+          <span>設定</span>
+        </button>
+        <button class="btn btn-sync" onclick="openAnalyzeModal()" style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important; border-color: #a78bfa !important;" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します">
+          <span>➕</span>
+          <span>追加</span>
+        </button>
+        <div class="header-auto-sync-chip" id="header-auto-sync-chip" title="自動定期更新の間隔 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
+          <span class="dot-pulse" id="header-sync-pulse" style="background: #34d399; width: 6px; height: 6px;"></span>
+          <span id="header-sync-chip-text">10分毎 (10:00)</span>
+        </div>
+        <button class="btn btn-sync" id="sync-btn" onclick="triggerGitHubSync()" title="GitHub最新コミット・差分を手動同期">
+          <span>🔄</span>
+          <span>同期</span>
+        </button>
+
+        <div class="zoom-controls-group" title="ダイアグラム表示倍率の操作">
+          <button class="zoom-btn" onclick="zoomIn()" title="ズームイン (拡大)">
+            <span>➕</span>
+          </button>
+          <button class="zoom-btn" onclick="zoomOut()" title="ズームアウト (縮小)">
+            <span>➖</span>
+          </button>
+          <button class="zoom-btn" onclick="resetZoom()" title="初期サイズにリセット (100%)">
+            <span>↺</span>
+          </button>
         </div>
 
-        <div class="header-actions" id="header-zoom-controls">
-          <div class="zoom-controls-group" title="ダイアグラム表示倍率の操作">
-            <button class="zoom-btn" onclick="zoomIn()" title="ズームイン (拡大)">
-              <span>➕</span>
-              <span>拡大</span>
-            </button>
-            <button class="zoom-btn" onclick="zoomOut()" title="ズームアウト (縮小)">
-              <span>➖</span>
-              <span>縮小</span>
-            </button>
-            <button class="zoom-btn" onclick="resetZoom()" title="初期サイズにリセット">
-              <span>↺</span>
-              <span>リセット</span>
-            </button>
-          </div>
-          <button class="pane-toggle-btn pane-open" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペイン（詳細インスペクター）を開閉 (⌘I)">右ペイン ◨</button>
-        </div>
+        <button class="pane-toggle-btn" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペインを開閉 (⌘I)"><span>◀</span> <span>◨</span></button>
       </div>
     </div>
 
@@ -4405,9 +4400,8 @@ def build_portal_html(data, is_shareable=False):
       <h3>🔍 コンポーネント詳細インスペクター</h3>
       <div class="inspector-actions">
         <button class="btn-icon" onclick="toggleInspectorWidth()" title="幅を最大化 / 元に戻す">⛶</button>
-        <button class="pane-collapse-btn" onclick="setInspectorCollapsed(true)" title="右ペインを閉じる (⌘I)">
-          <span>閉じる</span>
-          <span>▶</span>
+        <button class="pane-collapse-btn" onclick="setInspectorCollapsed(true)" title="右ペインを折りたたむ (⌘I)">
+          <span>◨</span><span>▶</span>
         </button>
       </div>
     </div>
@@ -4700,8 +4694,8 @@ def build_portal_html(data, is_shareable=False):
     }
 
     // Collapsible Left (Sidebar) / Right (Inspector) Panes
-    const PANE_STORAGE_KEY_SIDEBAR = 'repochecker_sidebar_collapsed';
-    const PANE_STORAGE_KEY_INSPECTOR = 'repochecker_inspector_collapsed';
+    const PANE_STORAGE_KEY_SIDEBAR = 'repochex_sidebar_collapsed';
+    const PANE_STORAGE_KEY_INSPECTOR = 'repochex_inspector_collapsed';
     const PANE_RESIZE_DELAY_MS = 60;
 
     function refreshCanvasAfterPaneToggle() {
@@ -4721,11 +4715,13 @@ def build_portal_html(data, is_shareable=False):
       const isInspectorCollapsed = document.body.classList.contains('inspector-collapsed');
       if (sidebarBtn) {
         sidebarBtn.classList.toggle('pane-open', !isSidebarCollapsed);
-        sidebarBtn.textContent = isSidebarCollapsed ? '◧ 左ペインを開く' : '◧ 左ペイン';
+        sidebarBtn.innerHTML = isSidebarCollapsed ? '<span>◧</span> <span>▶</span>' : '<span>◀</span> <span>◧</span>';
+        sidebarBtn.title = isSidebarCollapsed ? '左ペインを開く (⌘B)' : '左ペインを折りたたむ (⌘B)';
       }
       if (inspectorBtn) {
         inspectorBtn.classList.toggle('pane-open', !isInspectorCollapsed);
-        inspectorBtn.textContent = isInspectorCollapsed ? '右ペインを開く ◨' : '右ペイン ◨';
+        inspectorBtn.innerHTML = isInspectorCollapsed ? '<span>◀</span> <span>◨</span>' : '<span>◨</span> <span>▶</span>';
+        inspectorBtn.title = isInspectorCollapsed ? '右ペインを開く (⌘I)' : '右ペインを折りたたむ (⌘I)';
       }
     }
 
@@ -4775,8 +4771,8 @@ def build_portal_html(data, is_shareable=False):
     restorePaneCollapseState();
 
     // Auto Periodic Sync System
-    let autoSyncEnabled = localStorage.getItem('repochecker_auto_sync_enabled') !== '0';
-    let autoSyncIntervalMinutes = parseInt(localStorage.getItem('repochecker_auto_sync_interval') || '10', 10);
+    let autoSyncEnabled = (localStorage.getItem('repochex_auto_sync_enabled') ?? localStorage.getItem('repochecker_auto_sync_enabled')) !== '0';
+    let autoSyncIntervalMinutes = parseInt(localStorage.getItem('repochex_auto_sync_interval') || localStorage.getItem('repochecker_auto_sync_interval') || '10', 10);
     if (isNaN(autoSyncIntervalMinutes) || autoSyncIntervalMinutes < 1) autoSyncIntervalMinutes = 10;
     let autoSyncRemainingSeconds = autoSyncIntervalMinutes * 60;
     let autoSyncTimerId = null;
@@ -4801,7 +4797,7 @@ def build_portal_html(data, is_shareable=False):
       if (pulseDot) pulseDot.style.background = autoSyncEnabled ? '#38bdf8' : '#64748b';
 
       if (!autoSyncEnabled) {
-        if (chipText) chipText.textContent = '自動更新: 停止中';
+        if (chipText) chipText.textContent = '更新停止中';
         if (pulse) pulse.style.background = '#64748b';
         if (sidebarCountdown) sidebarCountdown.textContent = '停止中';
         if (progressBar) progressBar.style.width = '0%';
@@ -4809,7 +4805,7 @@ def build_portal_html(data, is_shareable=False):
       }
 
       const formatted = formatSecondsToMMSS(autoSyncRemainingSeconds);
-      if (chipText) chipText.textContent = `自動更新: ${autoSyncIntervalMinutes}分毎 (${formatted})`;
+      if (chipText) chipText.textContent = `${autoSyncIntervalMinutes}分毎 (${formatted})`;
       if (pulse) pulse.style.background = '#34d399';
       if (sidebarCountdown) sidebarCountdown.textContent = formatted;
       if (progressBar) {
@@ -8066,7 +8062,7 @@ def build_portal_html(data, is_shareable=False):
         <div style="display: flex; align-items: center; gap: 10px;">
           <span style="font-size: 1.4rem;">🔍</span>
           <div>
-            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">GitHub リポジトリ追加分析 & 保有リスト管理 (RepoChecker)</h3>
+            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">GitHub リポジトリ追加分析 & 保有リスト管理 (RepoChex)</h3>
             <span style="font-size: 0.72rem; color: #93c5fd;">新しい組織URL・リポジトリURLの追加解析と、保有データの確認・不要リポジトリの削除が行えます</span>
           </div>
         </div>
@@ -8078,7 +8074,7 @@ def build_portal_html(data, is_shareable=False):
             ➕ 新しく追加・分析したい 組織URL (<code style="color: #34d399;">https://github.com/org</code>) または リポジトリURL (<code style="color: #38bdf8;">owner/repo</code>):
           </label>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/plusimpact または https://github.com/nanonigit/RepoChecker"
+            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/plusimpact または https://github.com/nanonigit/RepoChex"
               style="flex: 1; min-width: 260px; background: #090d16; border: 1.5px solid #3b82f6; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 0.88rem; outline: none;"
               onkeydown="if(event.key==='Enter') submitModalAnalyze()" />
             <button id="modal-gh-browse-btn" onclick="browseOrgRepositories()"
@@ -8106,7 +8102,7 @@ def build_portal_html(data, is_shareable=False):
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/AmazonDeliverySync')">📦 nanonigit/AmazonDeliverySync</button>
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/VisualBarTimer')">⏱️ nanonigit/VisualBarTimer</button>
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/DesktopCalendar')">📅 nanonigit/DesktopCalendar</button>
-            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/RepoChecker')">🐰 nanonigit/RepoChecker</button>
+            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/RepoChex')">🐰 nanonigit/RepoChex</button>
           </div>
         </div>
 
@@ -8182,7 +8178,7 @@ def build_portal_html(data, is_shareable=False):
 
         <!-- 4 AI Providers API Key Inputs -->
         <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;">
-          🔑 AI プロバイダー APIキー設定 <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">(ローカルの ~/Library/Application Support/RepoChecker/settings.json に暗号権限 0600 で安全に保存されます)</span>
+          🔑 AI プロバイダー APIキー設定 <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">(ローカルの ~/Library/Application Support/RepoChex/settings.json に暗号権限 0600 で安全に保存されます)</span>
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(370px, 1fr)); gap: 12px; margin-bottom: 18px;">
@@ -8340,7 +8336,7 @@ def build_portal_html(data, is_shareable=False):
         out_path = Path(__file__).resolve().parent.parent / "webui" / "index.html"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(html, encoding="utf-8")
-        print(f"Generated RepoChecker webui at {out_path}")
+        print(f"Generated RepoChex webui at {out_path}")
 
 def main():
     data = collect_all_data()

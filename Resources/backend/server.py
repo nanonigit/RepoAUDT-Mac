@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Local HTTP Backend Server for RepoChecker macOS App.
+Local HTTP Backend Server for RepoChex macOS App.
 Serves the interactive WebUI and provides REST endpoints:
   - GET  /api/state    : Load persisted analyzed GitHub repositories
   - POST /api/analyze  : Analyze any GitHub Organization/User URL or Repository URL
@@ -32,8 +32,8 @@ def check_live_health(port: int) -> Dict[str, Any]:
     now_str = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
     services.append({
-        "id": "repochecker_engine",
-        "name": f"RepoChecker Analysis Engine (Port {port})",
+        "id": "repochex_engine",
+        "name": f"RepoChex Analysis Engine (Port {port})",
         "type": "Local macOS Backend",
         "status": "ONLINE",
         "latency_ms": 2,
@@ -45,7 +45,7 @@ def check_live_health(port: int) -> Dict[str, Any]:
     gh_status = "ONLINE"
     gh_detail = "HTTP 200 OK (api.github.com)"
     try:
-        req = urllib.request.Request("https://api.github.com/rate_limit", headers={"User-Agent": "RepoChecker-macOS"})
+        req = urllib.request.Request("https://api.github.com/rate_limit", headers={"User-Agent": "RepoChex-macOS"})
         with urllib.request.urlopen(req, timeout=5) as resp:
             if resp.status != 200:
                 gh_status = "DEGRADED"
@@ -82,7 +82,7 @@ def check_live_health(port: int) -> Dict[str, Any]:
     }
 
 
-class RepoCheckerRequestHandler(SimpleHTTPRequestHandler):
+class RepoChexRequestHandler(SimpleHTTPRequestHandler):
     server_port: int = 18765
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -225,11 +225,11 @@ class RepoCheckerRequestHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-    port = int(os.environ.get("REPOCHECKER_PORT", "18765"))
-    RepoCheckerRequestHandler.server_port = port
+    port = int(os.environ.get("REPOCHEX_PORT") or os.environ.get("REPOCHECKER_PORT") or "18765")
+    RepoChexRequestHandler.server_port = port
     ThreadingHTTPServer.allow_reuse_address = True
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), RepoCheckerRequestHandler)
-    print(f"RepoChecker server listening on http://127.0.0.1:{port}", flush=True)
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), RepoChexRequestHandler)
+    print(f"RepoChex server listening on http://127.0.0.1:{port}", flush=True)
     httpd.serve_forever()
 
 

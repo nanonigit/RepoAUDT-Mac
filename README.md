@@ -1,4 +1,4 @@
-# RepoChecker — GitHub Architecture & CodeRabbit AI Studio for macOS
+# RepoChex — GitHub Architecture & CodeRabbit AI Studio for macOS
 
 GitHubのURL（`https://github.com/owner/repo` または `owner/repo`）を入力するだけで、あらゆるリポジトリのソースコード構造を自動解析し、インタラクティブな構成図・シーケンス図・CodeRabbit風AIコード監査・要対応（脆弱性・バグ・改善提案）の可視化を行うネイティブ macOS アプリケーションです。
 
@@ -16,7 +16,7 @@ GitHubのURL（`https://github.com/owner/repo` または `owner/repo`）を入�
    - `📋 概要` / `🛡️ バージョン` / `🚀 インフラ` / `🔌 API` / `🗄️ DB` / `⚙️ 環境変数` / `🔗 連携` / `📁 ファイル`
 4. **リアルタイム死活監視 (`🟢 死活監視`)**
    - ローカル分析エンジン、GitHub API、Auth0、各種ローカルポート・バックグラウンドジョブの稼働状態と疎通レイテンシを監視
-5. **どのウィンドウ幅でも重ならない 2段式レスポンシブヘッダー**
+5. **どのウィンドウ幅でも重ならない レスポンシブヘッダー & スマート動的トグル**
 
 ## ビルドとインストール
 
@@ -24,4 +24,4 @@ GitHubのURL（`https://github.com/owner/repo` または `owner/repo`）を入�
 ./build.sh --install
 ```
 
-ビルド完了後、`/Applications/RepoChecker.app` にインストールされます。
+ビルド完了後、`/Applications/RepoChex.app` にインストールされます。

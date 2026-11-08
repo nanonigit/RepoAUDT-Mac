@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Security Skills, OSV Vulnerability MCP Scanner & Multi-LLM Audit Engine for RepoChecker.
+Security Skills, OSV Vulnerability MCP Scanner & Multi-LLM Audit Engine for RepoChex.
 Supports:
   1. API Key Management for OpenAI, Anthropic Claude, Google Gemini, and Groq
   2. Real-time OSV.dev Vulnerability Database querying (npm / Packagist PHP / PyPI / Go / crates.io)
@@ -12,13 +12,22 @@ Supports:
 import json
 import os
 import re
+import shutil
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChecker"
+APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChex"
+OLD_APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RepoChecker"
+if not APP_SUPPORT_DIR.exists() and OLD_APP_SUPPORT_DIR.exists():
+    try:
+        shutil.copytree(OLD_APP_SUPPORT_DIR, APP_SUPPORT_DIR)
+    except Exception as e:
+        print(f"Migration from RepoChecker to RepoChex notice: {e}", file=sys.stderr)
+
 SETTINGS_FILE = APP_SUPPORT_DIR / "settings.json"
 
 
@@ -177,7 +186,7 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
         req = urllib.request.Request(
             "https://api.osv.dev/v1/querybatch",
             data=req_body,
-            headers={"Content-Type": "application/json", "User-Agent": "RepoChecker-SecuritySkill"},
+            headers={"Content-Type": "application/json", "User-Agent": "RepoChex-SecuritySkill"},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
@@ -471,7 +480,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
-                "User-Agent": "RepoChecker-macOS/1.0",
+                "User-Agent": "RepoChex-macOS/1.0",
             },
             method="POST",
         )
@@ -492,7 +501,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
                     headers={
                         "Content-Type": "application/json",
                         "Authorization": f"Bearer {api_key}",
-                        "User-Agent": "RepoChecker-macOS/1.0",
+                        "User-Agent": "RepoChex-macOS/1.0",
                     },
                     method="POST",
                 )
@@ -516,7 +525,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
                 "Content-Type": "application/json",
                 "x-api-key": api_key,
                 "anthropic-version": "2023-06-01",
-                "User-Agent": "RepoChecker-macOS/1.0",
+                "User-Agent": "RepoChex-macOS/1.0",
             },
             method="POST",
         )
@@ -534,7 +543,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "User-Agent": "RepoChecker-macOS/1.0"},
+            headers={"Content-Type": "application/json", "User-Agent": "RepoChex-macOS/1.0"},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=25) as resp:
@@ -566,7 +575,7 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
         try:
             mreq = urllib.request.Request(
                 "https://api.openai.com/v1/models",
-                headers={"Authorization": f"Bearer {api_key}", "User-Agent": "RepoChecker-macOS/1.0"},
+                headers={"Authorization": f"Bearer {api_key}", "User-Agent": "RepoChex-macOS/1.0"},
             )
             with urllib.request.urlopen(mreq, timeout=12) as mresp:
                 if mresp.status == 200:
@@ -591,7 +600,7 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
                     try:
                         mreq2 = urllib.request.Request(
                             "https://api.openai.com/v1/models",
-                            headers={"Authorization": f"Bearer {fallback_key}", "User-Agent": "RepoChecker-macOS/1.0"},
+                            headers={"Authorization": f"Bearer {fallback_key}", "User-Agent": "RepoChex-macOS/1.0"},
                         )
                         with urllib.request.urlopen(mreq2, timeout=12) as mresp2:
                             if mresp2.status == 200:
