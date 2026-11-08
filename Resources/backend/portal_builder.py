@@ -1231,21 +1231,6 @@ def build_portal_html(data, is_shareable=False):
     body.inspector-collapsed #resizer {
       display: none !important;
     }
-    /* Only show toolbar toggle buttons when the corresponding pane is collapsed so there are never duplicate buttons side-by-side */
-    body:not(.sidebar-collapsed) #btn-toggle-sidebar {
-      display: none !important;
-    }
-    body.sidebar-collapsed #btn-toggle-sidebar {
-      display: inline-flex !important;
-    }
-
-    body:not(.inspector-collapsed) #btn-toggle-inspector {
-      display: none !important;
-    }
-    body.inspector-collapsed #btn-toggle-inspector {
-      display: inline-flex !important;
-    }
-
     .pane-toggle-btn {
       background: #0f172a;
       border: 1px solid #334155;
@@ -1291,6 +1276,63 @@ def build_portal_html(data, is_shareable=False):
       color: #38bdf8 !important;
       border-color: #38bdf8 !important;
       background: rgba(56, 189, 248, 0.12) !important;
+    }
+
+    /* Sidebar Collapsible Accordions (▽ で折りたたみ可能) */
+    .sidebar-accordion {
+      margin-top: 8px;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.65);
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+    .sidebar-accordion:hover {
+      border-color: #334155;
+    }
+    .sidebar-accordion-header {
+      padding: 7px 10px;
+      background: #0b1120;
+      border-bottom: 1px solid rgba(30, 41, 59, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s ease;
+    }
+    .sidebar-accordion-header:hover {
+      background: #111d33;
+    }
+    .sidebar-accordion-header .acc-title {
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sidebar-accordion-header:hover .acc-title {
+      color: #38bdf8;
+    }
+    .sidebar-accordion-header .acc-arrow {
+      font-size: 0.68rem;
+      color: #64748b;
+      display: inline-block;
+      transition: transform 0.2s ease, color 0.15s ease;
+    }
+    .sidebar-accordion.collapsed .sidebar-accordion-header {
+      border-bottom: none;
+    }
+    .sidebar-accordion.collapsed .acc-arrow {
+      transform: rotate(-90deg);
+    }
+    .sidebar-accordion-body {
+      padding: 8px;
+      transition: max-height 0.2s ease;
+    }
+    .sidebar-accordion.collapsed .sidebar-accordion-body {
+      display: none !important;
     }
 
     /* Auto Sync Periodic Update Widget */
@@ -3877,41 +3919,24 @@ def build_portal_html(data, is_shareable=False):
     }
 
 
-    /* ==========================================================================
-       2-Tier Non-Overlapping Responsive Header Bar (Zero Collision Guarantee)
-       ========================================================================== */
+    /* Clean single-row responsive header bar */
     .header-bar {
-      padding: 12px 20px !important;
-      background: #090e1a !important;
-      border-bottom: 1px solid #1e293b !important;
-      display: flex !important;
-      flex-direction: column !important;
-      align-items: stretch !important;
-      justify-content: flex-start !important;
-      gap: 10px !important;
-      z-index: 10 !important;
-      flex-shrink: 0 !important;
-      height: auto !important;
-      min-height: unset !important;
-      box-sizing: border-box !important;
-      overflow: visible !important;
-    }
-
-    .header-bar {
-      padding: 8px 14px !important;
-      height: 54px !important;
-      min-height: 54px !important;
-      max-height: 54px !important;
+      padding: 0 14px !important;
+      height: 52px !important;
+      min-height: 52px !important;
+      max-height: 52px !important;
       background: #0f172a !important;
       border-bottom: 1px solid var(--border-subtle) !important;
       display: flex !important;
+      flex-direction: row !important;
       align-items: center !important;
       justify-content: space-between !important;
-      gap: 10px !important;
+      gap: 8px !important;
       flex-shrink: 0 !important;
       box-sizing: border-box !important;
       flex-wrap: nowrap !important;
       overflow: hidden !important;
+      z-index: 25 !important;
     }
     .header-top-right {
       display: flex !important;
@@ -4191,9 +4216,6 @@ def build_portal_html(data, is_shareable=False):
       <div class="brand-title" style="display: flex; align-items: center; gap: 8px;">
         <img src="app-icon.png" alt="RepoChex" style="width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
         <div>RepoChex <span>AI Studio</span></div>
-        <button class="pane-collapse-btn" onclick="setSidebarCollapsed(true)" title="左ペインを折りたたむ (⌘B)" style="margin-left: auto;">
-          <span>◀</span><span>◧</span>
-        </button>
       </div>
       <div class="live-status"><div class="live-dot"></div> NATIVE MACOS STUDIO (CodeRabbit + Mermaid)</div>
       <div style="margin-top: 10px; background: linear-gradient(135deg, rgba(30, 58, 138, 0.45) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid #3b82f6; border-radius: 9px; padding: 9px 10px;">
@@ -4212,82 +4234,99 @@ def build_portal_html(data, is_shareable=False):
         </div>
       </div>
       
-      <!-- Generated/Synced Datetime Badge -->
-      <div class="sync-meta-box">
-        <div class="sync-timestamp-row">
-          <span>🔄 最終更新:</span>
-          <strong id="portal-sync-time">2026/11/07 14:32:37</strong>
+      <!-- Collapsible Accordion 1: 自動定期更新 & 死活監視 (▽ で開閉可能) -->
+      <div class="sidebar-accordion" id="acc-group-sync">
+        <div class="sidebar-accordion-header" onclick="toggleSidebarAccordion('sync')" title="自動更新・死活監視パネルを折りたたむ / 展開">
+          <span class="acc-title">⚡ 自動更新 &amp; 死活監視</span>
+          <span class="acc-arrow" id="acc-arrow-sync">▼</span>
         </div>
-        
-    <!-- Live Uptime & Health Monitoring Widget -->
-    <div class="health-monitoring-card" onclick="openHealthModal()" title="クリックして各サービスの死活状態・疎通レイテンシを確認">
-      <div style="display: flex; align-items: center; justify-content: space-between;">
-        <span style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #34d399;">
-          <span class="dot-pulse dot-green"></span>
-          <span id="health-status-summary-text">🟢 死活監視: 6/6 ONLINE</span>
-        </span>
-        <span style="font-size: 0.68rem; color: #38bdf8;">詳細 ↗</span>
-      </div>
-      <div style="font-size: 0.68rem; color: #94a3b8; margin-top: 4px;">
-        Port 3000/3001, GitHub API, Auth0 正常稼働
-      </div>
-    </div>
+        <div class="sidebar-accordion-body" id="acc-body-sync">
+          <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
+            <div class="sync-timestamp-row">
+              <span>🔄 最終更新:</span>
+              <strong id="portal-sync-time">2026/11/07 14:32:37</strong>
+            </div>
+            
+            <!-- Live Uptime & Health Monitoring Widget -->
+            <div class="health-monitoring-card" onclick="openHealthModal()" title="クリックして各サービスの死活状態・疎通レイテンシを確認">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #34d399;">
+                  <span class="dot-pulse dot-green"></span>
+                  <span id="health-status-summary-text">🟢 死活監視: 6/6 ONLINE</span>
+                </span>
+                <span style="font-size: 0.68rem; color: #38bdf8;">詳細 ↗</span>
+              </div>
+              <div style="font-size: 0.68rem; color: #94a3b8; margin-top: 4px;">
+                Port 3000/3001, GitHub API, Auth0 正常稼働
+              </div>
+            </div>
 
-        <!-- Interactive Auto-Sync / Periodic Update Widget -->
-        <div class="auto-sync-card">
-          <div class="auto-sync-header">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span class="dot-pulse" id="auto-sync-pulse-dot" style="background: #38bdf8; width: 7px; height: 7px;"></span>
-              <span style="font-size: 0.76rem; font-weight: 800; color: #e2e8f0;">⚡ 自動定期更新</span>
-            </div>
-            <label class="auto-sync-switch" title="自動定期更新のON/OFFを切り替え">
-              <input type="checkbox" id="auto-sync-toggle" checked onchange="toggleAutoSync(this.checked)">
-              <span class="auto-sync-slider"></span>
-            </label>
-          </div>
+            <!-- Interactive Auto-Sync / Periodic Update Widget -->
+            <div class="auto-sync-card">
+              <div class="auto-sync-header">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="dot-pulse" id="auto-sync-pulse-dot" style="background: #38bdf8; width: 7px; height: 7px;"></span>
+                  <span style="font-size: 0.76rem; font-weight: 800; color: #e2e8f0;">⚡ 自動定期更新</span>
+                </div>
+                <label class="auto-sync-switch" title="自動定期更新のON/OFFを切り替え">
+                  <input type="checkbox" id="auto-sync-toggle" checked onchange="toggleAutoSync(this.checked)">
+                  <span class="auto-sync-slider"></span>
+                </label>
+              </div>
 
-          <div class="auto-sync-interval-row">
-            <span style="font-size: 0.72rem; color: #94a3b8;">間隔:</span>
-            <div class="auto-sync-input-wrap" title="更新間隔（分）を入力">
-              <input type="number" id="auto-sync-min-input" min="1" max="1440" value="10" 
-                     onchange="setAutoSyncMinutes(this.value)" oninput="setAutoSyncMinutes(this.value)">
-              <span class="auto-sync-unit">分毎</span>
-            </div>
-            <div class="auto-sync-presets">
-              <button class="auto-sync-pill active" id="sync-pill-10" onclick="setAutoSyncMinutes(10)" title="10分間隔">10分</button>
-              <button class="auto-sync-pill" id="sync-pill-30" onclick="setAutoSyncMinutes(30)" title="30分間隔">30分</button>
-              <button class="auto-sync-pill" id="sync-pill-60" onclick="setAutoSyncMinutes(60)" title="60分間隔">60分</button>
-            </div>
-          </div>
+              <div class="auto-sync-interval-row">
+                <span style="font-size: 0.72rem; color: #94a3b8;">間隔:</span>
+                <div class="auto-sync-input-wrap" title="更新間隔（分）を入力">
+                  <input type="number" id="auto-sync-min-input" min="1" max="1440" value="10" 
+                         onchange="setAutoSyncMinutes(this.value)" oninput="setAutoSyncMinutes(this.value)">
+                  <span class="auto-sync-unit">分毎</span>
+                </div>
+                <div class="auto-sync-presets">
+                  <button class="auto-sync-pill active" id="sync-pill-10" onclick="setAutoSyncMinutes(10)" title="10分間隔">10分</button>
+                  <button class="auto-sync-pill" id="sync-pill-30" onclick="setAutoSyncMinutes(30)" title="30分間隔">30分</button>
+                  <button class="auto-sync-pill" id="sync-pill-60" onclick="setAutoSyncMinutes(60)" title="60分間隔">60分</button>
+                </div>
+              </div>
 
-          <div class="auto-sync-countdown-row">
-            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 0.7rem;">
-              <span style="color: #94a3b8; display: flex; align-items: center; gap: 4px;">
-                <span>⏱️ 次回更新:</span>
-                <strong id="auto-sync-countdown-text" style="color: #38bdf8; font-family: 'JetBrains Mono', monospace;">10:00</strong>
-              </span>
-              <button class="btn-quick-sync-link" onclick="triggerGitHubSync()" title="今すぐ手動で更新">
-                <span>今すぐ更新 ↻</span>
-              </button>
-            </div>
-            <div class="auto-sync-progress-bar">
-              <div class="auto-sync-progress-fill" id="auto-sync-progress-fill" style="width: 100%;"></div>
+              <div class="auto-sync-countdown-row">
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 0.7rem;">
+                  <span style="color: #94a3b8; display: flex; align-items: center; gap: 4px;">
+                    <span>⏱️ 次回更新:</span>
+                    <strong id="auto-sync-countdown-text" style="color: #38bdf8; font-family: 'JetBrains Mono', monospace;">10:00</strong>
+                  </span>
+                  <button class="btn-quick-sync-link" onclick="triggerGitHubSync()" title="今すぐ手動で更新">
+                    <span>今すぐ更新 ↻</span>
+                  </button>
+                </div>
+                <div class="auto-sync-progress-bar">
+                  <div class="auto-sync-progress-fill" id="auto-sync-progress-fill" style="width: 100%;"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Freshness Quick Filter Tabs -->
-    <div class="filter-tabs-row">
-      <div class="filter-pill active" onclick="setFreshnessFilter('all', this)">すべて (<span id="count-all">0</span>)</div>
-      <div class="filter-pill pill-red" onclick="setFreshnessFilter('red', this)">🔴 3日以内 (<span id="count-red">0</span>)</div>
-      <div class="filter-pill pill-yellow" onclick="setFreshnessFilter('yellow', this)">🟡 4〜10日 (<span id="count-yellow">0</span>)</div>
-      <div class="filter-pill" onclick="setFreshnessFilter('gray', this)">⚪ 11日以上 (<span id="count-gray">0</span>)</div>
-    </div>
+      <!-- Collapsible Accordion 2: 検索 & 鮮度フィルター (▽ で開閉可能) -->
+      <div class="sidebar-accordion" id="acc-group-search">
+        <div class="sidebar-accordion-header" onclick="toggleSidebarAccordion('search')" title="検索＆鮮度フィルターを折りたたむ / 展開">
+          <span class="acc-title">🔍 検索 &amp; 鮮度フィルター</span>
+          <span class="acc-arrow" id="acc-arrow-search">▼</span>
+        </div>
+        <div class="sidebar-accordion-body" id="acc-body-search">
+          <!-- Freshness Quick Filter Tabs -->
+          <div class="filter-tabs-row" style="margin-top: 0;">
+            <div class="filter-pill active" onclick="setFreshnessFilter('all', this)">すべて (<span id="count-all">0</span>)</div>
+            <div class="filter-pill pill-red" onclick="setFreshnessFilter('red', this)">🔴 3日 (<span id="count-red">0</span>)</div>
+            <div class="filter-pill pill-yellow" onclick="setFreshnessFilter('yellow', this)">🟡 4〜10日 (<span id="count-yellow">0</span>)</div>
+            <div class="filter-pill" onclick="setFreshnessFilter('gray', this)">⚪ 11日+ (<span id="count-gray">0</span>)</div>
+          </div>
 
-    <div class="search-box-wrap">
-      <input type="text" class="search-input" id="search-box" placeholder="🔍 リポジトリや機能名で検索..." oninput="handleSearch(this.value)">
+          <div class="search-box-wrap" style="margin-top: 6px;">
+            <input type="text" class="search-input" id="search-box" placeholder="🔍 リポジトリや機能名で検索..." oninput="handleSearch(this.value)">
+          </div>
+        </div>
+      </div>
     </div>
     <div id="nav-container"></div>
   </div>
@@ -4310,15 +4349,15 @@ def build_portal_html(data, is_shareable=False):
         <div class="view-mode-tabs">
           <button class="view-mode-btn active" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示">
             <span>🗺️</span>
-            <span>構成図 (Architecture)</span>
+            <span>構成図</span>
           </button>
           <button class="view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示">
             <span>⏱️</span>
-            <span>シーケンス図 (Sequence)</span>
+            <span>シーケンス</span>
           </button>
           <button class="view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示">
             <span>🐰</span>
-            <span>CodeRabbit 監視 (AI Review)</span>
+            <span>AI監査</span>
           </button>
         </div>
       </div>
@@ -4385,7 +4424,6 @@ def build_portal_html(data, is_shareable=False):
     <div class="canvas-layout">
       <div class="canvas-container" id="canvas-container">
         <div id="diagram-wrapper"></div>
-        <div class="canvas-hint">💡 ボックスをクリックすると右側に詳細情報が表示されます（境界線をドラッグして幅を調節可能）</div>
       </div>
       <div id="coderabbit-view" style="display: none;"></div>
     </div>
@@ -4400,9 +4438,6 @@ def build_portal_html(data, is_shareable=False):
       <h3>🔍 コンポーネント詳細インスペクター</h3>
       <div class="inspector-actions">
         <button class="btn-icon" onclick="toggleInspectorWidth()" title="幅を最大化 / 元に戻す">⛶</button>
-        <button class="pane-collapse-btn" onclick="setInspectorCollapsed(true)" title="右ペインを折りたたむ (⌘I)">
-          <span>◨</span><span>▶</span>
-        </button>
       </div>
     </div>
     <div class="inspector-tabs">
@@ -4747,10 +4782,30 @@ def build_portal_html(data, is_shareable=False):
       setInspectorCollapsed(!document.body.classList.contains('inspector-collapsed'));
     }
 
+    function toggleSidebarAccordion(section) {
+      const group = document.getElementById('acc-group-' + section);
+      if (!group) return;
+      const isCollapsed = group.classList.toggle('collapsed');
+      localStorage.setItem('repochex_acc_' + section, isCollapsed ? '1' : '0');
+    }
+
+    function restoreAccordionStates() {
+      ['sync', 'search'].forEach(sec => {
+        const isCollapsed = localStorage.getItem('repochex_acc_' + sec) === '1';
+        const group = document.getElementById('acc-group-' + sec);
+        if (group && isCollapsed) {
+          group.classList.add('collapsed');
+        }
+      });
+    }
+
     function restorePaneCollapseState() {
-      document.body.classList.toggle('sidebar-collapsed', localStorage.getItem(PANE_STORAGE_KEY_SIDEBAR) === '1');
-      document.body.classList.toggle('inspector-collapsed', localStorage.getItem(PANE_STORAGE_KEY_INSPECTOR) === '1');
+      const sideVal = localStorage.getItem(PANE_STORAGE_KEY_SIDEBAR) ?? localStorage.getItem('repochecker_sidebar_collapsed');
+      const inspVal = localStorage.getItem(PANE_STORAGE_KEY_INSPECTOR) ?? localStorage.getItem('repochecker_inspector_collapsed');
+      document.body.classList.toggle('sidebar-collapsed', sideVal === '1');
+      document.body.classList.toggle('inspector-collapsed', inspVal === '1');
       updatePaneToggleButtons();
+      restoreAccordionStates();
     }
 
     // ⌘B / Ctrl+B: toggle left pane, ⌘I / Ctrl+I: toggle right pane
