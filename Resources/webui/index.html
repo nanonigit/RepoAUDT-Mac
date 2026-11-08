@@ -162,6 +162,69 @@
       display: none !important;
     }
 
+    /* Action Required Collapsible Cards & Download Button */
+    .action-alert-card {
+      margin-bottom: 8px;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: 7px;
+      background: rgba(15, 23, 42, 0.65);
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+    .action-alert-card:hover {
+      border-color: #ef4444;
+    }
+    .action-alert-header {
+      padding: 9px 12px;
+      background: rgba(30, 10, 15, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s ease;
+    }
+    .action-alert-header:hover {
+      background: rgba(60, 15, 25, 0.85);
+    }
+    .action-arrow {
+      font-size: 0.68rem;
+      color: #f87171;
+      display: inline-block;
+      transition: transform 0.2s ease;
+    }
+    .action-alert-card:not(.collapsed) .action-arrow {
+      transform: rotate(90deg);
+    }
+    .action-alert-body {
+      padding: 10px 12px;
+      border-top: 1px solid rgba(239, 68, 68, 0.25);
+    }
+    .action-alert-card.collapsed .action-alert-body {
+      display: none !important;
+    }
+    .action-report-dl-btn {
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      border: 1px solid #38bdf8;
+      color: #ffffff;
+      font-size: 0.66rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .action-report-dl-btn:hover {
+      background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+      transform: translateY(-1px);
+    }
+
     /* Auto Sync Periodic Update Widget */
     .auto-sync-card {
       background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(14, 116, 144, 0.15) 100%);
@@ -615,16 +678,9 @@
       height: 100vh;
       overflow: hidden;
       min-width: 0;
-    }
-    .header-bar {
-      padding: 14px 24px;
-      background: #0f172a;
-      border-bottom: 1px solid var(--border-subtle);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      z-index: 10;
-      flex-shrink: 0;
+      position: relative;
+      container-type: inline-size;
+      container-name: mainpane;
     }
     .header-left {
       display: flex;
@@ -2746,29 +2802,35 @@
     }
 
 
-    /* Clean single-row responsive header bar */
+    /* Clean single-row responsive header bar that dynamically adapts to ANY middle pane width */
     .header-bar {
-      padding: 0 14px !important;
-      height: 52px !important;
-      min-height: 52px !important;
-      max-height: 52px !important;
+      padding: 0 10px !important;
+      height: 50px !important;
+      min-height: 50px !important;
+      max-height: 50px !important;
       background: #0f172a !important;
       border-bottom: 1px solid var(--border-subtle) !important;
       display: flex !important;
       flex-direction: row !important;
       align-items: center !important;
       justify-content: space-between !important;
-      gap: 8px !important;
+      gap: 6px !important;
       flex-shrink: 0 !important;
       box-sizing: border-box !important;
       flex-wrap: nowrap !important;
-      overflow: hidden !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      scrollbar-width: none !important;
       z-index: 25 !important;
     }
+    .header-bar::-webkit-scrollbar {
+      display: none !important;
+    }
+
     .header-top-right {
       display: flex !important;
       align-items: center !important;
-      gap: 6px !important;
+      gap: 5px !important;
       flex-wrap: nowrap !important;
       margin-left: auto !important;
       flex-shrink: 0 !important;
@@ -2777,7 +2839,7 @@
       display: flex !important;
       align-items: center !important;
       flex-wrap: nowrap !important;
-      gap: 8px !important;
+      gap: 6px !important;
       min-width: 0 !important;
       flex-shrink: 0 !important;
     }
@@ -2787,15 +2849,76 @@
       background: #040711 !important;
       border: 1px solid #1e293b !important;
       border-radius: 8px !important;
-      padding: 3px !important;
-      gap: 3px !important;
+      padding: 2px !important;
+      gap: 2px !important;
       flex-shrink: 0 !important;
     }
     .view-mode-btn {
-      padding: 5px 10px !important;
+      padding: 5px 9px !important;
       font-size: 0.74rem !important;
       white-space: nowrap !important;
       flex-shrink: 0 !important;
+    }
+
+    /* Container Queries for Responsive Header on Middle Pane */
+    @container mainpane (max-width: 900px) {
+      .header-top-right .btn-text {
+        display: none !important;
+      }
+      .header-top-right .btn-sync {
+        padding: 5px 8px !important;
+      }
+    }
+
+    @container mainpane (max-width: 720px) {
+      .view-mode-tabs .btn-text {
+        display: none !important;
+      }
+      .view-mode-btn {
+        padding: 5px 8px !important;
+      }
+      .header-auto-sync-chip {
+        padding: 3px 6px !important;
+      }
+      .header-auto-sync-chip .chip-label {
+        display: none !important;
+      }
+      .header-bar {
+        padding: 0 6px !important;
+        gap: 4px !important;
+      }
+      .header-top-right {
+        gap: 4px !important;
+      }
+    }
+
+    @container mainpane (max-width: 520px) {
+      .zoom-controls-group .zoom-btn {
+        padding: 3px 5px !important;
+      }
+      .pane-toggle-btn {
+        padding: 4px 6px !important;
+      }
+      .header-top-right {
+        gap: 3px !important;
+      }
+      .zoom-controls-group .zoom-btn:last-child {
+        display: none !important; /* Hide reset zoom button on ultra narrow */
+      }
+    }
+
+    @container mainpane (max-width: 380px) {
+      .header-bar {
+        height: auto !important;
+        min-height: 48px !important;
+        max-height: unset !important;
+        flex-wrap: wrap !important;
+        padding: 4px 6px !important;
+        gap: 4px !important;
+      }
+      .view-mode-container {
+        flex: 1 1 auto !important;
+      }
     }
     .header-actions {
       display: flex !important;
@@ -3071,7 +3194,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span>🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/08 11:06:48</strong>
+              <strong id="portal-sync-time">2026/11/08 11:24:44</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -3175,37 +3298,37 @@
         <button class="pane-toggle-btn pane-open" id="btn-toggle-sidebar" onclick="toggleSidebarPane()" title="左ペインを開閉 (⌘B)"><span>◀</span> <span>◧</span></button>
         <div class="view-mode-tabs">
           <button class="view-mode-btn active" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示">
-            <span>🗺️</span>
-            <span>構成図</span>
+            <span class="btn-icon">🗺️</span>
+            <span class="btn-text">構成図</span>
           </button>
           <button class="view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示">
-            <span>⏱️</span>
-            <span>シーケンス</span>
+            <span class="btn-icon">⏱️</span>
+            <span class="btn-text">シーケンス</span>
           </button>
           <button class="view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示">
-            <span>🐰</span>
-            <span>AI監査</span>
+            <span class="btn-icon">🐰</span>
+            <span class="btn-text">AI監査</span>
           </button>
         </div>
       </div>
 
       <!-- Right: Action Buttons + Zoom Controls + Toggle Inspector (Reopen Button shown when collapsed) -->
       <div class="header-top-right">
-        <button class="btn btn-sync" onclick="openAdminSettingsModal()" style="background: linear-gradient(135deg, #0f766e 0%, #047857 100%) !important; border-color: #34d399 !important;" title="OpenAI / Claude / Gemini / Groq APIキーと PHP・Node.js 脆弱性監査MCP/スキルを設定します (⌘,)">
-          <span>⚙️</span>
-          <span>設定</span>
+        <button class="btn btn-sync btn-settings" onclick="openAdminSettingsModal()" style="background: linear-gradient(135deg, #0f766e 0%, #047857 100%) !important; border-color: #34d399 !important;" title="OpenAI / Claude / Gemini / Groq APIキーと PHP・Node.js 脆弱性監査MCP/スキルを設定します (⌘,)">
+          <span class="btn-icon">⚙️</span>
+          <span class="btn-text">設定</span>
         </button>
         <button class="btn btn-sync" onclick="openAnalyzeModal()" style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important; border-color: #a78bfa !important;" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します">
-          <span>➕</span>
-          <span>追加</span>
+          <span class="btn-icon">➕</span>
+          <span class="btn-text">追加</span>
         </button>
         <div class="header-auto-sync-chip" id="header-auto-sync-chip" title="自動定期更新の間隔 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
           <span class="dot-pulse" id="header-sync-pulse" style="background: #34d399; width: 6px; height: 6px;"></span>
-          <span id="header-sync-chip-text">10分毎 (10:00)</span>
+          <span id="header-sync-chip-text"><span class="chip-label">10分毎 </span>(10:00)</span>
         </div>
         <button class="btn btn-sync" id="sync-btn" onclick="triggerGitHubSync()" title="GitHub最新コミット・差分を手動同期">
-          <span>🔄</span>
-          <span>同期</span>
+          <span class="btn-icon">🔄</span>
+          <span class="btn-text">同期</span>
         </button>
 
         <div class="zoom-controls-group" title="ダイアグラム表示倍率の操作">
@@ -3220,7 +3343,7 @@
           </button>
         </div>
 
-        <button class="pane-toggle-btn" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペインを開閉 (⌘I)"><span>◀</span> <span>◨</span></button>
+        <button class="pane-toggle-btn pane-open" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペインを開閉 (⌘I)"><span>◨</span> <span>▶</span></button>
       </div>
     </div>
 
@@ -3678,7 +3801,7 @@
       if (pulseDot) pulseDot.style.background = autoSyncEnabled ? '#38bdf8' : '#64748b';
 
       if (!autoSyncEnabled) {
-        if (chipText) chipText.textContent = '更新停止中';
+        if (chipText) chipText.innerHTML = '<span class="chip-label">更新</span>停止中';
         if (pulse) pulse.style.background = '#64748b';
         if (sidebarCountdown) sidebarCountdown.textContent = '停止中';
         if (progressBar) progressBar.style.width = '0%';
@@ -3686,7 +3809,7 @@
       }
 
       const formatted = formatSecondsToMMSS(autoSyncRemainingSeconds);
-      if (chipText) chipText.textContent = `${autoSyncIntervalMinutes}分毎 (${formatted})`;
+      if (chipText) chipText.innerHTML = `<span class="chip-label">${autoSyncIntervalMinutes}分毎 </span>(${formatted})`;
       if (pulse) pulse.style.background = '#34d399';
       if (sidebarCountdown) sidebarCountdown.textContent = formatted;
       if (progressBar) {
@@ -4529,46 +4652,69 @@
       if (currentInspTab === 'overview') {
         const repoActions = getRepoActionItems(repoItem);
         const actionAlertHtml = repoActions.length > 0 ? `
-          <div style="background: linear-gradient(145deg, #2a0a12 0%, #1a0810 100%); border: 2px solid #ef4444; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; box-shadow: 0 6px 20px rgba(239, 68, 68, 0.25);">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid rgba(239, 68, 68, 0.3); padding-bottom: 8px;">
+          <div style="background: linear-gradient(145deg, #2a0a12 0%, #1a0810 100%); border: 2px solid #ef4444; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; box-shadow: 0 6px 20px rgba(239, 68, 68, 0.25);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid rgba(239, 68, 68, 0.3); padding-bottom: 8px; flex-wrap: wrap; gap: 6px;">
               <span style="font-size: 0.85rem; font-weight: 900; color: #fca5a5; display: flex; align-items: center; gap: 6px;">
                 <span>🚨</span>
                 <span>要対応アラート (${repoActions.length}件)</span>
               </span>
-              <span class="sec-legend-badge sec-legend-red">ACTION REQUIRED</span>
-            </div>
-            ${repoActions.map((act, idx) => `
-              <div style="margin-bottom: ${idx < repoActions.length - 1 ? '14px' : '0'};">
-                <div style="font-size: 0.84rem; font-weight: 800; color: #ffffff; margin-bottom: 6px;">
-                  🔴 ${act.title}
-                </div>
-                <div style="font-size: 0.72rem; color: #fda4af; font-family: monospace; margin-bottom: 8px;">
-                  🎯 対象箇所: ${act.file}
-                </div>
-                <div style="background: rgba(15, 23, 42, 0.75); border-left: 3px solid #f87171; padding: 8px 10px; border-radius: 6px; margin-bottom: 8px;">
-                  <div style="font-size: 0.7rem; font-weight: 800; color: #f87171; margin-bottom: 3px;">⚠️ 要対応の理由 (なぜ必要か):</div>
-                  <div style="font-size: 0.78rem; color: #f1f5f9; line-height: 1.5;">${act.desc}</div>
-                </div>
-                <div style="background: rgba(6, 78, 59, 0.35); border-left: 3px solid #34d399; padding: 8px 10px; border-radius: 6px;">
-                  <div style="font-size: 0.7rem; font-weight: 800; color: #34d399; margin-bottom: 4px;">🛠️ 対応方法の提案 (具体的な対策):</div>
-                  ${act.diff ? `
-                    <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 4px;">推奨コード変更 (Diff):</div>
-                    <pre class="cr-diff-container" style="margin: 0 0 8px 0; font-size: 0.72rem;">${act.diff.split(String.fromCharCode(10)).map(line => {
-                      if (line.startsWith('+')) return `<span class="cr-diff-add">${line}</span>`;
-                      if (line.startsWith('-')) return `<span class="cr-diff-del">${line}</span>`;
-                      return `<span>${line}</span>`;
-                    }).join('<br/>')}</pre>
-                  ` : ''}
-                  ${act.fix_cmd ? `
-                    <div class="hotspot-fix-box" style="margin-top: 4px;">
-                      <span class="hotspot-cmd">$ ${act.fix_cmd}</span>
-                      <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">📋 コピー</button>
-                    </div>
-                  ` : ''}
-                </div>
-                ${renderAiAgentPromptWidget(repoItem.repo, act)}
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button class="table-view-btn" onclick="toggleAllActionItems(this)" style="font-size: 0.68rem; padding: 3px 8px; background: rgba(239, 68, 68, 0.2); border-color: #f87171; color: #fca5a5;">
+                  すべて展開 ▼
+                </button>
+                <span class="sec-legend-badge sec-legend-red">ACTION REQUIRED</span>
               </div>
-            `).join('')}
+            </div>
+            ${repoActions.map((act, idx) => {
+              const actJsonStr = encodeURIComponent(JSON.stringify(act));
+              const repoNameStr = encodeURIComponent(repoItem.repo || '');
+              return `
+                <div class="action-alert-card collapsed" id="action-alert-card-${idx}">
+                  <div class="action-alert-header" onclick="toggleActionCard('${idx}')" title="クリックして詳細を展開 / 折りたたむ">
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                      <span class="action-arrow" id="action-arrow-${idx}">▶</span>
+                      <div style="min-width: 0; flex: 1;">
+                        <div style="font-size: 0.8rem; font-weight: 800; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                          🔴 ${act.title}
+                        </div>
+                        <div style="font-size: 0.68rem; color: #fda4af; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                          🎯 ${act.file}
+                        </div>
+                      </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;" onclick="event.stopPropagation()">
+                      <button class="action-report-dl-btn" onclick="downloadSingleActionReport('${actJsonStr}', '${repoNameStr}')" title="この改善点の詳細レポート (.md) をダウンロード保存">
+                        📥 レポートDL
+                      </button>
+                    </div>
+                  </div>
+                  <div class="action-alert-body" id="action-alert-body-${idx}">
+                    <div style="background: rgba(15, 23, 42, 0.75); border-left: 3px solid #f87171; padding: 8px 10px; border-radius: 6px; margin-bottom: 8px;">
+                      <div style="font-size: 0.7rem; font-weight: 800; color: #f87171; margin-bottom: 3px;">⚠️ 要対応の理由 (なぜ必要か):</div>
+                      <div style="font-size: 0.78rem; color: #f1f5f9; line-height: 1.5;">${act.desc}</div>
+                    </div>
+                    <div style="background: rgba(6, 78, 59, 0.35); border-left: 3px solid #34d399; padding: 8px 10px; border-radius: 6px;">
+                      <div style="font-size: 0.7rem; font-weight: 800; color: #34d399; margin-bottom: 4px;">🛠️ 対応方法の提案 (具体的な対策):</div>
+                      ${act.diff ? `
+                        <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 4px;">推奨コード変更 (Diff):</div>
+                        <pre class="cr-diff-container" style="margin: 0 0 8px 0; font-size: 0.72rem;">${act.diff.split(String.fromCharCode(10)).map(line => {
+                          if (line.startsWith('+')) return `<span class="cr-diff-add">${line}</span>`;
+                          if (line.startsWith('-')) return `<span class="cr-diff-del">${line}</span>`;
+                          return `<span>${line}</span>`;
+                        }).join('<br/>')}</pre>
+                      ` : ''}
+                      ${act.fix_cmd ? `
+                        <div class="hotspot-fix-box" style="margin-top: 4px;">
+                          <span class="hotspot-cmd">$ ${act.fix_cmd}</span>
+                          <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">📋 コピー</button>
+                        </div>
+                      ` : ''}
+                    </div>
+                    ${renderAiAgentPromptWidget(repoItem.repo, act)}
+                  </div>
+                </div>
+              `;
+            }).join('')}
           </div>
         ` : '';
         let category = spec.category || "Application Module";
@@ -5532,7 +5678,12 @@
           <div class="action-hotspot-item" style="margin-bottom: 14px;">
             <div class="hotspot-top-row">
               <span class="hotspot-title">🔴 要対応 #${i + 1}: ${act.title}</span>
-              <span class="sec-legend-badge sec-legend-red">${act.severity || 'CRITICAL'}</span>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button class="action-report-dl-btn" onclick="downloadSingleActionReport('${encodeURIComponent(JSON.stringify(act))}', '${encodeURIComponent(repo.repo || '')}')" title="この改善点の詳細レポート (.md) をダウンロード保存">
+                  📥 レポートDL
+                </button>
+                <span class="sec-legend-badge sec-legend-red">${act.severity || 'CRITICAL'}</span>
+              </div>
             </div>
             
             <div style="margin: 8px 0; background: rgba(15, 23, 42, 0.6); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #ef4444;">
@@ -6239,6 +6390,76 @@
           btnEl.style.color = '';
         }, 2000);
       });
+    }
+
+    function toggleActionCard(idx) {
+      const card = document.getElementById('action-alert-card-' + idx);
+      if (card) {
+        card.classList.toggle('collapsed');
+      }
+    }
+
+    function toggleAllActionItems(btnEl) {
+      const cards = document.querySelectorAll('.action-alert-card');
+      if (!cards.length) return;
+      const anyCollapsed = Array.from(cards).some(c => c.classList.contains('collapsed'));
+      cards.forEach(c => c.classList.toggle('collapsed', !anyCollapsed));
+      if (btnEl) {
+        btnEl.textContent = anyCollapsed ? 'すべて折りたたむ ▲' : 'すべて展開 ▼';
+      }
+    }
+
+    function downloadSingleActionReport(actData, repoNameData) {
+      let act = actData;
+      if (typeof act === 'string') {
+        try { act = JSON.parse(decodeURIComponent(act)); } catch (_) {}
+      }
+      if (!act) return;
+      let repoName = repoNameData;
+      if (typeof repoName === 'string') {
+        try { repoName = decodeURIComponent(repoName); } catch (_) {}
+      }
+
+      const nowStr = new Date().toLocaleString('ja-JP');
+      const safeTitle = (act.title || 'issue').replace(/[^\w\d\-\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/g, '_').substring(0, 50);
+      const fileName = `RepoChex_改善レポート_${safeTitle}.md`;
+
+      let md = `# 🛡️ RepoChex 改善・セキュリティ監査レポート\n\n`;
+      md += `- **リポジトリ名**: ${repoName || '全体エコシステム'}\n`;
+      md += `- **改善項目**: ${act.title || '要対応事項'}\n`;
+      md += `- **対象ファイル / 箇所**: \`${act.file || 'N/A'}\`\n`;
+      md += `- **重要度**: ${act.severity || 'CRITICAL (要対応)'}\n`;
+      md += `- **出力日時**: ${nowStr}\n`;
+      md += `- **監査エンジン**: RepoChex Architecture & Vulnerability AI Studio\n\n`;
+      md += `---\n\n`;
+
+      md += `## ⚠️ 要対応の理由 (なぜ必要か / リスク分析)\n\n`;
+      md += `${act.desc || '詳細なリスク情報はありません。'}\n\n`;
+      md += `---\n\n`;
+
+      md += `## 🛠️ 対応方法の提案 (具体的な対策)\n\n`;
+      if (act.diff) {
+        md += `### 推奨コード変更 (Diff):\n\`\`\`diff\n${act.diff}\n\`\`\`\n\n`;
+      }
+      if (act.fix_cmd) {
+        md += `### 修正実行コマンド:\n\`\`\`bash\n${act.fix_cmd}\n\`\`\`\n\n`;
+      }
+      md += `---\n\n`;
+
+      const aiPrompt = buildAiAgentFixPrompt(repoName || 'リポジトリ', act);
+      md += `## 🤖 AIエージェント修正指示プロンプト (Claude Code / Cursor / Codex / Antigravity 用)\n\n`;
+      md += `\`\`\`text\n${aiPrompt}\n\`\`\`\n\n`;
+      md += `---\n*Generated by RepoChex — Architecture & Vulnerability AI Studio*\n`;
+
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     /* ==========================================================================
