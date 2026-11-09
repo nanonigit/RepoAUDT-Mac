@@ -1359,13 +1359,45 @@ def build_portal_html(data, is_shareable=False):
       font-size: 0.68rem;
       color: #64748b;
       display: inline-block;
-      transition: transform 0.2s ease, color 0.15s ease;
+      transition: transform 0.2s ease, color 0.15s ease, filter 0.15s ease;
     }
     .sidebar-accordion.collapsed .sidebar-accordion-header {
       border-bottom: none;
     }
     .sidebar-accordion.collapsed .acc-arrow {
       transform: rotate(-90deg);
+    }
+    /* Colored Active Arrows when collapsed */
+    .sidebar-accordion.collapsed.is-active-sync .acc-arrow {
+      color: #34d399 !important;
+      filter: drop-shadow(0 0 5px rgba(52, 211, 153, 0.9));
+    }
+    .sidebar-accordion.collapsed.is-active-filter .acc-arrow {
+      color: #f59e0b !important;
+      filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.9));
+    }
+    /* Compact indicator badge when collapsed */
+    .acc-active-badge {
+      display: none;
+      font-size: 0.62rem;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 9999px;
+      margin-left: auto;
+      margin-right: 6px;
+      line-height: 1.3;
+    }
+    .sidebar-accordion.collapsed.is-active-sync .acc-active-badge {
+      display: inline-block;
+      background: rgba(52, 211, 153, 0.16);
+      color: #34d399;
+      border: 1px solid rgba(52, 211, 153, 0.35);
+    }
+    .sidebar-accordion.collapsed.is-active-filter .acc-active-badge {
+      display: inline-block;
+      background: rgba(245, 158, 11, 0.16);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.35);
     }
     .sidebar-accordion-body {
       padding: 8px;
@@ -1732,16 +1764,31 @@ def build_portal_html(data, is_shareable=False):
       border-color: #38bdf8;
       box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
     }
+    .filter-pill.pill-amber.active,
     .filter-pill.pill-red.active {
-      background: rgba(248, 113, 113, 0.22);
-      color: #f87171;
-      border-color: #f87171;
-      box-shadow: 0 0 8px rgba(248, 113, 113, 0.25);
-    }
-    .filter-pill.pill-yellow.active {
-      background: rgba(251, 191, 36, 0.22);
+      background: rgba(245, 158, 11, 0.22);
       color: #fbbf24;
-      border-color: rgba(251, 191, 36, 0.5);
+      border-color: #f59e0b;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
+    }
+    .filter-pill.pill-green.active,
+    .filter-pill.pill-yellow.active {
+      background: rgba(16, 185, 129, 0.22);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.5);
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.25);
+    }
+    .filter-pill.pill-action-req {
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      background: rgba(239, 68, 68, 0.10);
+    }
+    .filter-pill.pill-action-req.active,
+    .filter-pill.pill-action-req:hover {
+      background: rgba(239, 68, 68, 0.28);
+      border-color: #ef4444;
+      color: #fff;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
     }
 
     .search-box-wrap {
@@ -1849,15 +1896,17 @@ def build_portal_html(data, is_shareable=False):
       font-size: 0.64rem;
       letter-spacing: 0.02em;
     }
-    .badge-fresh-red {
-      background: rgba(248, 113, 113, 0.18);
-      color: #f87171;
-      border: 1px solid rgba(248, 113, 113, 0.45);
-    }
-    .badge-fresh-yellow {
-      background: rgba(251, 191, 36, 0.18);
+    .badge-fresh-amber,
+    .badge-fresh-red { /* Alias for legacy/cached compatibility */
+      background: rgba(245, 158, 11, 0.18);
       color: #fbbf24;
-      border: 1px solid rgba(251, 191, 36, 0.45);
+      border: 1px solid rgba(245, 158, 11, 0.45);
+    }
+    .badge-fresh-green,
+    .badge-fresh-yellow { /* Alias for legacy/cached compatibility */
+      background: rgba(16, 185, 129, 0.18);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.45);
     }
     .badge-fresh-gray {
       background: rgba(100, 116, 139, 0.14);
@@ -1870,13 +1919,19 @@ def build_portal_html(data, is_shareable=False):
       border-radius: 50%;
       display: inline-block;
     }
-    .dot-pulse.red {
-      background-color: #f87171;
-      box-shadow: 0 0 6px #f87171;
-    }
+    .dot-pulse.amber,
     .dot-pulse.yellow {
-      background-color: #fbbf24;
-      box-shadow: 0 0 6px #fbbf24;
+      background-color: #f59e0b;
+      box-shadow: 0 0 6px #f59e0b;
+    }
+    .dot-pulse.green,
+    .dot-pulse.dot-green {
+      background-color: #10b981;
+      box-shadow: 0 0 6px #10b981;
+    }
+    .dot-pulse.red {
+      background-color: #ef4444;
+      box-shadow: 0 0 6px #ef4444;
     }
     .created-date-label {
       color: #64748b;
@@ -3494,6 +3549,149 @@ def build_portal_html(data, is_shareable=False):
       word-break: break-word !important;
     }
 
+    /* UI Mode Switcher (Simple vs Developer) & Simple Mode Styles */
+    .ui-mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      background: #090e1a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .ui-mode-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 4px 9px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .ui-mode-btn:hover {
+      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .ui-mode-btn.active#btn-ui-simple {
+      color: #38bdf8;
+      background: #1e293b;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      font-weight: 700;
+    }
+    .ui-mode-btn.active#btn-ui-dev {
+      color: #a78bfa;
+      background: #1e293b;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      font-weight: 700;
+    }
+
+    /* Guide Button Active State */
+    .pane-toggle-btn#btn-toggle-guide.active {
+      color: #38bdf8 !important;
+      border-color: rgba(56, 189, 248, 0.4) !important;
+      background: rgba(56, 189, 248, 0.12) !important;
+    }
+
+    /* Simple Mode Inspector Tab Filtering */
+    body.ui-mode-simple .insp-tab:not([data-tab-name="overview"]):not([data-tab-name="versions"]) {
+      display: none !important;
+    }
+    body.ui-mode-simple .inspector-actions button[title*="ターミナル"] {
+      display: none !important;
+    }
+
+    /* Simple Mode Banner in Inspector */
+    .simple-mode-banner {
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(99, 102, 241, 0.08) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.73rem;
+      color: #cbd5e1;
+    }
+    .simple-mode-switch-link {
+      background: transparent;
+      border: none;
+      color: #38bdf8;
+      font-size: 0.71rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
+    .simple-mode-switch-link:hover {
+      color: #7dd3fc;
+    }
+
+    /* Executive Safety Score Card */
+    .executive-score-card {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.75) 100%);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .executive-score-circle {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      border: 2px solid;
+      font-weight: 900;
+    }
+    .executive-score-num {
+      font-size: 1.15rem;
+      line-height: 1;
+    }
+    .executive-score-denom {
+      font-size: 0.6rem;
+      color: #94a3b8;
+    }
+
+    /* Executive Download Button */
+    .btn-exec-report-dl {
+      width: 100%;
+      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+      border: 1px solid #38bdf8;
+      color: #ffffff;
+      padding: 9px 14px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+      transition: all 0.15s ease;
+      margin-bottom: 12px;
+    }
+    .btn-exec-report-dl:hover {
+      background: linear-gradient(135deg, #0369a1 0%, #1d4ed8 100%);
+      box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35);
+      transform: translateY(-1px);
+    }
+
 
     /* ==========================================================================
        CodeRabbit AI Monitoring & Action Required Styles
@@ -4189,6 +4387,15 @@ def build_portal_html(data, is_shareable=False):
       .header-top-right .btn-sync {
         padding: 5px 8px !important;
       }
+      .ui-mode-btn .btn-text {
+        display: none !important;
+      }
+      .ui-mode-btn {
+        padding: 4px 6px !important;
+      }
+      #btn-toggle-guide .btn-text {
+        display: none !important;
+      }
     }
 
     @container mainpane (max-width: 720px) {
@@ -4795,10 +5002,11 @@ def build_portal_html(data, is_shareable=False):
         </div>
       </div>
       
-      <!-- Collapsible Accordion 1: 自動定期更新 & 死活監視 (▽ で開閉可能) -->
-      <div class="sidebar-accordion" id="acc-group-sync">
+      <!-- Collapsible Accordion 1: 自動定期更新 & 死活監視 (デフォルト折りたたみ) -->
+      <div class="sidebar-accordion collapsed" id="acc-group-sync">
         <div class="sidebar-accordion-header" onclick="toggleSidebarAccordion('sync')" title="自動更新・死活監視パネルを折りたたむ / 展開">
           <span class="acc-title" data-i18n="acc_sync_title">⚡ 自動更新 &amp; 死活監視</span>
+          <span class="acc-active-badge" id="acc-badge-sync">60分</span>
           <span class="acc-arrow" id="acc-arrow-sync">▼</span>
         </div>
         <div class="sidebar-accordion-body" id="acc-body-sync">
@@ -4838,14 +5046,14 @@ def build_portal_html(data, is_shareable=False):
               <div class="auto-sync-interval-row">
                 <span style="font-size: 0.72rem; color: #94a3b8;" data-i18n="sync_interval_label">間隔:</span>
                 <div class="auto-sync-input-wrap" title="更新間隔（分）を入力">
-                  <input type="number" id="auto-sync-min-input" min="1" max="1440" value="10" 
+                  <input type="number" id="auto-sync-min-input" min="1" max="1440" value="60" 
                          onchange="setAutoSyncMinutes(this.value)" oninput="setAutoSyncMinutes(this.value)">
                   <span class="auto-sync-unit" data-i18n="sync_unit_label">分毎</span>
                 </div>
                 <div class="auto-sync-presets">
-                  <button class="auto-sync-pill active" id="sync-pill-10" onclick="setAutoSyncMinutes(10)" title="10分間隔" data-i18n="sync_pill_10">10分</button>
+                  <button class="auto-sync-pill" id="sync-pill-10" onclick="setAutoSyncMinutes(10)" title="10分間隔" data-i18n="sync_pill_10">10分</button>
                   <button class="auto-sync-pill" id="sync-pill-30" onclick="setAutoSyncMinutes(30)" title="30分間隔" data-i18n="sync_pill_30">30分</button>
-                  <button class="auto-sync-pill" id="sync-pill-60" onclick="setAutoSyncMinutes(60)" title="60分間隔" data-i18n="sync_pill_60">60分</button>
+                  <button class="auto-sync-pill active" id="sync-pill-60" onclick="setAutoSyncMinutes(60)" title="60分間隔" data-i18n="sync_pill_60">60分</button>
                 </div>
               </div>
 
@@ -4853,7 +5061,7 @@ def build_portal_html(data, is_shareable=False):
                 <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 0.7rem;">
                   <span style="color: #94a3b8; display: flex; align-items: center; gap: 4px;">
                     <span data-i18n="next_sync_label">⏱️ 次回更新:</span>
-                    <strong id="auto-sync-countdown-text" style="color: #38bdf8; font-family: 'JetBrains Mono', monospace;">10:00</strong>
+                    <strong id="auto-sync-countdown-text" style="color: #38bdf8; font-family: 'JetBrains Mono', monospace;">60:00</strong>
                   </span>
                   <button class="btn-quick-sync-link" onclick="triggerGitHubSync()" title="今すぐ手動で更新">
                     <span data-i18n="quick_sync_btn">今すぐ更新 ↻</span>
@@ -4868,18 +5076,22 @@ def build_portal_html(data, is_shareable=False):
         </div>
       </div>
 
-      <!-- Collapsible Accordion 2: 検索 & 鮮度フィルター (▽ で開閉可能) -->
-      <div class="sidebar-accordion" id="acc-group-search">
+      <!-- Collapsible Accordion 2: 検索 & 鮮度フィルター (デフォルト折りたたみ) -->
+      <div class="sidebar-accordion collapsed" id="acc-group-search">
         <div class="sidebar-accordion-header" onclick="toggleSidebarAccordion('search')" title="検索＆鮮度フィルターを折りたたむ / 展開">
           <span class="acc-title" data-i18n="acc_search_title">🔍 検索 &amp; 鮮度フィルター</span>
+          <span class="acc-active-badge" id="acc-badge-search"></span>
           <span class="acc-arrow" id="acc-arrow-search">▼</span>
         </div>
         <div class="sidebar-accordion-body" id="acc-body-search">
-          <!-- Freshness Quick Filter Tabs -->
-          <div class="filter-tabs-row" style="margin-top: 0;">
+          <!-- Freshness & Action Quick Filter Tabs -->
+          <div class="filter-tabs-row" style="margin-top: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
+            <div class="filter-pill pill-action-req" style="grid-column: span 2;" onclick="setFreshnessFilter('action-req', this)" title="要対応アラートがあるリポジトリのみを絞り込み">
+              <span data-i18n="filter_action_req">🔴 要対応</span> (<span id="count-action-req">0</span>)
+            </div>
             <div class="filter-pill active" onclick="setFreshnessFilter('all', this)"><span data-i18n="filter_all">すべて</span> (<span id="count-all">0</span>)</div>
-            <div class="filter-pill pill-red" onclick="setFreshnessFilter('red', this)"><span data-i18n="filter_3d">🔴 3日</span> (<span id="count-red">0</span>)</div>
-            <div class="filter-pill pill-yellow" onclick="setFreshnessFilter('yellow', this)"><span data-i18n="filter_10d">🟡 4〜10日</span> (<span id="count-yellow">0</span>)</div>
+            <div class="filter-pill pill-amber" onclick="setFreshnessFilter('amber', this)"><span data-i18n="filter_3d">🔥 ≤3日</span> (<span id="count-amber">0</span>)</div>
+            <div class="filter-pill pill-green" onclick="setFreshnessFilter('green', this)"><span data-i18n="filter_10d">🟢 4〜10日</span> (<span id="count-green">0</span>)</div>
             <div class="filter-pill" onclick="setFreshnessFilter('gray', this)"><span data-i18n="filter_old">⚪ 11日+</span> (<span id="count-gray">0</span>)</div>
           </div>
 
@@ -4923,6 +5135,18 @@ def build_portal_html(data, is_shareable=False):
           </button>
         </div>
 
+        <!-- Non-Technical Simple Mode vs Developer Mode Toggle -->
+        <div class="ui-mode-toggle" id="ui-mode-toggle" title="表示モード切替 (シンプル / 開発者) / Switch UI Mode">
+          <button class="ui-mode-btn active" id="btn-ui-simple" onclick="setUiMode('simple')" title="シンプル表示 (初心者・管理者向け)">
+            <span class="btn-icon">🔰</span>
+            <span class="btn-text" data-i18n="mode_simple">シンプル</span>
+          </button>
+          <button class="ui-mode-btn" id="btn-ui-dev" onclick="setUiMode('dev')" title="開発者向け詳細表示 (全9タブ・ターミナル・DB・API等)">
+            <span class="btn-icon">🛠️</span>
+            <span class="btn-text" data-i18n="mode_dev">開発者</span>
+          </button>
+        </div>
+
         <!-- Header Central Context Breadcrumb (Raycast / Linear style) -->
         <div class="current-repo-badge" id="current-repo-badge" onclick="openCommandPalette()" title="クイックコマンドパレットを開く (⌘K)">
           <span class="repo-badge-icon">📁</span>
@@ -4935,6 +5159,11 @@ def build_portal_html(data, is_shareable=False):
 
       <!-- Right: Action Buttons + Zoom Controls + Toggle Inspector (Reopen Button shown when collapsed) -->
       <div class="header-top-right">
+        <!-- Beginner Guide Toggle Button (Reopen anytime) -->
+        <button class="pane-toggle-btn" id="btn-toggle-guide" onclick="toggleGuideBar()" title="初心者ガイドの表示/非表示 (Toggle Quick Guide)">
+          <span style="font-size: 0.82rem;">❓</span>
+          <span class="btn-text" data-i18n="btn_guide" style="font-size: 0.74rem; font-weight: 600;">ガイド</span>
+        </button>
         <button class="pane-toggle-btn" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)">
           <span style="font-size: 0.82rem;">⌨️</span>
         </button>
@@ -4948,7 +5177,7 @@ def build_portal_html(data, is_shareable=False):
         </button>
         <div class="header-auto-sync-chip" id="header-auto-sync-chip" title="自動定期更新の間隔 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
           <span class="dot-pulse" id="header-sync-pulse" style="background: #34d399; width: 6px; height: 6px;"></span>
-          <span id="header-sync-chip-text"><span class="chip-label">10分毎 </span>(10:00)</span>
+          <span id="header-sync-chip-text"><span class="chip-label">60分毎 </span>(60:00)</span>
         </div>
         <button class="btn btn-sync" id="sync-btn" onclick="triggerGitHubSync()" title="GitHub最新コミット・差分を手動同期">
           <span class="btn-icon">🔄</span>
@@ -5005,7 +5234,7 @@ def build_portal_html(data, is_shareable=False):
         <span class="guide-step"><span data-i18n="guide_step_3">③ <b>右インスペクター</b>で修正プロンプトのコピーやターミナル実行</span></span>
       </div>
       <div style="display: flex; align-items: center; gap: 6px;">
-        <button onclick="document.getElementById('beginner-guide-bar').style.display='none'" style="background: transparent; border: none; color: #94a3b8; font-size: 0.72rem; cursor: pointer; padding: 2px 6px; border-radius: 4px;" title="ガイドを非表示">✕</button>
+        <button onclick="dismissGuideBar()" class="guide-close-btn" style="background: transparent; border: none; color: #94a3b8; font-size: 0.72rem; cursor: pointer; padding: 2px 6px; border-radius: 4px;" title="ガイドを非表示 (次回から表示されません)">✕</button>
       </div>
     </div>
 
@@ -5020,13 +5249,13 @@ def build_portal_html(data, is_shareable=False):
       <div class="wt-top-controls">
         <div class="wt-btn-group">
           <span style="font-size: 0.75rem; font-weight: 800; color: #38bdf8; display: inline-flex; align-items: center; gap: 4px; margin-right: 4px;">
-            <span>🚶</span> 機能遷移ウォークスルー:
+            <span>🚶</span> <span data-i18n="wt_title">機能遷移ウォークスルー:</span>
           </span>
-          <button class="wt-ctrl-btn" id="wt-btn-first" onclick="walkthroughFirst()" title="最初のステップへ (Step 1)">⏮ 最初</button>
-          <button class="wt-ctrl-btn" id="wt-btn-prev" onclick="walkthroughPrev()" title="前のステップへ (← キー)">◀ 前へ</button>
-          <button class="wt-ctrl-btn wt-play-btn" id="wt-btn-play" onclick="toggleWalkthroughPlay()" title="自動ステップ再生 / 一時停止">▶ 自動再生</button>
-          <button class="wt-ctrl-btn" id="wt-btn-next" onclick="walkthroughNext()" title="次のステップへ (→ キー)">次へ ▶</button>
-          <button class="wt-ctrl-btn" id="wt-btn-reset" onclick="resetWalkthrough()" title="ハイライトを解除して全体を表示">🔄 全体表示</button>
+          <button class="wt-ctrl-btn" id="wt-btn-first" onclick="walkthroughFirst()" title="最初のステップへ (Step 1)" data-i18n="wt_btn_first">⏮ 最初</button>
+          <button class="wt-ctrl-btn" id="wt-btn-prev" onclick="walkthroughPrev()" title="前のステップへ (← キー)" data-i18n="wt_btn_prev">◀ 前へ</button>
+          <button class="wt-ctrl-btn wt-play-btn" id="wt-btn-play" onclick="toggleWalkthroughPlay()" title="自動ステップ再生 / 一時停止" data-i18n="wt_play">▶ 自動再生</button>
+          <button class="wt-ctrl-btn" id="wt-btn-next" onclick="walkthroughNext()" title="次のステップへ (→ キー)" data-i18n="wt_btn_next">次へ ▶</button>
+          <button class="wt-ctrl-btn" id="wt-btn-reset" onclick="resetWalkthrough()" title="ハイライトを解除して全体を表示" data-i18n="wt_btn_reset">🔄 全体表示</button>
         </div>
         <div class="wt-steps-pills" id="wt-steps-pills"></div>
       </div>
@@ -5230,11 +5459,11 @@ def build_portal_html(data, is_shareable=False):
         <span class="modal-spinner" id="modal-spinner"></span>
         <span id="modal-title-text">GitHubリポジトリ同期中...</span>
       </div>
-      <div class="modal-desc" id="modal-desc-text">
-        全29リポジトリの最新コミットを確認し、依存ライブラリ・データベースバージョンを解析してアーキテクチャ図を更新しています...
+      <div class="modal-desc" id="modal-desc-text" data-i18n="sync_modal_desc">
+        リポジトリの最新コミットを確認し、依存ライブラリ・データベースバージョンを解析してアーキテクチャ図を更新しています...
       </div>
       <div id="modal-action-row" style="display: none; justify-content: flex-end; gap: 8px;">
-        <button class="btn" onclick="closeSyncModal()">閉じる</button>
+        <button class="btn" onclick="closeSyncModal()" data-i18n="btn_close">閉じる</button>
       </div>
     </div>
   </div>
@@ -5535,16 +5764,68 @@ def build_portal_html(data, is_shareable=False):
       if (!group) return;
       const isCollapsed = group.classList.toggle('collapsed');
       localStorage.setItem('repochex_acc_' + section, isCollapsed ? '1' : '0');
+      updateAccordionActiveIndicators();
+    }
+
+    function updateAccordionActiveIndicators() {
+      const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
+
+      // 1. Sync & Health Accordion Indicator
+      const syncGroup = document.getElementById('acc-group-sync');
+      const syncBadge = document.getElementById('acc-badge-sync');
+      if (syncGroup) {
+        const isSyncActive = Boolean(typeof autoSyncEnabled !== 'undefined' && autoSyncEnabled);
+        syncGroup.classList.toggle('is-active-sync', isSyncActive);
+        if (syncBadge) {
+          if (isSyncActive) {
+            const minVal = typeof autoSyncIntervalMinutes !== 'undefined' ? autoSyncIntervalMinutes : 60;
+            syncBadge.textContent = `${minVal}${dict.sync_unit_label || '分毎'}`;
+            syncBadge.title = `自動更新が稼働中 (${minVal}分間隔)`;
+          } else {
+            syncBadge.textContent = dict.status_stopped || '停止';
+            syncBadge.title = '自動更新停止中';
+          }
+        }
+      }
+
+      // 2. Search & Freshness Filter Accordion Indicator
+      const searchGroup = document.getElementById('acc-group-search');
+      const searchBadge = document.getElementById('acc-badge-search');
+      const searchBox = document.getElementById('search-box');
+      const searchVal = searchBox ? searchBox.value.trim() : '';
+      const filterKey = typeof currentFreshnessFilter !== 'undefined' ? currentFreshnessFilter : 'all';
+      const isFilterActive = (filterKey !== 'all') || (searchVal !== '');
+
+      if (searchGroup) {
+        searchGroup.classList.toggle('is-active-filter', isFilterActive);
+        if (searchBadge) {
+          if (isFilterActive) {
+            let label = dict.badge_filtering || '絞込中';
+            if (filterKey === 'action-req') label = '🔴' + (dict.filter_action_req_short || '要対応');
+            else if (filterKey === 'amber') label = '🔥≤3日';
+            else if (filterKey === 'green') label = '🟢4-10日';
+            else if (filterKey === 'gray') label = '⚪11日+';
+            else if (searchVal) label = '🔍' + (searchVal.length > 5 ? searchVal.slice(0, 5) + '…' : searchVal);
+            searchBadge.textContent = label;
+            searchBadge.title = 'フィルターまたは検索が有効です';
+          } else {
+            searchBadge.textContent = '';
+          }
+        }
+      }
     }
 
     function restoreAccordionStates() {
       ['sync', 'search'].forEach(sec => {
-        const isCollapsed = localStorage.getItem('repochex_acc_' + sec) === '1';
+        const stored = localStorage.getItem('repochex_acc_' + sec);
+        // デフォルトは畳んだ状態（storedが保存されていない場合はtrue）
+        const isCollapsed = stored === null ? true : (stored === '1');
         const group = document.getElementById('acc-group-' + sec);
-        if (group && isCollapsed) {
-          group.classList.add('collapsed');
+        if (group) {
+          group.classList.toggle('collapsed', isCollapsed);
         }
       });
+      updateAccordionActiveIndicators();
     }
 
     function restorePaneCollapseState() {
@@ -5663,8 +5944,8 @@ def build_portal_html(data, is_shareable=False):
 
     // Auto Periodic Sync System
     let autoSyncEnabled = (localStorage.getItem('repochex_auto_sync_enabled') ?? localStorage.getItem('repochecker_auto_sync_enabled')) !== '0';
-    let autoSyncIntervalMinutes = parseInt(localStorage.getItem('repochex_auto_sync_interval') || localStorage.getItem('repochecker_auto_sync_interval') || '10', 10);
-    if (isNaN(autoSyncIntervalMinutes) || autoSyncIntervalMinutes < 1) autoSyncIntervalMinutes = 10;
+    let autoSyncIntervalMinutes = parseInt(localStorage.getItem('repochex_auto_sync_interval') || localStorage.getItem('repochecker_auto_sync_interval') || '60', 10);
+    if (isNaN(autoSyncIntervalMinutes) || autoSyncIntervalMinutes < 1) autoSyncIntervalMinutes = 60;
     let autoSyncRemainingSeconds = autoSyncIntervalMinutes * 60;
     let autoSyncTimerId = null;
 
@@ -5686,6 +5967,8 @@ def build_portal_html(data, is_shareable=False):
       if (toggle && toggle.checked !== autoSyncEnabled) toggle.checked = autoSyncEnabled;
       if (minInput && parseInt(minInput.value, 10) !== autoSyncIntervalMinutes) minInput.value = autoSyncIntervalMinutes;
       if (pulseDot) pulseDot.style.background = autoSyncEnabled ? '#38bdf8' : '#64748b';
+
+      updateAccordionActiveIndicators();
 
       if (!autoSyncEnabled) {
         if (chipText) chipText.innerHTML = '<span class="chip-label">更新</span>停止中';
@@ -5727,6 +6010,7 @@ def build_portal_html(data, is_shareable=False):
       });
 
       resetAutoSyncCountdown();
+      updateAccordionActiveIndicators();
     }
 
     function toggleAutoSync(enabled) {
@@ -5736,6 +6020,8 @@ def build_portal_html(data, is_shareable=False):
       if (toggle) toggle.checked = autoSyncEnabled;
       const pulseDot = document.getElementById('auto-sync-pulse-dot');
       if (pulseDot) pulseDot.style.background = autoSyncEnabled ? '#38bdf8' : '#64748b';
+
+      updateAccordionActiveIndicators();
 
       if (autoSyncEnabled) {
         resetAutoSyncCountdown();
@@ -5799,8 +6085,14 @@ def build_portal_html(data, is_shareable=False):
       if (!isAuto && modal) {
         spinner.style.display = 'inline-block';
         actionRow.style.display = 'none';
-        title.textContent = 'GitHubリポジトリ更新 & 全図再生成中...';
-        desc.textContent = 'リポジトリの最新コードを取り込み、Next.js/DBバージョン、API、環境変数、アーキテクチャ図を最新情報に更新しています...';
+        const totalRepos = diagrams.length;
+        if (currentLang === 'en') {
+          title.textContent = 'Syncing GitHub Repositories & Regenerating Diagrams...';
+          desc.textContent = `Checking latest commits across all ${totalRepos} ${totalRepos === 1 ? 'repository' : 'repositories'}, analyzing dependencies, and updating architecture diagrams...`;
+        } else {
+          title.textContent = 'GitHubリポジトリ更新 & 全図再生成中...';
+          desc.textContent = `全${totalRepos}リポジトリの最新コードを取り込み、Next.js/DBバージョン、API、環境変数、アーキテクチャ図を最新情報に更新しています...`;
+        }
         modal.style.display = 'flex';
       }
 
@@ -5819,8 +6111,13 @@ def build_portal_html(data, is_shareable=False):
 
           if (!isAuto && modal) {
             spinner.style.display = 'none';
-            title.textContent = '✨ 最新アーキテクチャに更新完了！';
-            desc.textContent = `最新のコードベースとライブラリバージョンを正常に反映しました（完了日時: ${syncTime}）。画面を更新します...`;
+            if (currentLang === 'en') {
+              title.textContent = '✨ Architecture Diagrams Successfully Updated!';
+              desc.textContent = `Reflected latest codebase and library versions (${syncTime}). Reloading portal...`;
+            } else {
+              title.textContent = '✨ 最新アーキテクチャに更新完了！';
+              desc.textContent = `最新のコードベースとライブラリバージョンを正常に反映しました（完了日時: ${syncTime}）。画面を更新します...`;
+            }
             setTimeout(() => {
               window.location.reload();
             }, 1200);
@@ -6009,23 +6306,24 @@ def build_portal_html(data, is_shareable=False):
 
     // Date and Freshness helpers
     function calculateDaysAgo(isoDateStr) {
-      if (!isoDateStr) return { days: 999, text: '不明', colorClass: 'badge-fresh-gray', colorKey: 'gray' };
+      const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
+      if (!isoDateStr) return { days: 999, text: dict.days_unknown || '不明', colorClass: 'badge-fresh-gray', colorKey: 'gray', dotClass: '', icon: '⚪' };
       const d = new Date(isoDateStr);
       const now = new Date();
       const diffMs = now - d;
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
       
       let text = '';
-      if (diffDays <= 0) text = '本日更新';
-      else if (diffDays === 1) text = '1日前';
-      else text = `${diffDays}日前`;
+      if (diffDays <= 0) text = dict.days_today || '本日更新';
+      else if (diffDays === 1) text = dict.days_ago_1 || '1日前';
+      else text = (dict.days_ago_n ? dict.days_ago_n.replace('{n}', diffDays) : `${diffDays}日前`);
 
       if (diffDays <= 3) {
-        return { days: diffDays, text, colorClass: 'badge-fresh-red', colorKey: 'red', dotClass: 'red' };
+        return { days: diffDays, text, colorClass: 'badge-fresh-amber', colorKey: 'amber', dotClass: 'amber', icon: '🔥' };
       } else if (diffDays <= 10) {
-        return { days: diffDays, text, colorClass: 'badge-fresh-yellow', colorKey: 'yellow', dotClass: 'yellow' };
+        return { days: diffDays, text, colorClass: 'badge-fresh-green', colorKey: 'green', dotClass: 'green', icon: '🟢' };
       } else {
-        return { days: diffDays, text, colorClass: 'badge-fresh-gray', colorKey: 'gray', dotClass: '' };
+        return { days: diffDays, text, colorClass: 'badge-fresh-gray', colorKey: 'gray', dotClass: '', icon: '⚪' };
       }
     }
 
@@ -6045,13 +6343,15 @@ def build_portal_html(data, is_shareable=False):
       if (el) el.classList.add('active');
       const searchVal = document.getElementById('search-box').value;
       renderNav(searchVal);
+      updateAccordionActiveIndicators();
     }
 
     // Render Navigation
     function renderNav(filter = '') {
       navContainer.innerHTML = '';
       const categories = {};
-      let countAll = 0, countRed = 0, countYellow = 0, countGray = 0, countActionReq = 0;
+      let countAll = 0, countAmber = 0, countGreen = 0, countGray = 0, countActionReq = 0;
+      const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
 
       diagrams.forEach((item, index) => {
         const fresh = calculateDaysAgo(item.pushedAt || item.updatedAt);
@@ -6063,12 +6363,16 @@ def build_portal_html(data, is_shareable=False):
 
         countAll++;
         if (hasActionReq) countActionReq++;
-        if (fresh.colorKey === 'red') countRed++;
-        else if (fresh.colorKey === 'yellow') countYellow++;
+        if (fresh.colorKey === 'amber' || fresh.colorKey === 'red') countAmber++;
+        else if (fresh.colorKey === 'green' || fresh.colorKey === 'yellow') countGreen++;
         else countGray++;
 
         if (currentFreshnessFilter === 'action-req') {
           if (!hasActionReq) return;
+        } else if (currentFreshnessFilter === 'amber' || currentFreshnessFilter === 'red') {
+          if (fresh.colorKey !== 'amber' && fresh.colorKey !== 'red') return;
+        } else if (currentFreshnessFilter === 'green' || currentFreshnessFilter === 'yellow') {
+          if (fresh.colorKey !== 'green' && fresh.colorKey !== 'yellow') return;
         } else if (currentFreshnessFilter !== 'all' && fresh.colorKey !== currentFreshnessFilter) {
           return;
         }
@@ -6090,18 +6394,19 @@ def build_portal_html(data, is_shareable=False):
       const bannerCountEl = document.getElementById('banner-action-req-count');
       if (bannerCountEl) bannerCountEl.textContent = countActionReq;
 
-      document.getElementById('count-red').textContent = countRed;
-      document.getElementById('count-yellow').textContent = countYellow;
-      document.getElementById('count-gray').textContent = countGray;
+      const countAmberEl = document.getElementById('count-amber') || document.getElementById('count-red');
+      if (countAmberEl) countAmberEl.textContent = countAmber;
+      const countGreenEl = document.getElementById('count-green') || document.getElementById('count-yellow');
+      if (countGreenEl) countGreenEl.textContent = countGreen;
+      const countGrayEl = document.getElementById('count-gray');
+      if (countGrayEl) countGrayEl.textContent = countGray;
 
       for (const [catName, list] of Object.entries(categories)) {
         const grp = document.createElement('div');
         grp.className = 'category-group';
-        const safeCat = catName.replace(/'/g, "\'");
         grp.innerHTML = `
           <div class="category-label" style="display: flex; align-items: center; justify-content: space-between;">
             <span>${catName} (${list.length})</span>
-            <button class="cat-del-btn" onclick="deleteCategoryGroup(event, '${safeCat}')" title="このカテゴリのリポジトリを一括削除">🗑️ 一括削除</button>
           </div>
         `;
 
@@ -6111,8 +6416,6 @@ def build_portal_html(data, is_shareable=False):
           el.id = 'nav-item-' + index;
 
           const createdStr = formatDateShort(item.createdAt);
-          const safeId = (item.id || '').replace(/'/g, "\'");
-          const safeRepo = (item.repo || '').replace(/'/g, "\'");
 
           el.innerHTML = `
             <div class="nav-item-top" style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
@@ -6120,19 +6423,18 @@ def build_portal_html(data, is_shareable=False):
                 ${item.repo}
               </div>
               ${item._hasActionReq ? `
-                <span class="repo-badge-action-req" style="flex-shrink: 0;" onclick="showActionModalForRepo(event, ${index})" title="クリックして要対応の理由と対応方法を確認">
-                  🔴 要対応 ↗
+                <span class="repo-badge-action-req" style="flex-shrink: 0;" onclick="showActionModalForRepo(event, ${index})" title="${dict.title_action_req || 'クリックして要対応の理由と対応方法を確認'}">
+                  ${dict.badge_action_req || '🔴 要対応 ↗'}
                 </span>
               ` : ''}
               ${item.is_root ? '<span class="badge-eco" style="flex-shrink: 0;">ECO</span>' : ''}
-              <button class="nav-del-btn" onclick="deleteRepoById(event, '${safeId}', '${safeRepo}')" title="このリポジトリをリストから削除">🗑️ 削除</button>
             </div>
             <div class="persp-tag">perspective: ${item.perspective}</div>
             <div class="date-meta-row">
-              <span class="created-date-label">🐣 作成: ${createdStr}</span>
+              <span class="created-date-label">${dict.label_created || '🐣 作成'}: ${createdStr}</span>
               <span class="freshness-badge ${fresh.colorClass}">
                 ${fresh.dotClass ? `<span class="dot-pulse ${fresh.dotClass}"></span>` : ''}
-                更新: ${fresh.text}
+                ${dict.label_updated || '更新'}: ${fresh.text}
               </span>
             </div>
           `;
@@ -6146,7 +6448,7 @@ def build_portal_html(data, is_shareable=False):
       if (typeof sequenceDiagrams !== 'undefined' && sequenceDiagrams && sequenceDiagrams.length > 0) {
         const seqGrp = document.createElement('div');
         seqGrp.className = 'nav-group';
-        seqGrp.innerHTML = `<div class="group-title">⏱️ 実行シーケンスフロー (${sequenceDiagrams.length})</div>`;
+        seqGrp.innerHTML = `<div class="group-title">${dict.seq_flow_title || '⏱️ 実行シーケンスフロー'} (${sequenceDiagrams.length})</div>`;
         sequenceDiagrams.forEach((seq) => {
           const el = document.createElement('div');
           el.className = 'nav-item';
@@ -6170,6 +6472,7 @@ def build_portal_html(data, is_shareable=False):
 
     function handleSearch(val) {
       renderNav(val);
+      updateAccordionActiveIndicators();
     }
 
     async function selectDiagram(index) {
@@ -6576,18 +6879,18 @@ def build_portal_html(data, is_shareable=False):
             <a href="${repoItem.github_url}" target="_blank" class="gh-link-btn">${dict.open_github}</a>
           </div>
           <div style="display: flex; gap: 10px; align-items: center; color: #94a3b8;">
-            <span>🐣 作成: ${createdStr}</span>
+            <span>${dict.label_created || '🐣 作成'}: ${createdStr}</span>
             <span class="freshness-badge ${fresh.colorClass}">
               ${fresh.dotClass ? `<span class="dot-pulse ${fresh.dotClass}"></span>` : ''}
-              更新: ${pushedStr} (${fresh.text})
+              ${dict.label_updated || '更新'}: ${pushedStr} (${fresh.text})
             </span>
           </div>
           ${repoItem.commit_subject ? `
             <div style="font-size: 0.72rem; color: #cbd5e1; border-top: 1px dashed #334155; padding-top: 6px; margin-top: 6px;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
                 <span style="display: flex; align-items: center; gap: 6px;">
-                  <span>📝 最新コミット:</span>
-                  <a href="${repoItem.github_url}/commit/${repoItem.commit_hash}" target="_blank" class="commit-hash-link" title="GitHubでコミット差分を直接開く">
+                  <span>${dict.label_latest_commit || '📝 最新コミット:'}</span>
+                  <a href="${repoItem.github_url}/commit/${repoItem.commit_hash}" target="_blank" class="commit-hash-link" title="${dict.title_open_commit_diff || 'GitHubでコミット差分を直接開く'}">
                     <code>${repoItem.commit_hash || ''}</code> <span style="font-size: 0.65rem;">↗</span>
                   </a>
                 </span>
@@ -6605,14 +6908,14 @@ def build_portal_html(data, is_shareable=False):
               <div id="commit-diff-drawer-${repoItem.repo_slug}" class="commit-diff-drawer" style="display: none;">
                 ${repoItem.commit_body && repoItem.commit_body.length > 0 ? `
                   <div style="margin-bottom: 8px;">
-                    <div class="commit-body-label">【コミット説明・変更の背景】</div>
+                    <div class="commit-body-label">${dict.commit_body_label || '【コミット説明・変更の背景】'}</div>
                     ${repoItem.commit_body.map(line => `<div class="commit-body-line">• ${line}</div>`).join('')}
                   </div>
                 ` : ''}
 
                 ${repoItem.commit_files && repoItem.commit_files.length > 0 ? `
                   <div>
-                    <div class="commit-body-label">【変更ファイル抜粋 (${repoItem.commit_files.length}件)】</div>
+                    <div class="commit-body-label">${(dict.commit_files_label || '【変更ファイル抜粋 ({n}件)】').replace('{n}', repoItem.commit_files.length)}</div>
                     ${repoItem.commit_files.map(f => {
                       const parts = f.split('\\t');
                       const status = parts[0];
@@ -6620,7 +6923,7 @@ def build_portal_html(data, is_shareable=False):
                       const isAdd = status === 'A';
                       const isDel = status === 'D';
                       const badgeClass = isAdd ? 'diff-badge-add' : (isDel ? 'diff-badge-del' : 'diff-badge-mod');
-                      const label = isAdd ? '追加 A' : (isDel ? '削除 D' : '変更 M');
+                      const label = isAdd ? (dict.diff_add || '追加 A') : (isDel ? (dict.diff_del || '削除 D') : (dict.diff_mod || '変更 M'));
                       return `
                         <div class="diff-file-row">
                           <span class="diff-badge ${badgeClass}">${label}</span>
@@ -6633,7 +6936,7 @@ def build_portal_html(data, is_shareable=False):
 
                 <div style="margin-top: 8px; text-align: right;">
                   <a href="${repoItem.github_url}/commit/${repoItem.commit_hash}" target="_blank" class="gh-link-btn" style="font-size: 0.68rem; padding: 4px 10px;">
-                    GitHubで完全なコミット差分（Diff）を見る ↗
+                    ${dict.view_full_diff || 'GitHubで完全なコミット差分（Diff）を見る ↗'}
                   </a>
                 </div>
               </div>
@@ -6726,10 +7029,10 @@ def build_portal_html(data, is_shareable=False):
           const total = selectedNodeData.walkthroughTotal || currentWalkthroughSteps.length || 1;
           const stepIdx = selectedNodeData.walkthroughStepIdx || 0;
           const flowBadge = st.isSelf
-            ? '<span style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde68a; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: 800;">🔄 内部処理 (Self)</span>'
+            ? `<span style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde68a; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: 800;">${dict.wt_self || '🔄 内部処理 (Self)'}</span>`
             : (st.isReturn
-                ? '<span style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #a7f3d0; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: 800;">↩️ 応答・返却 (Return)</span>'
-                : '<span style="background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #bae6fd; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: 800;">➡️ 呼び出し・遷移 (Call)</span>');
+                ? `<span style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #a7f3d0; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: 800;">${dict.wt_return || '↩️ 応答・返却 (Return)'}</span>`
+                : `<span style="background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #bae6fd; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: 800;">${dict.wt_call || '➡️ 呼び出し・遷移 (Call)'}</span>`);
           const fromMeta = selectedNodeData.fromMeta || null;
           const toMeta = selectedNodeData.toMeta || null;
 
@@ -6743,8 +7046,8 @@ def build_portal_html(data, is_shareable=False):
                   ${flowBadge}
                 </div>
                 <div style="display: flex; align-items: center; gap: 4px;">
-                  <button onclick="walkthroughPrev()" ${stepIdx <= 0 ? 'disabled' : ''} style="background: #1e293b; border: 1px solid #334155; color: ${stepIdx <= 0 ? '#475569' : '#e2e8f0'}; border-radius: 5px; padding: 3px 8px; font-size: 0.7rem; font-weight: 700; cursor: ${stepIdx <= 0 ? 'default' : 'pointer'};">◀ 前へ</button>
-                  <button onclick="walkthroughNext()" ${stepIdx >= total - 1 ? 'disabled' : ''} style="background: #1e293b; border: 1px solid #334155; color: ${stepIdx >= total - 1 ? '#475569' : '#e2e8f0'}; border-radius: 5px; padding: 3px 8px; font-size: 0.7rem; font-weight: 700; cursor: ${stepIdx >= total - 1 ? 'default' : 'pointer'};">次へ ▶</button>
+                  <button onclick="walkthroughPrev()" ${stepIdx <= 0 ? 'disabled' : ''} style="background: #1e293b; border: 1px solid #334155; color: ${stepIdx <= 0 ? '#475569' : '#e2e8f0'}; border-radius: 5px; padding: 3px 8px; font-size: 0.7rem; font-weight: 700; cursor: ${stepIdx <= 0 ? 'default' : 'pointer'};">${dict.wt_prev_step || '◀ 前へ'}</button>
+                  <button onclick="walkthroughNext()" ${stepIdx >= total - 1 ? 'disabled' : ''} style="background: #1e293b; border: 1px solid #334155; color: ${stepIdx >= total - 1 ? '#475569' : '#e2e8f0'}; border-radius: 5px; padding: 3px 8px; font-size: 0.7rem; font-weight: 700; cursor: ${stepIdx >= total - 1 ? 'default' : 'pointer'};">${dict.wt_next_step || '次へ ▶'}</button>
                 </div>
               </div>
 
@@ -6755,7 +7058,7 @@ def build_portal_html(data, is_shareable=False):
               <!-- From -> To Cards -->
               <div style="display: flex; flex-direction: column; gap: 6px; background: rgba(9, 14, 26, 0.85); border: 1px solid #1e293b; border-radius: 8px; padding: 10px;">
                 <div style="border-left: 3px solid #38bdf8; padding-left: 8px;">
-                  <div style="font-size: 0.68rem; font-weight: 800; color: #38bdf8;">📤 送信元 (From / Caller)</div>
+                  <div style="font-size: 0.68rem; font-weight: 800; color: #38bdf8;">${dict.wt_from || '📤 送信元 (From / Caller)'}</div>
                   <div style="font-size: 0.84rem; font-weight: 700; color: #f8fafc;">${st.fromLabel}</div>
                   ${fromMeta ? `<div style="font-size: 0.71rem; color: #94a3b8; margin-top: 2px;">${fromMeta}</div>` : ''}
                 </div>
@@ -6766,7 +7069,7 @@ def build_portal_html(data, is_shareable=False):
                 </div>
 
                 <div style="border-left: 3px solid #34d399; padding-left: 8px;">
-                  <div style="font-size: 0.68rem; font-weight: 800; color: #34d399;">📥 遷移先 (To / Receiver)</div>
+                  <div style="font-size: 0.68rem; font-weight: 800; color: #34d399;">${dict.wt_to || '📥 遷移先 (To / Receiver)'}</div>
                   <div style="font-size: 0.84rem; font-weight: 700; color: #f8fafc;">${st.toLabel}</div>
                   ${toMeta ? `<div style="font-size: 0.71rem; color: #94a3b8; margin-top: 2px;">${toMeta}</div>` : ''}
                 </div>
@@ -6774,7 +7077,7 @@ def build_portal_html(data, is_shareable=False):
 
               ${st.note ? `
                 <div style="margin-top: 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 6px; padding: 7px 10px; font-size: 0.75rem; color: #fde68a;">
-                  📌 <strong>補足ノート:</strong> ${st.note}
+                  📌 <strong>${dict.wt_note || '補足ノート:'}</strong> ${st.note}
                 </div>
               ` : ''}
             </div>
@@ -6783,7 +7086,7 @@ def build_portal_html(data, is_shareable=False):
               <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-seq-detail')">
                 <div class="inspector-collapsible-title">
                   <span>🎯</span>
-                  <span>このステップの処理内容 (STEP DETAIL)</span>
+                  <span>${dict.wt_step_detail_title || 'このステップの処理内容 (STEP DETAIL)'}</span>
                 </div>
                 <span class="inspector-collapse-arrow">▼</span>
               </div>
@@ -6796,7 +7099,7 @@ def build_portal_html(data, is_shareable=False):
               <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-seq-flow')">
                 <div class="inspector-collapsible-title" style="color: #34d399;">
                   <span>⚙️</span>
-                  <span>ステップ実行詳細・前後関係</span>
+                  <span>${dict.wt_step_flow_title || 'ステップ実行詳細・前後関係'}</span>
                 </div>
                 <span class="inspector-collapse-arrow">▼</span>
               </div>
@@ -6813,7 +7116,7 @@ def build_portal_html(data, is_shareable=False):
             <div class="logic-steps-card" style="border-color: rgba(56, 189, 248, 0.3);">
               <div class="steps-header" style="color: #38bdf8;">
                 <span>⏱️</span>
-                <span>シーケンス全ステップ一覧 (クリックで移動)</span>
+                <span>${dict.wt_all_steps_title || 'シーケンス全ステップ一覧 (クリックで移動)'}</span>
               </div>
               <div style="display: flex; flex-direction: column; gap: 5px; max-height: 240px; overflow-y: auto;">
                 ${currentWalkthroughSteps.map((wStep, wIdx) => {
@@ -6845,6 +7148,54 @@ def build_portal_html(data, is_shareable=False):
 
           const plainRoleDesc = resp.length > 150 ? resp.slice(0, 150) + '...' : resp;
 
+          const isSimple = (typeof currentUiMode !== 'undefined' && currentUiMode === 'simple');
+
+          // Executive Safety Score Card calculation (Pillar 2)
+          const critCount = repoActions.filter(a => String(a.severity || '').toUpperCase().includes('CRIT')).length;
+          const warnCount = repoActions.length - critCount;
+          let execScore = 100 - (critCount * 30) - (warnCount * 10);
+          if (execScore < 20 && repoActions.length > 0) execScore = 20;
+          const scoreColor = execScore >= 85 ? '#10b981' : (execScore >= 60 ? '#f59e0b' : '#ef4444');
+          const scoreStatusText = execScore >= 85 
+            ? (dict.safety_status_safe || '🟢 健全・安全（重大リスクなし）')
+            : (execScore >= 60 
+              ? (dict.safety_status_attn || '🟡 注意（改善推奨あり）')
+              : (dict.safety_status_action || '🚨 要対応（脆弱性対策が必要）'));
+          const scoreDesc = execScore >= 85
+            ? (dict.safety_desc_safe || 'このシステムは安全に構成されており、即時対応が必要な重大な既知の脆弱性はありません。')
+            : (dict.safety_desc_action || `セキュリティ対策・ライブラリ更新が推奨される項目が ${repoActions.length} 件検出されています。`);
+
+          const simpleBannerHtml = isSimple ? `
+            <div class="simple-mode-banner">
+              <span>🔰 <strong>${dict.simple_banner_label || 'シンプル表示中: システムの役割と安全性を要約しています'}</strong></span>
+              <button class="simple-mode-switch-link" onclick="setUiMode('dev')">${dict.simple_switch_dev_link || '🛠️ 開発者モードで全9タブ・ターミナルを開く ↗'}</button>
+            </div>
+          ` : '';
+
+          const execScoreCardHtml = isSimple ? `
+            <div class="executive-score-card" style="border-color: ${scoreColor}44;">
+              <div class="executive-score-circle" style="border-color: ${scoreColor}; color: ${scoreColor}; background: ${scoreColor}14;">
+                <div class="executive-score-num">${execScore}</div>
+                <div class="executive-score-denom">/ 100</div>
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 0.82rem; font-weight: 800; color: ${scoreColor}; margin-bottom: 2px;">
+                  ${scoreStatusText}
+                </div>
+                <div style="font-size: 0.72rem; color: #cbd5e1; line-height: 1.4;">
+                  ${scoreDesc}
+                </div>
+              </div>
+            </div>
+          ` : '';
+
+          const execReportBtnHtml = isSimple ? `
+            <button class="btn-exec-report-dl" onclick="downloadExecutiveSummaryReport('${encodeURIComponent(JSON.stringify(repoItem))}')" title="このリポジトリの経営・管理者向け要約レポート (.md) を出力保存">
+              <span>📥</span>
+              <span>${dict.btn_download_exec_report || '要約レポートをダウンロード (.md)'}</span>
+            </button>
+          ` : '';
+
           const plainSummaryCardHtml = `
             <div style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 27, 75, 0.8) 100%); border: 1px solid #3b82f6; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.15);">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -6867,19 +7218,7 @@ def build_portal_html(data, is_shareable=False):
             </div>
           `;
 
-          tabBody = `
-            ${plainSummaryCardHtml}
-            ${repoContextHtml}
-            ${actionAlertHtml}
-
-            <!-- Quick Toggle Bar for Overview Cards -->
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-              <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600;">${dict.insp_toggle_hint}</span>
-              <button class="insp-toggle-all-btn" onclick="toggleAllInspectorCards(this)" title="Toggle all sections">
-                <span>${dict.collapse_all}</span>
-              </button>
-            </div>
-
+          const inspCardInfo = `
             <!-- Card 1: Basic Node Info -->
             <div class="inspector-collapsible-card" id="insp-card-info">
               <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-info')">
@@ -6904,7 +7243,9 @@ def build_portal_html(data, is_shareable=False):
                 </div>
               </div>
             </div>
+          `;
 
+          const inspCardResp = `
             <!-- Card 2: System Responsibility & Purpose (Clear Explanations) -->
             <div class="inspector-collapsible-card" id="insp-card-resp">
               <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-resp')">
@@ -6921,7 +7262,9 @@ def build_portal_html(data, is_shareable=False):
                 ${respContentHtml}
               </div>
             </div>
+          `;
 
+          const inspCardLogic = `
             <!-- Card 3: Processing Logic Steps -->
             <div class="inspector-collapsible-card" id="insp-card-logic">
               <div class="inspector-collapsible-header" onclick="toggleInspectorCard('insp-card-logic')">
@@ -6941,6 +7284,35 @@ def build_portal_html(data, is_shareable=False):
               </div>
             </div>
           `;
+
+          if (isSimple) {
+            tabBody = `
+              ${simpleBannerHtml}
+              ${execScoreCardHtml}
+              ${execReportBtnHtml}
+              ${repoContextHtml}
+              ${inspCardResp}
+              ${actionAlertHtml}
+            `;
+          } else {
+            tabBody = `
+              ${plainSummaryCardHtml}
+              ${repoContextHtml}
+              ${actionAlertHtml}
+
+              <!-- Quick Toggle Bar for Overview Cards -->
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600;">${dict.insp_toggle_hint}</span>
+                <button class="insp-toggle-all-btn" onclick="toggleAllInspectorCards(this)" title="Toggle all sections">
+                  <span>${dict.collapse_all}</span>
+                </button>
+              </div>
+
+              ${inspCardInfo}
+              ${inspCardResp}
+              ${inspCardLogic}
+            `;
+          }
         }
       } else if (currentInspTab === 'versions') {
         // Versions & Security Tab with Authoritative Sources and Red/Green Status Legend
@@ -7705,6 +8077,7 @@ def build_portal_html(data, is_shareable=False):
         findings: []
       };
 
+      const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
       const actionList = cr.action_items || [];
       const findingList = cr.findings || [];
       const stObj = cr.stats || {};
@@ -7714,10 +8087,15 @@ def build_portal_html(data, is_shareable=False):
 
       const hasAction = cr.status === 'NEEDS_ATTENTION' || cr.status === 'ACTION_REQUIRED' || actionList.length > 0;
       const scoreClass = cr.score >= 90 ? 'score-high' : (cr.score >= 80 ? 'score-med' : 'score-low');
-      const statusLabel = hasAction ? '🔴 要対応 (Action Required)' : (cr.status === 'PASSED_WITH_WARNINGS' ? '🟡 要確認 (Warnings)' : '🟢 合格 (Passed)');
+      const statusLabel = hasAction
+        ? (dict.cr_status_action || '🔴 要対応 (Action Required)')
+        : (cr.status === 'PASSED_WITH_WARNINGS' ? (dict.cr_status_warn || '🟡 要確認 (Warnings)') : (dict.cr_status_pass || '🟢 合格 (Passed)'));
 
       const repoOwner = repo.owner || (repo.repo && repo.repo.includes('/') ? repo.repo.split('/')[0] : 'RepoCHK Mac');
       viewBreadcrumb.textContent = `${repoOwner} / ${repo.repo} / coderabbit-ai-review`;
+
+      const actionTitle = (dict.cr_action_items_title || '要対応アクションアイテム ({n}件) - 即時パッチ・修正が必要').replace('{n}', cr.action_items.length);
+      const findingsTitle = (dict.cr_findings_title || '検出されたコードレビュー指摘 & 修正提案 ({n}件)').replace('{n}', cr.findings ? cr.findings.length : 0);
 
       crView.innerHTML = `
         <div class="cr-dashboard-grid">
@@ -7727,12 +8105,12 @@ def build_portal_html(data, is_shareable=False):
               <div class="cr-logo-badge">🐰</div>
               <div class="cr-header-titles">
                 <h2>
-                  <span>CodeRabbit AI コード品質 & セキュリティ監査レポート</span>
+                  <span>${dict.cr_title || 'CodeRabbit AI コード品質 & セキュリティ監査レポート'}</span>
                   <span style="font-size: 0.72rem; padding: 3px 8px; border-radius: 4px; background: ${hasAction ? 'rgba(239, 68, 68, 0.2)' : 'rgba(99, 102, 241, 0.2)'}; border: 1px solid ${hasAction ? '#ef4444' : 'rgba(99, 102, 241, 0.4)'}; color: ${hasAction ? '#fca5a5' : '#c7d2fe'};">
                     ${statusLabel}
                   </span>
                 </h2>
-                <p>対象リポジトリ: <strong>${repo.repo}</strong> ｜ 最新コミット: <code>${repo.commit_hash}</code> (${repo.commit_date}) ｜ 作成者: <strong>${repo.commit_author}</strong></p>
+                <p>${dict.cr_target_repo || '対象リポジトリ:'} <strong>${repo.repo}</strong> ｜ ${dict.cr_latest_commit || '最新コミット:'} <code>${repo.commit_hash}</code> (${repo.commit_date}) ｜ ${dict.cr_author || '作成者:'} <strong>${repo.commit_author}</strong></p>
                 <p style="margin-top: 6px; color: #cbd5e1;">${cr.summary}</p>
               </div>
             </div>
@@ -7740,20 +8118,20 @@ def build_portal_html(data, is_shareable=False):
             <div class="cr-stats-row">
               <div class="cr-score-card">
                 <div class="cr-score-val ${scoreClass}">${cr.score}</div>
-                <div class="cr-score-label">品質スコア / 100</div>
+                <div class="cr-score-label">${dict.cr_score_label || '品質スコア / 100'}</div>
               </div>
 
               <div class="cr-counts-pill-group">
                 <div class="cr-count-item crit">
-                  <span>🚨 重大リスク (Critical)</span>
+                  <span>${dict.cr_crit_label || '🚨 重大リスク (Critical)'}</span>
                   <strong>${critCount}件</strong>
                 </div>
                 <div class="cr-count-item warn">
-                  <span>⚠️ 警告 (Warning)</span>
+                  <span>${dict.cr_warn_label || '⚠️ 警告 (Warning)'}</span>
                   <strong>${warnCount}件</strong>
                 </div>
                 <div class="cr-count-item info">
-                  <span>💡 改善提案 (Suggestion)</span>
+                  <span>${dict.cr_info_label || '💡 改善提案 (Suggestion)'}</span>
                   <strong>${infoCount}件</strong>
                 </div>
               </div>
@@ -7765,7 +8143,7 @@ def build_portal_html(data, is_shareable=False):
             <div class="cr-section-card" style="border-color: rgba(239, 68, 68, 0.4);">
               <div class="cr-section-title" style="color: #fca5a5;">
                 <span>🚨</span>
-                <span>要対応アクションアイテム (${cr.action_items.length}件) - 即時パッチ・修正が必要</span>
+                <span>${actionTitle}</span>
               </div>
               <div>
                 ${cr.action_items.map(act => `
@@ -7780,14 +8158,14 @@ def build_portal_html(data, is_shareable=False):
                     ${act.official_source ? `
                       <div style="margin-bottom: 6px;">
                         <a href="${act.official_source}" target="_blank" style="color: #38bdf8; font-size: 0.72rem; text-decoration: none;">
-                          🏛️ 公式セキュリティアドバイザリ (NVD / GitHub) で詳細を確認 ↗
+                          ${dict.cr_official_source_link || '🏛️ 公式セキュリティアドバイザリ (NVD / GitHub) で詳細を確認 ↗'}
                         </a>
                       </div>
                     ` : ''}
                     ${act.fix_cmd ? `
                       <div class="hotspot-fix-box">
                         <span class="hotspot-cmd">$ ${act.fix_cmd}</span>
-                        <button class="hotspot-copy-btn" onclick="copyToClipboard('${act.fix_cmd.replace(/'/g, "\'")}', this)">📋 コマンドをコピー</button>
+                        <button class="hotspot-copy-btn" onclick="copyToClipboard('${act.fix_cmd.replace(/'/g, "\'")}', this)">${dict.cr_copy_cmd || '📋 コマンドをコピー'}</button>
                       </div>
                     ` : ''}
                     ${renderAiAgentPromptWidget(repo.repo, act)}
@@ -7800,8 +8178,8 @@ def build_portal_html(data, is_shareable=False):
               <div style="display: flex; align-items: center; gap: 10px;">
                 <span style="font-size: 1.2rem;">🟢</span>
                 <div>
-                  <strong style="color: #34d399; font-size: 0.88rem;">緊急の要対応事項（CRITICAL）はありません</strong>
-                  <div style="color: #94a3b8; font-size: 0.75rem;">既知の重大な未パッチ脆弱性（CVE）およびセキュリティアンチパターンは検知されていません。</div>
+                  <strong style="color: #34d399; font-size: 0.88rem;">${dict.cr_no_critical || '緊急の要対応事項（CRITICAL）はありません'}</strong>
+                  <div style="color: #94a3b8; font-size: 0.75rem;">${dict.cr_no_critical_sub || '既知の重大な未パッチ脆弱性（CVE）およびセキュリティアンチパターンは検知されていません。'}</div>
                 </div>
               </div>
             </div>
@@ -7811,7 +8189,7 @@ def build_portal_html(data, is_shareable=False):
           <div class="cr-section-card">
             <div class="cr-section-title">
               <span>📋</span>
-              <span>コミット変更ウォークスルー (High-level Walkthrough)</span>
+              <span>${dict.cr_walkthrough_title || 'コミット変更ウォークスルー (High-level Walkthrough)'}</span>
             </div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
               ${cr.walkthrough && cr.walkthrough.length > 0 ? cr.walkthrough.map((w, idx) => `
@@ -7823,7 +8201,7 @@ def build_portal_html(data, is_shareable=False):
                     ${w.desc || w.summary || ''}
                   </div>
                 </div>
-              `).join('') : '<div style="color: #64748b; font-size: 0.8rem;">ウォークスルー情報がありません。</div>'}
+              `).join('') : `<div style="color: #64748b; font-size: 0.8rem;">${dict.cr_no_walkthrough || 'ウォークスルー情報がありません。'}</div>`}
             </div>
           </div>
 
@@ -7831,7 +8209,7 @@ def build_portal_html(data, is_shareable=False):
           <div class="cr-section-card">
             <div class="cr-section-title">
               <span>🔬</span>
-              <span>検出されたコードレビュー指摘 & 修正提案 (${cr.findings ? cr.findings.length : 0}件)</span>
+              <span>${findingsTitle}</span>
             </div>
             ${cr.findings && cr.findings.length > 0 ? cr.findings.map(f => `
               <div class="cr-finding-card">
@@ -7850,7 +8228,7 @@ def build_portal_html(data, is_shareable=False):
                   </div>
                   ${f.diff ? `
                     <div style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 4px; font-weight: 700;">
-                      💡 CodeRabbit 推奨コード修正 (Diff Preview):
+                      ${dict.cr_diff_preview_title || '💡 CodeRabbit 推奨コード修正 (Diff Preview):'}
                     </div>
                     <pre class="cr-diff-container">${f.diff.split(String.fromCharCode(10)).map(line => {
                       if (line.startsWith('+')) return `<span class="cr-diff-add">${line}</span>`;
@@ -7861,18 +8239,18 @@ def build_portal_html(data, is_shareable=False):
                   ${renderAiAgentPromptWidget(repo.repo, f)}
                 </div>
               </div>
-            `).join('') : '<div style="color: #64748b; font-size: 0.8rem;">指摘事項はありません。</div>'}
+            `).join('') : `<div style="color: #64748b; font-size: 0.8rem;">${dict.cr_no_findings || '指摘事項はありません。'}</div>`}
           </div>
 
           <!-- Section 4: Configuration Status -->
           <div class="cr-section-card" style="background: rgba(15, 23, 42, 0.5);">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
               <div>
-                <strong style="color: #e2e8f0; font-size: 0.82rem;">⚙️ CodeRabbit 監視設定 (.coderabbit.yaml)</strong>
-                <div style="font-size: 0.72rem; color: #94a3b8;">レビュー言語: 日本語 (ja-JP) ｜ プロファイル: Assertive (高精度監査) ｜ シーケンス図自動生成: 有効</div>
+                <strong style="color: #e2e8f0; font-size: 0.82rem;">${dict.cr_config_title || '⚙️ CodeRabbit 監視設定 (.coderabbit.yaml)'}</strong>
+                <div style="font-size: 0.72rem; color: #94a3b8;">${dict.cr_config_detail || 'レビュー言語: 日本語 (ja-JP) ｜ プロファイル: Assertive (高精度監査) ｜ シーケンス図自動生成: 有効'}</div>
               </div>
               <a href="${repo.github_url}" target="_blank" class="gh-link-btn" style="font-size: 0.72rem;">
-                GitHubでこのリポジトリを確認 ↗
+                ${dict.cr_view_repo || 'GitHubでこのリポジトリを確認 ↗'}
               </a>
             </div>
           </div>
@@ -7880,14 +8258,39 @@ def build_portal_html(data, is_shareable=False):
       `;
     }
 
-    
     /* ==========================================================================
        Action Required Highlighting & Interactive Reason/Remedy Modal
        ========================================================================== */
     function buildAiAgentFixPrompt(repoName, act) {
+      const isEn = (typeof currentLang !== 'undefined' && currentLang === 'en');
       const targetFile = (act.file || 'src/').split(' (Target:')[0].trim();
-      const title = act.title || 'セキュリティ・品質要対応イシュー';
-      const desc = act.desc || act.comment || '検出されたリスクを修正してください。';
+      const title = act.title || (isEn ? 'Security & Quality Action Item' : 'セキュリティ・品質要対応イシュー');
+      const desc = act.desc || act.comment || (isEn ? 'Remediate the detected risk.' : '検出されたリスクを修正してください。');
+
+      if (isEn) {
+        const lines = [
+          'Please remediate the following action-required issue in repository "' + repoName + '", file `' + targetFile + '`:',
+          '',
+          '[Detected Issue]: ' + title,
+          '[Target File/Location]: ' + targetFile,
+          '[Reason / Risk]: ' + desc
+        ];
+        if (act.diff) {
+          lines.push('[Recommended Fix Diff]:', act.diff);
+        }
+        if (act.fix_cmd) {
+          lines.push('[Verification / Fix Command]:', '$ ' + act.fix_cmd);
+        }
+        lines.push(
+          '',
+          '[Remediation Requirements]:',
+          '1. Locate the exact code in `' + targetFile + '` and implement the remediation meeting security and robustness standards.',
+          '2. Preserve existing function signatures and callers to avoid side effects.',
+          '3. Run syntax checks, type checks, and unit tests after editing to confirm zero regressions.'
+        );
+        return lines.join('\\n');
+      }
+
       const lines = [
         'リポジトリ「' + repoName + '」のファイル `' + targetFile + '` における以下の要対応イシューを修正してください。',
         '',
@@ -7912,6 +8315,7 @@ def build_portal_html(data, is_shareable=False):
     }
 
     function renderAiAgentPromptWidget(repoName, act) {
+      const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
       const promptText = buildAiAgentFixPrompt(repoName || 'Repository', act || {});
       const encodedPrompt = encodeURIComponent(promptText);
       const escapedHtml = promptText
@@ -7923,10 +8327,10 @@ def build_portal_html(data, is_shareable=False):
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
             <span style="font-size: 0.72rem; font-weight: 800; color: #ddd6fe; display: inline-flex; align-items: center; gap: 5px;">
               <span>🤖</span>
-              <span>AIエージェント修正指示プロンプト (Claude Code / Cursor / Codex / Antigravity 用)</span>
+              <span>${dict.ai_prompt_banner || 'AIエージェント修正指示プロンプト (Claude Code / Cursor / Codex / Antigravity 用)'}</span>
             </span>
             <button class="hotspot-copy-btn" style="background: #6d28d9; border-color: #a78bfa; color: #ffffff; padding: 3px 10px;" onclick="copyCmdFromButton(this)" data-cmd="${encodedPrompt}">
-              📋 AI修正プロンプトをコピー
+              ${dict.ai_copy_prompt_btn || '📋 AI修正プロンプトをコピー'}
             </button>
           </div>
           <pre style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 0.71rem; line-height: 1.48; color: #e2e8f0; white-space: pre-wrap; word-break: break-word; background: rgba(9, 13, 22, 0.75); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 5px; padding: 8px 10px; max-height: 135px; overflow-y: auto;">${escapedHtml}</pre>
@@ -8412,14 +8816,14 @@ def build_portal_html(data, is_shareable=False):
               ${hasAct ? '<span class="sec-legend-badge sec-legend-red" style="font-size: 0.62rem; padding: 1px 6px;">🔴 要対応</span>' : '<span class="sec-legend-badge sec-legend-green" style="font-size: 0.62rem; padding: 1px 6px;">🟢 正常</span>'}
             </div>
             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-              <button class="table-view-btn" onclick="selectDiagram(${idx}); closeAnalyzeModal();" title="このリポジトリの構成図を開く">
-                📂 表示
+              <button class="table-view-btn" onclick="selectDiagram(${idx}); closeAnalyzeModal();" title="${dict.modal_btn_show_repo || 'このリポジトリの構成図を開く'}">
+                ${dict.modal_btn_show_repo || '📂 表示'}
               </button>
-              <button class="table-view-btn" onclick="quickFillAndAnalyze('${safeUrl}')" title="GitHubから最新状態を再取得・再解析">
-                🔄 再解析
+              <button class="table-view-btn" onclick="quickFillAndAnalyze('${safeUrl}')" title="${dict.modal_btn_reanalyze || 'GitHubから最新状態を再取得・再解析'}">
+                ${dict.modal_btn_reanalyze || '🔄 再解析'}
               </button>
-              <button class="nav-del-btn" style="padding: 4px 10px; font-size: 0.72rem;" onclick="deleteRepoById(event, '${safeId}', '${safeRepo}')" title="保有リストから削除">
-                🗑️ 削除
+              <button class="nav-del-btn" style="padding: 4px 10px; font-size: 0.72rem;" onclick="deleteRepoById(event, '${safeId}', '${safeRepo}')" title="${dict.title_del || '保有リストから削除'}">
+                ${dict.btn_del || '🗑️ 削除'}
               </button>
             </div>
           </div>
@@ -8427,9 +8831,28 @@ def build_portal_html(data, is_shareable=False):
       }).join('');
     }
 
+    function openManageListModal() {
+      openAnalyzeModal();
+      const target = document.getElementById('saved-repos-manage-list');
+      if (target) {
+        setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+      }
+    }
+
     async function deleteRepoById(event, diagId, repoName) {
       if (event) event.stopPropagation();
       if (!diagId) return;
+
+      const lang = (typeof currentLang !== 'undefined' ? currentLang : 'ja');
+      const dict = (typeof I18N !== 'undefined' && I18N[lang]) ? I18N[lang] : {};
+
+      const confirmMsg = lang === 'ja'
+        ? `【リポジトリ削除の確認】\\n\\nリポジトリ「${repoName || diagId}」を保有リストから削除しますか？\\n\\n※ ローカルの構成図・監査データは破棄されます。\\n※ GitHub上のリモートリポジトリには影響しません。\\n※ いつでもGitHub URLから再解析・追加できます。`
+        : `[Confirm Repository Deletion]\\n\\nRemove repository '${repoName || diagId}' from your saved list?\\n\\n* Local diagrams and audit data will be removed.\\n* Your GitHub remote repository will NOT be affected.\\n* You can re-analyze and re-add it anytime.`;
+
+      if (!window.confirm(confirmMsg)) {
+        return;
+      }
 
       const idx = diagrams.findIndex(d => d.id === diagId);
       if (idx !== -1) {
@@ -8442,7 +8865,9 @@ def build_portal_html(data, is_shareable=False):
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: diagId })
         });
-      } catch (e) {}
+      } catch (e) {
+        console.error('Failed to notify backend /api/delete:', e);
+      }
 
       renderNav();
       renderSavedReposManageList();
@@ -8452,13 +8877,32 @@ def build_portal_html(data, is_shareable=False):
           selectDiagram(Math.min(idx, diagrams.length - 1));
         }
       }
+
+      if (typeof showToast === 'function') {
+        const toastMsg = lang === 'ja' 
+          ? `リポジトリ「${repoName || diagId}」を保有リストから削除しました` 
+          : `Removed repository '${repoName || diagId}' from saved list`;
+        showToast(toastMsg, 'info');
+      }
     }
 
     async function deleteCategoryGroup(event, categoryName) {
       if (event) event.stopPropagation();
       if (!categoryName) return;
 
-      const idsToDelete = diagrams.filter(d => (d.category || 'Other Services') === categoryName).map(d => d.id);
+      const lang = (typeof currentLang !== 'undefined' ? currentLang : 'ja');
+      const targetRepos = diagrams.filter(d => (d.category || 'Other Services') === categoryName);
+      if (targetRepos.length === 0) return;
+
+      const confirmMsg = lang === 'ja'
+        ? `【カテゴリ一括削除の確認】\\n\\nカテゴリ「${categoryName}」に含まれる全 ${targetRepos.length} 件のリポジトリを保有リストから一括削除しますか？\\n\\nこの操作は取り消せません。`
+        : `[Confirm Category Deletion]\\n\\nDelete all ${targetRepos.length} repositories in category '${categoryName}'?\\n\\nThis operation cannot be undone.`;
+
+      if (!window.confirm(confirmMsg)) {
+        return;
+      }
+
+      const idsToDelete = targetRepos.map(d => d.id);
       for (let i = diagrams.length - 1; i >= 0; i--) {
         if ((diagrams[i].category || 'Other Services') === categoryName) {
           diagrams.splice(i, 1);
@@ -8471,12 +8915,21 @@ def build_portal_html(data, is_shareable=False):
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ category: categoryName, ids: idsToDelete })
         });
-      } catch (e) {}
+      } catch (e) {
+        console.error('Failed to notify backend /api/delete:', e);
+      }
 
       renderNav();
       renderSavedReposManageList();
       if (diagrams.length > 0) {
         selectDiagram(0);
+      }
+
+      if (typeof showToast === 'function') {
+        const toastMsg = lang === 'ja'
+          ? `カテゴリ「${categoryName}」の全リポジトリ (${idsToDelete.length}件) を削除しました`
+          : `Deleted all ${idsToDelete.length} repositories in category '${categoryName}'`;
+        showToast(toastMsg, 'info');
       }
     }
 
@@ -8652,6 +9105,8 @@ def build_portal_html(data, is_shareable=False):
       } catch (e) {}
     }
     window.addEventListener('DOMContentLoaded', () => {
+      initUiMode();
+      initGuideBar();
       setLanguage(currentLang);
       setTimeout(async () => {
         await syncSavedAnalysesFromServer();
@@ -8669,18 +9124,25 @@ def build_portal_html(data, is_shareable=False):
       const listEl = document.getElementById('health-services-list');
       if (!modal || !listEl) return;
 
+      const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
+      const onlineStatusText = (dict.health_status_online_fmt || '🟢 死活状態: {online} / {total} サービス稼働中 (ALL SYSTEMS OPERATIONAL)')
+        .replace('{online}', healthData.online_count)
+        .replace('{total}', healthData.total);
+      const checkedAtText = (dict.health_status_checked_at || '最終死活確認: <strong>{time}</strong> ｜ 監視間隔: リアルタイム & 定期ポーリング')
+        .replace('{time}', healthData.checked_at);
+
       listEl.innerHTML = `
         <div style="margin-bottom: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;">
           <div>
             <div style="font-size: 0.92rem; font-weight: 800; color: #34d399;">
-              🟢 死活状態: ${healthData.online_count} / ${healthData.total} サービス稼働中 (ALL SYSTEMS OPERATIONAL)
+              ${onlineStatusText}
             </div>
             <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 3px;">
-              最終死活確認: <strong>${healthData.checked_at}</strong> ｜ 監視間隔: リアルタイム & 定期ポーリング
+              ${checkedAtText}
             </div>
           </div>
           <button class="table-view-btn" onclick="refreshHealthCheck(this)" style="background: #10b981; color: #fff;">
-            🔄 今すぐ再確認
+            ${dict.health_refresh_btn || '🔄 今すぐ再確認'}
           </button>
         </div>
 
@@ -8718,16 +9180,20 @@ def build_portal_html(data, is_shareable=False):
     }
 
     function refreshHealthCheck(btnEl) {
+      const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
       if (btnEl) {
-        btnEl.textContent = '⏳ 確認中...';
+        btnEl.textContent = dict.health_checking || '⏳ 確認中...';
         btnEl.disabled = true;
       }
       // Simulate quick live ping re-verification
       setTimeout(() => {
-        healthData.checked_at = new Date().toLocaleString('ja-JP');
+        healthData.checked_at = currentLang === 'en' ? new Date().toUTCString() : new Date().toLocaleString('ja-JP');
         openHealthModal();
         const headerPulse = document.getElementById('health-status-summary-text');
-        if (headerPulse) headerPulse.textContent = `🟢 死活監視: ${healthData.online_count}/${healthData.total} ONLINE`;
+        if (headerPulse) {
+          const prefix = dict.health_summary_prefix || '🟢 死活監視:';
+          headerPulse.textContent = `${prefix} ${healthData.online_count}/${healthData.total} ONLINE`;
+        }
       }, 600);
     }
 
@@ -8773,9 +9239,17 @@ def build_portal_html(data, is_shareable=False):
         }
       });
 
+      const totalRepos = diagrams.length;
+      const actionCount = allActions.length;
+      const summaryText = currentLang === 'en'
+        ? `Across all ${totalRepos} ${totalRepos === 1 ? 'repository' : 'repositories'}, <strong>${actionCount} action-required ${actionCount === 1 ? 'item' : 'items'}</strong> (unpatched CVEs & CodeRabbit critical reviews) detected.`
+        : `現在、全${totalRepos}リポジトリのうち <strong>${actionCount}件</strong> の要対応アクション（未パッチCVE脆弱性・CodeRabbit重大指摘）が検知されています。`;
+
+      const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
+
       listEl.innerHTML = `
         <div style="margin-bottom: 14px; font-size: 0.8rem; color: #cbd5e1;">
-          現在、全29リポジトリのうち <strong>${allActions.length}件</strong> の要対応アクション（未パッチCVE脆弱性・CodeRabbit重大指摘）が検知されています。
+          ${summaryText}
         </div>
         ${allActions.map(act => `
           <div class="action-hotspot-item" style="margin-bottom: 14px;">
@@ -8789,11 +9263,11 @@ def build_portal_html(data, is_shareable=False):
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
               ${act.source ? `
                 <a href="${act.source}" target="_blank" style="color: #38bdf8; font-size: 0.72rem; text-decoration: none;">
-                  🏛️ 公式ソース (NVD/GitHub) ↗
+                  ${dict.modal_action_hub_src || '🏛️ 公式ソース (NVD/GitHub) ↗'}
                 </a>
               ` : '<span></span>'}
               <button class="table-view-btn" onclick="navigateToRepoFromActionHub('${act.target_repo_id}')" style="background: #38bdf8; color: #0b1120;">
-                このリポジトリのCodeRabbitレポートを開く ↗
+                ${dict.modal_action_hub_goto_cr || 'このリポジトリのCodeRabbitレポートを開く ↗'}
               </button>
             </div>
             ${act.fix_cmd ? `
@@ -8884,9 +9358,13 @@ def build_portal_html(data, is_shareable=False):
         quick_sync_btn: "今すぐ更新 ↻",
         acc_search_title: "🔍 検索 &amp; 鮮度フィルター",
         filter_all: "すべて",
-        filter_3d: "🔴 3日",
-        filter_10d: "🟡 4〜10日",
+        filter_3d: "🔥 ≤3日",
+        filter_10d: "🟢 4〜10日",
         filter_old: "⚪ 11日+",
+        filter_action_req: "🔴 要対応",
+        badge_filtering: "絞込中",
+        filter_action_req_short: "要対応",
+        status_stopped: "停止",
         search_placeholder: "🔍 リポジトリや機能名で検索...",
         inspector_title: "🔍 コンポーネント詳細インスペクター",
         tab_overview: "📋 概要",
@@ -8945,6 +9423,92 @@ def build_portal_html(data, is_shareable=False):
         toast_png_exported: "📷 高解像度PNG画像を保存しました",
         toast_sync_complete: "🔄 GitHub最新情報の同期が完了しました",
         toast_lang_switched: "🌐 言語を切り替えました",
+        days_today: "本日更新",
+        days_ago_1: "1日前",
+        days_ago_n: "{n}日前",
+        days_unknown: "不明",
+        label_created: "🐣 作成",
+        label_updated: "更新",
+        label_latest_commit: "📝 最新コミット:",
+        title_open_commit_diff: "GitHubでコミット差分を直接開く",
+        commit_body_label: "【コミット説明・変更の背景】",
+        commit_files_label: "【変更ファイル抜粋 ({n}件)】",
+        diff_add: "追加 A",
+        diff_del: "削除 D",
+        diff_mod: "変更 M",
+        view_full_diff: "GitHubで完全なコミット差分（Diff）を見る ↗",
+        btn_del: "🗑️ 削除",
+        title_del: "このリポジトリを保有リストから削除",
+        badge_action_req: "🔴 要対応 ↗",
+        title_action_req: "クリックして要対応の理由と対応方法を確認",
+        seq_flow_title: "⏱️ 実行シーケンスフロー",
+        wt_self: "🔄 内部処理 (Self)",
+        wt_return: "↩️ 応答・返却 (Return)",
+        wt_call: "➡️ 呼び出し・遷移 (Call)",
+        wt_prev_step: "◀ 前へ",
+        wt_next_step: "次へ ▶",
+        wt_from: "📤 送信元 (From / Caller)",
+        wt_to: "📥 遷移先 (To / Receiver)",
+        wt_note: "補足ノート:",
+        wt_step_detail_title: "このステップの処理内容 (STEP DETAIL)",
+        wt_step_flow_title: "ステップ実行詳細・前後関係",
+        wt_all_steps_title: "シーケンス全ステップ一覧 (クリックで移動)",
+        wt_title: "機能遷移ウォークスルー:",
+        wt_btn_first: "⏮ 最初",
+        wt_btn_prev: "◀ 前へ",
+        wt_btn_next: "次へ ▶",
+        wt_btn_reset: "🔄 全体表示",
+        wt_play: "▶ 自動再生",
+        wt_pause: "⏸ 一時停止",
+        cr_title: "CodeRabbit AI コード品質 & セキュリティ監査レポート",
+        cr_status_action: "🔴 要対応 (Action Required)",
+        cr_status_warn: "🟡 要確認 (Warnings)",
+        cr_status_pass: "🟢 合格 (Passed)",
+        cr_target_repo: "対象リポジトリ:",
+        cr_latest_commit: "最新コミット:",
+        cr_author: "作成者:",
+        cr_score_label: "品質スコア / 100",
+        cr_crit_label: "🚨 重大リスク (Critical)",
+        cr_warn_label: "⚠️ 警告 (Warning)",
+        cr_info_label: "💡 改善提案 (Suggestion)",
+        cr_action_items_title: "要対応アクションアイテム ({n}件) - 即時パッチ・修正が必要",
+        cr_official_source_link: "🏛️ 公式セキュリティアドバイザリ (NVD / GitHub) で詳細を確認 ↗",
+        cr_copy_cmd: "📋 コマンドをコピー",
+        cr_no_critical: "🟢 緊急の要対応事項（CRITICAL）はありません",
+        cr_no_critical_sub: "既知の重大な未パッチ脆弱性（CVE）およびセキュリティアンチパターンは検知されていません。",
+        cr_walkthrough_title: "📋 コミット変更ウォークスルー (High-level Walkthrough)",
+        cr_no_walkthrough: "ウォークスルー情報がありません。",
+        cr_findings_title: "🔬 検出されたコードレビュー指摘 & 修正提案 ({n}件)",
+        cr_no_findings: "指摘事項はありません。",
+        cr_diff_preview_title: "💡 CodeRabbit 推奨コード修正 (Diff Preview):",
+        cr_config_title: "⚙️ CodeRabbit 監視設定 (.coderabbit.yaml)",
+        cr_config_detail: "レビュー言語: 日本語 (ja-JP) ｜ プロファイル: Assertive (高精度監査) ｜ シーケンス図自動生成: 有効",
+        cr_view_repo: "GitHubでこのリポジトリを確認 ↗",
+        ai_prompt_banner: "🤖 AIエージェント修正指示プロンプト (Claude Code / Cursor / Codex / Antigravity 用)",
+        ai_copy_prompt_btn: "📋 AI修正プロンプトをコピー",
+        modal_action_hub_src: "🏛️ 公式ソース (NVD/GitHub) ↗",
+        modal_action_hub_goto_cr: "このリポジトリのCodeRabbitレポートを開く ↗",
+        health_status_online_fmt: "🟢 死活状態: {online} / {total} サービス稼働中 (ALL SYSTEMS OPERATIONAL)",
+        health_status_checked_at: "最終死活確認: <strong>{time}</strong> ｜ 監視間隔: リアルタイム & 定期ポーリング",
+        health_refresh_btn: "🔄 今すぐ再確認",
+        health_checking: "⏳ 確認中...",
+        modal_btn_show_repo: "📂 表示",
+        modal_btn_reanalyze: "🔄 再解析",
+        modal_saved_empty: "該当するリポジトリがありません。上の入力欄から追加してください。",
+        mode_simple: "シンプル",
+        mode_dev: "開発者",
+        toast_mode_simple: "🔰 シンプル表示モードに切り替えました",
+        toast_mode_dev: "🛠️ 開発者表示モードに切り替えました",
+        simple_banner_label: "シンプル表示中: システムの役割と安全性を要約しています",
+        simple_switch_dev_link: "🛠️ 開発者モードで全9タブ・ターミナルを開く ↗",
+        safety_status_safe: "🟢 健全・安全（重大リスクなし）",
+        safety_status_attn: "🟡 注意（改善推奨あり）",
+        safety_status_action: "🚨 要対応（脆弱性対策が必要）",
+        safety_desc_safe: "このシステムは安全に構成されており、即時対応が必要な重大な既知の脆弱性はありません。",
+        safety_desc_action: "セキュリティ対策・ライブラリ更新が推奨される項目が検出されています。",
+        btn_download_exec_report: "📥 経営・管理者向け要約レポートDL (.md)",
+        btn_guide: "ガイド",
+        sync_modal_desc: "リポジトリの最新コミットを確認し、依存ライブラリ・データベースバージョンを解析してアーキテクチャ図を更新しています...",
       },
       en: {
         mode_arch: "Architecture",
@@ -8969,9 +9533,13 @@ def build_portal_html(data, is_shareable=False):
         quick_sync_btn: "Sync Now ↻",
         acc_search_title: "🔍 Search &amp; Freshness",
         filter_all: "All",
-        filter_3d: "🔴 ≤ 3d",
-        filter_10d: "🟡 4-10d",
+        filter_3d: "🔥 ≤ 3d",
+        filter_10d: "🟢 4-10d",
         filter_old: "⚪ 11d+",
+        filter_action_req: "🔴 Action Req",
+        badge_filtering: "Filtered",
+        filter_action_req_short: "Action",
+        status_stopped: "Off",
         search_placeholder: "🔍 Search repository or feature...",
         inspector_title: "🔍 Component Inspector",
         tab_overview: "📋 Overview",
@@ -9030,8 +9598,258 @@ def build_portal_html(data, is_shareable=False):
         toast_png_exported: "📷 High-res PNG image downloaded",
         toast_sync_complete: "🔄 GitHub repository sync completed",
         toast_lang_switched: "🌐 Switched language",
+        days_today: "Today",
+        days_ago_1: "1d ago",
+        days_ago_n: "{n}d ago",
+        days_unknown: "Unknown",
+        label_created: "🐣 Created",
+        label_updated: "Updated",
+        label_latest_commit: "📝 Latest Commit:",
+        title_open_commit_diff: "Open commit diff on GitHub",
+        commit_body_label: "[Commit Message & Context]",
+        commit_files_label: "[Changed Files Excerpt ({n} files)]",
+        diff_add: "Add A",
+        diff_del: "Del D",
+        diff_mod: "Mod M",
+        view_full_diff: "View complete commit diff on GitHub ↗",
+        btn_del: "🗑️ Delete",
+        title_del: "Delete this repository from retained list",
+        badge_action_req: "🔴 Action Req ↗",
+        title_action_req: "Click to review reason and remediation plan",
+        seq_flow_title: "⏱️ Sequence Flows",
+        wt_self: "🔄 Internal (Self)",
+        wt_return: "↩️ Return Response",
+        wt_call: "➡️ Call / Transition",
+        wt_prev_step: "◀ Prev",
+        wt_next_step: "Next ▶",
+        wt_from: "📤 Caller (From)",
+        wt_to: "📥 Receiver (To)",
+        wt_note: "Note:",
+        wt_step_detail_title: "Step Execution Details (STEP DETAIL)",
+        wt_step_flow_title: "Step Sequence Context",
+        wt_all_steps_title: "All Sequence Steps (Click to Jump)",
+        wt_title: "Walkthrough Controls:",
+        wt_btn_first: "⏮ First",
+        wt_btn_prev: "◀ Prev",
+        wt_btn_next: "Next ▶",
+        wt_btn_reset: "🔄 Reset View",
+        wt_play: "▶ Auto Play",
+        wt_pause: "⏸ Pause",
+        cr_title: "CodeRabbit AI Code Quality & Security Audit Report",
+        cr_status_action: "🔴 Action Required",
+        cr_status_warn: "🟡 Warnings",
+        cr_status_pass: "🟢 Passed",
+        cr_target_repo: "Target Repository:",
+        cr_latest_commit: "Latest Commit:",
+        cr_author: "Author:",
+        cr_score_label: "Quality Score / 100",
+        cr_crit_label: "🚨 Critical Risk",
+        cr_warn_label: "⚠️ Warning",
+        cr_info_label: "💡 Suggestion",
+        cr_action_items_title: "Action Required Items ({n} items) - Immediate Patch Recommended",
+        cr_official_source_link: "🏛️ Review Details on Official Security Advisory (NVD / GitHub) ↗",
+        cr_copy_cmd: "📋 Copy Command",
+        cr_no_critical: "🟢 No Critical Security Issues Detected",
+        cr_no_critical_sub: "No unpatched critical vulnerabilities (CVEs) or security anti-patterns detected.",
+        cr_walkthrough_title: "📋 Commit Walkthrough (High-level Walkthrough)",
+        cr_no_walkthrough: "No walkthrough information available.",
+        cr_findings_title: "🔬 Review Findings & Remediation Diff ({n} items)",
+        cr_no_findings: "No review findings reported.",
+        cr_diff_preview_title: "💡 CodeRabbit Recommended Code Fix (Diff Preview):",
+        cr_config_title: "⚙️ CodeRabbit Configuration (.coderabbit.yaml)",
+        cr_config_detail: "Review Language: English (en-US) ｜ Profile: Assertive (High Precision) ｜ Auto-generate Diagrams: Enabled",
+        cr_view_repo: "View Repository on GitHub ↗",
+        ai_prompt_banner: "🤖 AI Agent Remediation Prompt (for Claude Code / Cursor / Codex / Antigravity)",
+        ai_copy_prompt_btn: "📋 Copy AI Fix Prompt",
+        modal_action_hub_src: "🏛️ Official Source (NVD/GitHub) ↗",
+        modal_action_hub_goto_cr: "Open CodeRabbit Audit Report for this Repo ↗",
+        health_status_online_fmt: "🟢 Liveness: {online} / {total} Services Operational (ALL SYSTEMS OPERATIONAL)",
+        health_status_checked_at: "Last Checked: <strong>{time}</strong> ｜ Interval: Live & Periodic Polling",
+        health_refresh_btn: "🔄 Refresh Status Now",
+        health_checking: "⏳ Checking...",
+        modal_btn_show_repo: "📂 Open",
+        modal_btn_reanalyze: "🔄 Re-analyze",
+        modal_saved_empty: "No matching repositories found. Enter a GitHub URL above to analyze.",
+        mode_simple: "Simple",
+        mode_dev: "Developer",
+        toast_mode_simple: "🔰 Switched to Simple View Mode",
+        toast_mode_dev: "🛠️ Switched to Developer View Mode",
+        simple_banner_label: "Simple View: Highlighting system roles and safety summaries",
+        simple_switch_dev_link: "🛠️ Open all 9 tabs & terminal in Developer Mode ↗",
+        safety_status_safe: "🟢 Safe & Healthy (No Critical Risks)",
+        safety_status_attn: "🟡 Attention (Recommended Improvements)",
+        safety_status_action: "🚨 Action Required (Security/Patch Needed)",
+        safety_desc_safe: "This system is properly configured with no critical known vulnerabilities.",
+        safety_desc_action: "Security or library update actions are recommended for this repository.",
+        btn_download_exec_report: "📥 Download Executive Summary Report (.md)",
+        btn_guide: "Guide",
+        sync_modal_desc: "Checking latest commits across repositories, analyzing dependencies and database schemas to update architecture diagrams...",
       }
     };
+
+    /* ==========================================================================
+       UI Mode Management (Simple Mode vs Developer Mode)
+       ========================================================================== */
+    let currentUiMode = 'simple'; // Default to Simple Mode for clean intuitive onboarding
+
+    function initUiMode() {
+      try {
+        const saved = localStorage.getItem('repochex_ui_mode');
+        if (saved === 'dev' || saved === 'simple') {
+          currentUiMode = saved;
+        }
+      } catch (_) {}
+      applyUiMode(currentUiMode, false);
+    }
+
+    function setUiMode(mode) {
+      if (mode !== 'simple' && mode !== 'dev') return;
+      currentUiMode = mode;
+      try {
+        localStorage.setItem('repochex_ui_mode', mode);
+      } catch (_) {}
+      applyUiMode(mode, true);
+    }
+
+    function applyUiMode(mode, showNotification = false) {
+      const isSimple = mode === 'simple';
+      document.body.classList.toggle('ui-mode-simple', isSimple);
+
+      const btnSimple = document.getElementById('btn-ui-simple');
+      const btnDev = document.getElementById('btn-ui-dev');
+      if (btnSimple) btnSimple.classList.toggle('active', isSimple);
+      if (btnDev) btnDev.classList.toggle('active', !isSimple);
+
+      // If currently active inspector tab is one of the hidden technical tabs, switch to overview
+      if (isSimple && typeof currentInspTab !== 'undefined' && currentInspTab !== 'overview' && currentInspTab !== 'versions') {
+        switchInspTab('overview');
+      } else if (typeof renderInspector === 'function') {
+        renderInspector();
+      }
+
+      if (showNotification && typeof showToast === 'function') {
+        const dict = I18N[currentLang] || I18N.ja;
+        const msg = isSimple ? (dict.toast_mode_simple || '🔰 シンプル表示に切り替えました') : (dict.toast_mode_dev || '🛠️ 開発者表示に切り替えました');
+        showToast(msg, 'info');
+      }
+    }
+
+    function downloadExecutiveSummaryReport(repoDataStr) {
+      let repoItem = null;
+      try {
+        repoItem = JSON.parse(decodeURIComponent(repoDataStr));
+      } catch (_) {
+        repoItem = (typeof selectedNodeData !== 'undefined' && selectedNodeData?.repoItem) ? selectedNodeData.repoItem : selectedDiagram;
+      }
+      if (!repoItem) return;
+
+      const isEn = (typeof currentLang !== 'undefined' && currentLang === 'en');
+      const nowStr = new Date().toLocaleString(isEn ? 'en-US' : 'ja-JP');
+      const repoName = repoItem.repo || 'Repository';
+      const fileName = `RepoCHK_Executive_Report_${repoName.replace(/[^a-zA-Z0-9_\\-]/g, '_')}.md`;
+      const repoActions = (typeof getRepoActionItems === 'function') ? getRepoActionItems(repoItem) : [];
+
+      let md = `# 🛡️ RepoCHK Mac — ${isEn ? 'Executive Architecture & Security Summary' : 'エグゼクティブ・システム概要＆安全性サマリーレポート'}\\n\\n`;
+      md += `- **${isEn ? 'Target Repository' : '対象リポジトリ'}**: \\`${repoName}\\` (${repoItem.category || 'Module'})\\n`;
+      md += `- **GitHub URL**: ${repoItem.github_url || 'N/A'}\\n`;
+      md += `- **${isEn ? 'Generated At' : 'レポート出力日時'}**: ${nowStr}\\n`;
+      md += `- **${isEn ? 'Audit Engine' : '監査エンジン'}**: RepoCHK Mac Architecture & Security Studio\\n\\n`;
+      md += `---\\n\\n`;
+
+      md += `## 1. ${isEn ? 'System Responsibility & Business Role' : 'システムの役割・提供機能 (役割と責務)'}\\n\\n`;
+      if (typeof selectedNodeData !== 'undefined' && selectedNodeData) {
+        md += `${selectedNodeData.name} (${selectedNodeData.category || repoItem.category})\\n\\n`;
+        if (selectedNodeData.path) {
+          md += `- **Code Path**: \\`${selectedNodeData.path}\\`\\n`;
+        }
+      }
+      md += `\\n---\\n\\n`;
+
+      md += `## 2. ${isEn ? 'Security & Health Assessment' : '安全性・健全性評価'}\\n\\n`;
+      if (repoActions.length === 0) {
+        md += `✅ **${isEn ? 'Safe & Stable' : '健全・正常稼働'}**: ${isEn ? 'No critical vulnerabilities or action-required items detected.' : '現在、即時対応が必要な重大リスクやCVE脆弱性は検出されていません。'}\\n\\n`;
+      } else {
+        md += `⚠️ **${isEn ? 'Action Items Detected' : '要対応・改善推奨事項あり'}**: ${repoActions.length} ${isEn ? 'items detected.' : '件の改善推奨事項が検出されています。'}\\n\\n`;
+        repoActions.forEach((act, idx) => {
+          md += `### ${idx + 1}. 🔴 ${act.title}\\n`;
+          md += `- **${isEn ? 'File' : '対象箇所'}**: \\`${act.file || 'N/A'}\\`\\n`;
+          md += `- **${isEn ? 'Reason' : '要対応の理由'}**: ${act.desc || 'N/A'}\\n`;
+          if (act.fix_cmd) {
+            md += `- **${isEn ? 'Suggested Fix' : '推奨対策コマンド'}**: \\`${act.fix_cmd}\\`\\n`;
+          }
+          md += `\\n`;
+        });
+      }
+      md += `---\\n*Generated by RepoCHK Mac — Intuitive Repository & Security Intelligence*\\n`;
+
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      if (typeof showToast === 'function') {
+        showToast(isEn ? '📥 Executive report downloaded' : '📥 要約レポートをダウンロードしました', 'success');
+      }
+    }
+
+    /* ==========================================================================
+       Beginner Guide Bar State Management (Persistent via localStorage)
+       ========================================================================== */
+    function isGuideDismissed() {
+      try {
+        return localStorage.getItem('repochex_guide_dismissed') === 'true';
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function dismissGuideBar() {
+      const bar = document.getElementById('beginner-guide-bar');
+      if (bar) bar.style.display = 'none';
+      try {
+        localStorage.setItem('repochex_guide_dismissed', 'true');
+      } catch (_) {}
+      updateGuideButtonState(false);
+    }
+
+    function toggleGuideBar() {
+      const bar = document.getElementById('beginner-guide-bar');
+      if (!bar) return;
+      const isHidden = window.getComputedStyle(bar).display === 'none';
+      if (isHidden) {
+        bar.style.display = 'flex';
+        try {
+          localStorage.setItem('repochex_guide_dismissed', 'false');
+        } catch (_) {}
+        updateGuideButtonState(true);
+      } else {
+        dismissGuideBar();
+      }
+    }
+
+    function updateGuideButtonState(isOpen) {
+      const btn = document.getElementById('btn-toggle-guide');
+      if (btn) {
+        btn.classList.toggle('active', isOpen);
+      }
+    }
+
+    function initGuideBar() {
+      const bar = document.getElementById('beginner-guide-bar');
+      if (!bar) return;
+      if (isGuideDismissed()) {
+        bar.style.display = 'none';
+        updateGuideButtonState(false);
+      } else {
+        bar.style.display = 'flex';
+        updateGuideButtonState(true);
+      }
+    }
 
     function toggleLanguage() {
       const nextLang = currentLang === 'ja' ? 'en' : 'ja';
@@ -9107,6 +9925,36 @@ def build_portal_html(data, is_shareable=False):
         renderInspector();
       }
       updateHeaderBreadcrumbs();
+
+      // Re-render navigation sidebar items (freshness text, badges)
+      const searchBox = document.getElementById('search-box');
+      if (typeof renderNav === 'function') {
+        renderNav(searchBox ? searchBox.value : '');
+      }
+      // Re-render walkthrough bar
+      if (typeof renderWalkthroughBar === 'function') {
+        renderWalkthroughBar();
+      }
+      // Re-render CodeRabbit view if active
+      if (typeof currentViewMode !== 'undefined' && currentViewMode === 'coderabbit' && typeof renderCodeRabbitView === 'function') {
+        renderCodeRabbitView();
+      }
+      // Re-render modals if open
+      const actionModal = document.getElementById('action-hub-modal');
+      if (actionModal && actionModal.style.display !== 'none' && typeof openActionRequiredHubModal === 'function') {
+        openActionRequiredHubModal();
+      }
+      const healthModal = document.getElementById('health-modal');
+      if (healthModal && healthModal.style.display !== 'none' && typeof openHealthModal === 'function') {
+        openHealthModal();
+      }
+      const analyzeModal = document.getElementById('analyze-repo-modal');
+      if (analyzeModal && analyzeModal.style.display !== 'none' && typeof renderSavedReposManageList === 'function') {
+        renderSavedReposManageList();
+      }
+      if (typeof updateAccordionActiveIndicators === 'function') {
+        updateAccordionActiveIndicators();
+      }
     }
 
     function toggleInspectorCard(cardId) {
@@ -9375,34 +10223,33 @@ def build_portal_html(data, is_shareable=False):
         try { repoName = decodeURIComponent(repoName); } catch (_) {}
       }
 
-      const nowStr = new Date().toLocaleString('ja-JP');
+      const isEn = (typeof currentLang !== 'undefined' && currentLang === 'en');
+      const nowStr = isEn ? new Date().toUTCString() : new Date().toLocaleString('ja-JP');
       const safeTitle = (act.title || 'issue').replace(/[^\\w\\d\\-\\u3000-\\u303f\\u3040-\\u309f\\u30a0-\\u30ff\\uff00-\\uff9f\\u4e00-\\u9faf]/g, '_').substring(0, 50);
-      const fileName = `RepoCHK_Mac_改善レポート_${safeTitle}.md`;
+      const fileName = isEn
+        ? `RepoCHK_Mac_Remediation_Report_${safeTitle}.md`
+        : `RepoCHK_Mac_改善レポート_${safeTitle}.md`;
 
-      let md = `# 🛡️ RepoCHK Mac 改善・セキュリティ監査レポート\\n\\n`;
-      md += `- **リポジトリ名**: ${repoName || '全体エコシステム'}\\n`;
-      md += `- **改善項目**: ${act.title || '要対応事項'}\\n`;
-      md += `- **対象ファイル / 箇所**: \\`${act.file || 'N/A'}\\`\\n`;
-      md += `- **重要度**: ${act.severity || 'CRITICAL (要対応)'}\\n`;
-      md += `- **出力日時**: ${nowStr}\\n`;
-      md += `- **監査エンジン**: RepoCHK Mac Architecture & Vulnerability AI Studio\\n\\n`;
-      md += `---\\n\\n`;
+      let md = isEn
+        ? `# 🛡️ RepoCHK Mac Security & Remediation Report\\n\\n`
+        : `# 🛡️ RepoCHK Mac 改善・セキュリティ監査レポート\\n\\n`;
 
-      md += `## ⚠️ 要対応の理由 (なぜ必要か / リスク分析)\\n\\n`;
-      md += `${act.desc || '詳細なリスク情報はありません。'}\\n\\n`;
-      md += `---\\n\\n`;
+      md += isEn
+        ? `- **Repository**: ${repoName || 'All Ecosystem'}\\n- **Action Item**: ${act.title || 'Action Required'}\\n- **Target File / Path**: \\`${act.file || 'N/A'}\\`\\n- **Severity**: ${act.severity || 'CRITICAL'}\\n- **Generated At**: ${nowStr}\\n- **Audit Engine**: RepoCHK Mac Architecture & Vulnerability AI Studio\\n\\n---\\n\\n## ⚠️ Reason for Action (Risk Analysis)\\n\\n${act.desc || 'No detailed risk description available.'}\\n\\n---\\n\\n## 🛠️ Proposed Solution & Remediation\\n\\n`
+        : `- **リポジトリ名**: ${repoName || '全体エコシステム'}\\n- **改善項目**: ${act.title || '要対応事項'}\\n- **対象ファイル / 箇所**: \\`${act.file || 'N/A'}\\`\\n- **重要度**: ${act.severity || 'CRITICAL (要対応)'}\\n- **出力日時**: ${nowStr}\\n- **監査エンジン**: RepoCHK Mac Architecture & Vulnerability AI Studio\\n\\n---\\n\\n## ⚠️ 要対応の理由 (なぜ必要か / リスク分析)\\n\\n${act.desc || '詳細なリスク情報はありません。'}\\n\\n---\\n\\n## 🛠️ 対応方法の提案 (具体的な対策)\\n\\n`;
 
-      md += `## 🛠️ 対応方法の提案 (具体的な対策)\\n\\n`;
       if (act.diff) {
-        md += `### 推奨コード変更 (Diff):\\n\\`\\`\\`diff\\n${act.diff}\\n\\`\\`\\`\\n\\n`;
+        md += isEn ? `### Recommended Code Diff:\\n\\`\\`\\`diff\\n${act.diff}\\n\\`\\`\\`\\n\\n` : `### 推奨コード変更 (Diff):\\n\\`\\`\\`diff\\n${act.diff}\\n\\`\\`\\`\\n\\n`;
       }
       if (act.fix_cmd) {
-        md += `### 修正実行コマンド:\\n\\`\\`\\`bash\\n${act.fix_cmd}\\n\\`\\`\\`\\n\\n`;
+        md += isEn ? `### Execution Command:\\n\\`\\`\\`bash\\n${act.fix_cmd}\\n\\`\\`\\`\\n\\n` : `### 修正実行コマンド:\\n\\`\\`\\`bash\\n${act.fix_cmd}\\n\\`\\`\\`\\n\\n`;
       }
       md += `---\\n\\n`;
 
-      const aiPrompt = buildAiAgentFixPrompt(repoName || 'リポジトリ', act);
-      md += `## 🤖 AIエージェント修正指示プロンプト (Claude Code / Cursor / Codex / Antigravity 用)\\n\\n`;
+      const aiPrompt = buildAiAgentFixPrompt(repoName || 'Repository', act);
+      md += isEn
+        ? `## 🤖 AI Agent Remediation Prompt (for Claude Code / Cursor / Codex / Antigravity)\\n\\n`
+        : `## 🤖 AIエージェント修正指示プロンプト (Claude Code / Cursor / Codex / Antigravity 用)\\n\\n`;
       md += `\\`\\`\\`text\\n${aiPrompt}\\n\\`\\`\\`\\n\\n`;
       md += `---\\n*Generated by RepoCHK Mac — Architecture & Vulnerability AI Studio*\\n`;
 
@@ -9513,11 +10360,12 @@ def build_portal_html(data, is_shareable=False):
       if (btnPrev) btnPrev.disabled = (total === 0 || currentWalkthroughIndex <= 0);
       if (btnNext) btnNext.disabled = (total === 0 || currentWalkthroughIndex >= total - 1);
       if (btnPlay) {
+        const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
         if (walkthroughTimer) {
-          btnPlay.textContent = '⏸ 一時停止';
+          btnPlay.textContent = dict.wt_pause || '⏸ 一時停止';
           btnPlay.classList.add('playing');
         } else {
-          btnPlay.textContent = '▶ 自動再生';
+          btnPlay.textContent = dict.wt_play || '▶ 自動再生';
           btnPlay.classList.remove('playing');
         }
       }
@@ -9595,7 +10443,8 @@ def build_portal_html(data, is_shareable=False):
       }
       const btnPlay = document.getElementById('wt-btn-play');
       if (btnPlay) {
-        btnPlay.textContent = '▶ 自動再生';
+        const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
+        btnPlay.textContent = dict.wt_play || '▶ 自動再生';
         btnPlay.classList.remove('playing');
       }
     }
@@ -10125,7 +10974,7 @@ def build_portal_html(data, is_shareable=False):
             <span style="font-size: 0.72rem; color: #93c5fd;">新しい組織URL・リポジトリURLの追加解析と、保有データの確認・不要リポジトリの削除が行えます</span>
           </div>
         </div>
-        <button class="modal-close-btn" onclick="closeAnalyzeModal()">✕ 閉じる</button>
+        <button class="modal-close-btn" onclick="closeAnalyzeModal()" data-i18n="btn_close">✕ 閉じる</button>
       </div>
       <div class="action-hub-body" style="padding: 20px; overflow-y: auto; max-height: 78vh;">
         <div style="margin-bottom: 14px;">
@@ -10212,7 +11061,7 @@ def build_portal_html(data, is_shareable=False):
             <span style="font-size: 0.72rem; color: #6ee7b7;">OpenAI / Claude / Gemini / Groq のAPIキー管理と、OSV脆弱性MCP・OWASP SASTスキルの監査設定</span>
           </div>
         </div>
-        <button class="modal-close-btn" onclick="closeAdminSettingsModal()">✕ 閉じる</button>
+        <button class="modal-close-btn" onclick="closeAdminSettingsModal()" data-i18n="btn_close">✕ 閉じる</button>
       </div>
 
       <div class="action-hub-body" style="padding: 20px; overflow-y: auto; max-height: 80vh;">
