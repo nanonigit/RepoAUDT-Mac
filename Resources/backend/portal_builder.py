@@ -4996,9 +4996,19 @@ def build_portal_html(data, is_shareable=False):
             style="flex: 1; min-width: 0; background: #090d16; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; color: #f8fafc; font-size: 0.73rem; outline: none;"
             onkeydown="if(event.key==='Enter') triggerSidebarAnalyze()" />
           <button onclick="triggerSidebarAnalyze()" id="sidebar-gh-analyze-btn"
-            style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: 1px solid #60a5fa; color: #fff; font-size: 0.72rem; font-weight: 800; padding: 6px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap;">
+            style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: 1px solid #60a5fa; color: #fff; font-size: 0.72rem; font-weight: 800; padding: 6px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; min-width: 68px; text-align: center;">
             ➕ 分析
           </button>
+        </div>
+        <!-- Live Countdown & Progress Bar for Sidebar Analysis -->
+        <div id="sidebar-analyze-progress-box" style="display: none; margin-top: 7px; padding: 6px 8px; background: rgba(9, 13, 22, 0.95); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.4);">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.67rem;">
+            <span id="sidebar-analyze-step-text" style="color: #38bdf8; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;">⏳ 構造解析中...</span>
+            <span id="sidebar-analyze-countdown-text" style="color: #fde047; font-weight: 900; font-family: 'JetBrains Mono', monospace;">あと約18秒</span>
+          </div>
+          <div style="height: 3px; background: #1e293b; border-radius: 2px; overflow: hidden; margin-top: 5px;">
+            <div id="sidebar-analyze-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.8s ease;"></div>
+          </div>
         </div>
       </div>
       
@@ -9012,14 +9022,68 @@ def build_portal_html(data, is_shareable=False):
       const progTitle = document.getElementById('analyze-progress-title');
       const submitBtn = document.getElementById('modal-gh-submit-btn');
       const sideBtn = document.getElementById('sidebar-gh-analyze-btn');
+      const sideProgBox = document.getElementById('sidebar-analyze-progress-box');
+      const sideStepText = document.getElementById('sidebar-analyze-step-text');
+      const sideCountText = document.getElementById('sidebar-analyze-countdown-text');
+      const sideProgBar = document.getElementById('sidebar-analyze-progress-bar');
+      const modalCountText = document.getElementById('modal-analyze-countdown-text');
+      const modalProgBar = document.getElementById('modal-analyze-progress-bar');
+
+      const isJa = currentLang === 'ja';
 
       if (prog) prog.style.display = 'block';
+      if (sideProgBox) sideProgBox.style.display = 'block';
       if (progTitle) {
         progTitle.style.color = '#38bdf8';
-        progTitle.textContent = `⏳ "${repoUrl}" を自動解析し、保有リストへ追加中...`;
+        progTitle.textContent = isJa ? `⏳ "${repoUrl}" を自動解析中...` : `⏳ Analyzing "${repoUrl}"...`;
       }
-      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ 解析中...'; }
-      if (sideBtn) { sideBtn.disabled = true; sideBtn.textContent = '⏳...'; }
+      if (submitBtn) submitBtn.disabled = true;
+      if (sideBtn) sideBtn.disabled = true;
+
+      // Estimated countdown timer (18 seconds default)
+      const ESTIMATED_TOTAL_SECS = 18;
+      let elapsedSecs = 0;
+
+      const updateCountdownUI = () => {
+        const remainSecs = Math.max(0, ESTIMATED_TOTAL_SECS - elapsedSecs);
+        const timeStr = remainSecs > 0 ? (isJa ? `約${remainSecs}秒` : `~${remainSecs}s`) : (isJa ? `仕上げ中 (${elapsedSecs}s)` : `Finalizing (${elapsedSecs}s)`);
+
+        // Update Sidebar Button
+        if (sideBtn) {
+          sideBtn.textContent = remainSecs > 0 ? `⏳ ${remainSecs}s` : `⏳ 仕上げ中`;
+        }
+        // Update Modal Submit Button
+        if (submitBtn) {
+          submitBtn.textContent = remainSecs > 0
+            ? (isJa ? `⏳ 解析中... 残り約${remainSecs}秒` : `⏳ Analyzing... ~${remainSecs}s left`)
+            : (isJa ? `⏳ 仕上げ処理中 (${elapsedSecs}s)...` : `⏳ Finalizing (${elapsedSecs}s)...`);
+        }
+        // Update Countdown Badges
+        if (sideCountText) sideCountText.textContent = timeStr;
+        if (modalCountText) modalCountText.textContent = timeStr;
+
+        // Step text based on phase
+        let stepMsg = isJa ? '⏳ GitHub構造取得中...' : '⏳ Fetching repo structure...';
+        if (remainSecs <= 14 && remainSecs > 8) {
+          stepMsg = isJa ? '🔍 依存関係・AST解析中...' : '🔍 Parsing AST & schemas...';
+        } else if (remainSecs <= 8 && remainSecs > 2) {
+          stepMsg = isJa ? '📐 構成図・シーケンス生成中...' : '📐 Generating diagrams...';
+        } else if (remainSecs <= 2) {
+          stepMsg = isJa ? '✨ 描画準備・保存中...' : '✨ Preparing rendering...';
+        }
+        if (sideStepText) sideStepText.textContent = stepMsg;
+
+        // Progress Bars (advancing from 8% to 92%)
+        const pct = Math.min(94, Math.max(8, Math.round((elapsedSecs / ESTIMATED_TOTAL_SECS) * 90)));
+        if (sideProgBar) sideProgBar.style.width = pct + '%';
+        if (modalProgBar) modalProgBar.style.width = pct + '%';
+      };
+
+      updateCountdownUI();
+      const analyzeTimer = setInterval(() => {
+        elapsedSecs++;
+        updateCountdownUI();
+      }, 1000);
 
       try {
         const resp = await fetch('/api/analyze', {
@@ -9031,6 +9095,12 @@ def build_portal_html(data, is_shareable=False):
         if (!resp.ok || data.error) {
           throw new Error(data.error || '解析サーバーエラーが発生しました');
         }
+
+        // Fill progress bar to 100% on success
+        if (sideProgBar) sideProgBar.style.width = '100%';
+        if (modalProgBar) modalProgBar.style.width = '100%';
+        if (sideCountText) sideCountText.textContent = isJa ? '✓ 完了' : '✓ Done';
+        if (modalCountText) modalCountText.textContent = isJa ? '✓ 完了' : '✓ Done';
 
         if (data.techSpecs) Object.assign(techSpecs, data.techSpecs);
         if (data.tableSchemas) Object.assign(tableSchemas, data.tableSchemas);
@@ -9059,7 +9129,7 @@ def build_portal_html(data, is_shareable=False):
         const sideInput = document.getElementById('sidebar-gh-url-input');
         if (sideInput) sideInput.value = '';
 
-        const msg = currentLang === 'ja' ? '✅ リポジトリの分析が完了しました！' : '✅ Repository analyzed successfully!';
+        const msg = isJa ? '✅ リポジトリの分析が完了しました！' : '✅ Repository analyzed successfully!';
         showToast(msg, 'success');
       } catch (err) {
         if (progTitle) {
@@ -9069,6 +9139,12 @@ def build_portal_html(data, is_shareable=False):
           alert(`解析エラー: ${err.message}`);
         }
       } finally {
+        clearInterval(analyzeTimer);
+        setTimeout(() => {
+          if (sideProgBox) sideProgBox.style.display = 'none';
+          if (sideProgBar) sideProgBar.style.width = '0%';
+          if (modalProgBar) modalProgBar.style.width = '0%';
+        }, 1200);
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🚀 追加して分析'; }
         if (sideBtn) { sideBtn.disabled = false; sideBtn.textContent = '➕ 分析'; }
       }
@@ -11023,9 +11099,17 @@ def build_portal_html(data, is_shareable=False):
           <div id="org-repos-browser-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
-        <div id="analyze-progress-box" style="display: none; background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 14px;">
-          <div id="analyze-progress-title" style="font-size: 0.84rem; font-weight: 800; color: #38bdf8; margin-bottom: 6px;">
-            ⏳ リポジトリをクローン＆静的解析中...
+        <div id="analyze-progress-box" style="display: none; background: #090d16; border: 1.5px solid #38bdf8; border-radius: 8px; padding: 14px; margin-bottom: 14px; box-shadow: 0 4px 16px rgba(56, 189, 248, 0.15);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+            <div id="analyze-progress-title" style="font-size: 0.85rem; font-weight: 800; color: #38bdf8;">
+              ⏳ リポジトリをクローン＆静的解析中...
+            </div>
+            <div id="modal-analyze-countdown-text" style="font-size: 0.84rem; font-weight: 900; color: #fde047; font-family: 'JetBrains Mono', monospace; background: rgba(253, 224, 71, 0.12); border: 1px solid rgba(253, 224, 71, 0.3); padding: 2px 8px; border-radius: 9999px;">
+              約18秒
+            </div>
+          </div>
+          <div style="height: 5px; background: #1e293b; border-radius: 3px; overflow: hidden; margin: 8px 0;">
+            <div id="modal-analyze-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.8s ease;"></div>
           </div>
           <div id="analyze-progress-detail" style="font-size: 0.74rem; color: #94a3b8; line-height: 1.5;">
             解析結果は保有リストに自動保存され、次回起動時もそのまま保持されます。
