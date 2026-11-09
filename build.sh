@@ -13,9 +13,11 @@ fi
 
 mkdir -p "$DIR/build"
 
-# Clean up legacy app bundles from repository root
+# Clean up app bundles from repository root and legacy apps from /Applications
+rm -rf "$DIR/$APP_NAME.app"
 for legacy in "RepoPulse" "RepoChecker" "RepoChex"; do
     rm -rf "$DIR/$legacy.app"
+    rm -rf "/Applications/$legacy.app" 2>/dev/null || true
 done
 
 STAGE="$(mktemp -d "$DIR/build/stage.XXXXXX")"
@@ -42,9 +44,6 @@ echo "[3/4] Code-signing and verifying app bundle..."
 codesign --force --deep --sign - "$APP"
 codesign --verify --strict "$APP"
 
-rm -rf "$BUNDLE_DIR"
-ditto "$APP" "$BUNDLE_DIR"
-
 if [[ "$MODE" == "--install" ]]; then
     echo "[4/4] Installing to /Applications/$APP_NAME.app..."
     # Terminate running instances of current and legacy apps
@@ -59,9 +58,15 @@ if [[ "$MODE" == "--install" ]]; then
         sleep 0.1
     done
     rm -rf "/Applications/$APP_NAME.app"
-    ditto "$BUNDLE_DIR" "/Applications/$APP_NAME.app"
+    ditto "$APP" "/Applications/$APP_NAME.app"
     touch "/Applications/$APP_NAME.app"
+    # Ensure repository root is cleaned so Spotlight and Raycast ONLY show /Applications/RepoCHK Mac.app
+    rm -rf "$DIR/$APP_NAME.app"
     echo "✅ Cleaned up old apps and installed: /Applications/$APP_NAME.app"
+    echo "✨ (Repository root cleaned so only /Applications/$APP_NAME.app appears in Spotlight/Raycast)"
 else
+    rm -rf "$BUNDLE_DIR"
+    ditto "$APP" "$BUNDLE_DIR"
     echo "✅ Built: $BUNDLE_DIR"
 fi
+
