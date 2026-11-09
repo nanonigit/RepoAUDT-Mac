@@ -4979,439 +4979,484 @@ def build_portal_html(data, is_shareable=False):
 
 
     /* ==========================================================================
-       Native macOS Full-Width Dedicated Studio Toolbar
-       Spanning 100vw directly under macOS titlebar
+       Linear x Apple HIG Native Studio Toolbar
+       Unified, high-density, zero-overlap, timeless dark desktop design
        ========================================================================== */
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Text', 'Helvetica Neue', sans-serif !important;
+      background: #090d16 !important;
+      color: #f1f5f9 !important;
       display: flex !important;
       flex-direction: column !important;
       height: 100vh !important;
       overflow: hidden !important;
       -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.01em;
     }
 
     #app-top-toolbar {
-      height: 48px;
-      min-height: 48px;
-      max-height: 48px;
-      width: 100vw;
-      box-sizing: border-box;
-      background: linear-gradient(180deg, #161b26 0%, #0c1017 100%);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 12px;
-      gap: 8px;
-      z-index: 100;
-      flex-shrink: 0;
-      user-select: none;
-      overflow-x: auto;
-      scrollbar-width: none;
+      height: 44px !important;
+      min-height: 44px !important;
+      max-height: 44px !important;
+      width: 100vw !important;
+      box-sizing: border-box !important;
+      background: #0c1017 !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 0 10px !important;
+      gap: 8px !important;
+      z-index: 100 !important;
+      flex-shrink: 0 !important;
+      user-select: none !important;
+      overflow-x: auto !important;
+      scrollbar-width: none !important;
     }
     #app-top-toolbar::-webkit-scrollbar {
-      display: none;
+      display: none !important;
     }
 
     .tb-left-zone, .tb-right-zone {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-shrink: 0;
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      flex-shrink: 0 !important;
     }
 
     .tb-center-zone {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-      min-width: 0;
-      padding: 0 10px;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex: 1 1 auto !important;
+      min-width: 140px !important;
+      max-width: 320px !important;
+      overflow: hidden !important;
+      padding: 0 4px !important;
     }
 
     .tb-separator {
-      width: 1px;
-      height: 20px;
-      background: rgba(255, 255, 255, 0.09);
-      margin: 0 3px;
-      flex-shrink: 0;
+      width: 1px !important;
+      height: 18px !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      margin: 0 2px !important;
+      flex-shrink: 0 !important;
     }
 
-    .tb-pane-btn {
-      background: rgba(30, 41, 59, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 6px;
-      padding: 5px 9px;
-      color: #94a3b8;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 0.76rem;
-      transition: all 0.15s ease;
+    /* Common Button Base */
+    .tb-btn {
+      height: 28px !important;
+      box-sizing: border-box !important;
+      border-radius: 6px !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      background: rgba(255, 255, 255, 0.03) !important;
+      color: #94a3b8 !important;
+      font-size: 0.73rem !important;
+      font-weight: 500 !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 5px !important;
+      padding: 0 9px !important;
+      transition: all 0.15s ease !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
     }
-    .tb-pane-btn:hover {
-      background: rgba(51, 65, 85, 0.8);
-      color: #f8fafc;
-      border-color: #38bdf8;
-    }
-
-    /* Segmented Tabs (Architecture / Sequence / CodeRabbit) */
-    .tb-segmented-tabs, .tb-ui-mode-toggle {
-      display: inline-flex;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      padding: 2px;
-      gap: 2px;
-    }
-    .tb-seg-btn, .tb-ui-btn {
-      background: transparent;
-      border: 1px solid transparent;
-      color: #94a3b8;
-      font-size: 0.74rem;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: all 0.15s ease;
-      white-space: nowrap;
-    }
-    .tb-seg-btn:hover, .tb-ui-btn:hover {
-      color: #f1f5f9;
-      background: rgba(255, 255, 255, 0.05);
-    }
-    .tb-seg-btn.active, .tb-ui-btn.active {
-      background: linear-gradient(135deg, #1e293b 0%, #283548 100%);
-      color: #38bdf8;
-      font-weight: 700;
-      border-color: rgba(56, 189, 248, 0.35);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-    }
-    .tb-ui-btn.active {
-      color: #f8fafc;
-      border-color: rgba(255, 255, 255, 0.15);
+    .tb-btn:hover {
+      background: rgba(255, 255, 255, 0.07) !important;
+      color: #f8fafc !important;
+      border-color: rgba(255, 255, 255, 0.14) !important;
     }
 
-    /* Breadcrumb / Search Palette Trigger */
-    .tb-search-palette-badge {
-      max-width: 380px;
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 7px;
-      background: rgba(15, 23, 42, 0.75);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 20px;
-      padding: 4px 14px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    /* View Switcher Segmented Control */
+    .tb-segmented {
+      display: inline-flex !important;
+      height: 28px !important;
+      background: rgba(255, 255, 255, 0.03) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 7px !important;
+      padding: 2px !important;
+      gap: 1px !important;
+      box-sizing: border-box !important;
+      flex-shrink: 0 !important;
     }
-    .tb-search-palette-badge:hover {
-      border-color: #38bdf8;
-      background: rgba(15, 23, 42, 0.95);
-      box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+    .tb-seg-item {
+      height: 22px !important;
+      background: transparent !important;
+      border: 1px solid transparent !important;
+      border-radius: 5px !important;
+      color: #94a3b8 !important;
+      font-size: 0.72rem !important;
+      font-weight: 500 !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      padding: 0 8px !important;
+      transition: all 0.12s ease !important;
+      white-space: nowrap !important;
+      user-select: none !important;
     }
-    .tb-repo-icon { font-size: 0.8rem; }
-    .tb-repo-name { font-size: 0.74rem; font-weight: 700; color: #f1f5f9; }
-    .tb-repo-sep { color: #64748b; font-size: 0.72rem; }
-    .tb-mode-name { font-size: 0.72rem; color: #38bdf8; font-weight: 600; }
-    .tb-kbd {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #94a3b8;
-      font-size: 0.65rem;
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-weight: 700;
-    }
-
-    /* Action Buttons */
-    .tb-action-btn {
-      border: none;
-      border-radius: 7px;
-      padding: 5px 11px;
-      font-size: 0.74rem;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: all 0.15s ease;
-      white-space: nowrap;
-    }
-    .tb-action-btn:hover {
-      transform: translateY(-1px);
-    }
-    .tb-btn-add {
-      background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important;
-      border: 1px solid #a78bfa !important;
-      color: #fff !important;
-      box-shadow: 0 2px 10px rgba(124, 58, 237, 0.35);
-    }
-    .tb-btn-add:hover {
-      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.55);
-    }
-    .tb-btn-settings {
-      background: linear-gradient(135deg, #0f766e 0%, #047857 100%) !important;
-      border: 1px solid #34d399 !important;
-      color: #fff !important;
-      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
-    }
-    .tb-btn-settings:hover {
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.45);
-    }
-    .tb-btn-sync {
-      background: rgba(30, 41, 59, 0.6) !important;
-      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    .tb-seg-item:hover {
       color: #e2e8f0 !important;
+      background: rgba(255, 255, 255, 0.04) !important;
     }
-    .tb-btn-sync:hover {
-      background: rgba(51, 65, 85, 0.8) !important;
-      border-color: #38bdf8 !important;
+    .tb-seg-item.active {
+      background: #1e293b !important;
+      color: #38bdf8 !important;
+      font-weight: 600 !important;
+      border-color: rgba(56, 189, 248, 0.25) !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
     }
 
-    /* Auto Sync Chip */
-    .tb-sync-chip {
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid rgba(52, 211, 153, 0.35);
-      border-radius: 20px;
-      padding: 4px 10px;
-      font-size: 0.72rem;
-      color: #34d399;
-      font-weight: 700;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.15s ease;
+    /* UI Mode Switch (Simple / Dev) */
+    .tb-ui-toggle {
+      display: inline-flex !important;
+      height: 28px !important;
+      background: rgba(255, 255, 255, 0.03) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 7px !important;
+      padding: 2px !important;
+      gap: 1px !important;
+      box-sizing: border-box !important;
+      flex-shrink: 0 !important;
     }
-    .tb-sync-chip:hover {
-      border-color: #34d399;
-      box-shadow: 0 0 10px rgba(52, 211, 153, 0.3);
+    .tb-ui-item {
+      height: 22px !important;
+      background: transparent !important;
+      border: 1px solid transparent !important;
+      border-radius: 5px !important;
+      color: #64748b !important;
+      font-size: 0.70rem !important;
+      font-weight: 500 !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 3px !important;
+      padding: 0 6px !important;
+      transition: all 0.12s ease !important;
+      white-space: nowrap !important;
+    }
+    .tb-ui-item:hover {
+      color: #94a3b8 !important;
+    }
+    .tb-ui-item.active {
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: #f1f5f9 !important;
+      font-weight: 600 !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    /* Center Breadcrumb & Search Pill (Linear Command Menu style) */
+    .tb-search-pill {
+      width: 100% !important;
+      max-width: 280px !important;
+      height: 28px !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      background: rgba(255, 255, 255, 0.03) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 6px !important;
+      padding: 0 9px !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease !important;
+      overflow: hidden !important;
+      white-space: nowrap !important;
+    }
+    .tb-search-pill:hover {
+      background: rgba(255, 255, 255, 0.06) !important;
+      border-color: rgba(56, 189, 248, 0.35) !important;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.15) !important;
+    }
+    .tb-repo-name {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      font-size: 0.72rem !important;
+      font-weight: 600 !important;
+      color: #f1f5f9 !important;
+      text-align: left !important;
+    }
+    .tb-mode-name {
+      font-size: 0.68rem !important;
+      color: #38bdf8 !important;
+      font-weight: 500 !important;
+      flex-shrink: 0 !important;
+      white-space: nowrap !important;
+    }
+    .tb-kbd {
+      background: rgba(255, 255, 255, 0.06) !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      color: #94a3b8 !important;
+      font-size: 0.62rem !important;
+      padding: 1px 4px !important;
+      border-radius: 3px !important;
+      font-weight: 600 !important;
+      font-family: inherit !important;
+      flex-shrink: 0 !important;
+    }
+
+    /* Primary CTA Button (Linear Indigo) */
+    .tb-btn-primary {
+      height: 28px !important;
+      border-radius: 6px !important;
+      border: 1px solid rgba(99, 102, 241, 0.5) !important;
+      background: #5e6ad2 !important;
+      color: #ffffff !important;
+      font-size: 0.73rem !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 5px !important;
+      padding: 0 10px !important;
+      transition: all 0.15s ease !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+      box-shadow: 0 1px 4px rgba(94, 106, 210, 0.3) !important;
+    }
+    .tb-btn-primary:hover {
+      background: #6f7cf0 !important;
+      box-shadow: 0 2px 8px rgba(94, 106, 210, 0.45) !important;
+    }
+
+    /* Unified Sync Status Chip */
+    .tb-sync-unified {
+      height: 28px !important;
+      box-sizing: border-box !important;
+      border-radius: 6px !important;
+      border: 1px solid rgba(52, 211, 153, 0.22) !important;
+      background: rgba(16, 185, 129, 0.06) !important;
+      color: #34d399 !important;
+      font-size: 0.71rem !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 5px !important;
+      padding: 0 9px !important;
+      transition: all 0.15s ease !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+    }
+    .tb-sync-unified:hover {
+      background: rgba(16, 185, 129, 0.12) !important;
+      border-color: rgba(52, 211, 153, 0.45) !important;
+      box-shadow: 0 0 8px rgba(52, 211, 153, 0.2) !important;
     }
     .tb-pulse-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: #34d399;
-      box-shadow: 0 0 8px #34d399;
-      animation: tbPulse 2s infinite;
+      width: 6px !important;
+      height: 6px !important;
+      border-radius: 50% !important;
+      background: #34d399 !important;
+      box-shadow: 0 0 6px #34d399 !important;
+      animation: tbPulse 2s infinite !important;
+      flex-shrink: 0 !important;
     }
     @keyframes tbPulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.4; transform: scale(0.85); }
     }
 
-    /* Button Groups (Export, Zoom) */
+    /* Compact Button Groups (Export, Zoom) */
     .tb-btn-group {
-      display: inline-flex;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 7px;
-      padding: 2px;
-      gap: 1px;
+      display: inline-flex !important;
+      height: 28px !important;
+      background: rgba(255, 255, 255, 0.03) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 6px !important;
+      padding: 1px !important;
+      gap: 1px !important;
+      box-sizing: border-box !important;
+      flex-shrink: 0 !important;
     }
     .tb-group-btn {
-      background: transparent;
-      border: none;
-      color: #94a3b8;
-      font-size: 0.72rem;
-      font-weight: 600;
-      padding: 4px 7px;
-      border-radius: 5px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      transition: all 0.15s ease;
-      white-space: nowrap;
+      height: 24px !important;
+      background: transparent !important;
+      border: none !important;
+      color: #94a3b8 !important;
+      font-size: 0.70rem !important;
+      font-weight: 500 !important;
+      padding: 0 7px !important;
+      border-radius: 4px !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 3px !important;
+      transition: all 0.12s ease !important;
+      white-space: nowrap !important;
     }
     .tb-group-btn:hover {
-      background: rgba(255, 255, 255, 0.08);
-      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.07) !important;
+      color: #f8fafc !important;
     }
 
     /* Language Switcher */
-    .tb-lang-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 20px;
-      padding: 3px 9px;
-      cursor: pointer;
-      font-size: 0.72rem;
-      transition: all 0.15s ease;
-      white-space: nowrap;
+    .tb-lang-btn {
+      height: 28px !important;
+      box-sizing: border-box !important;
+      border-radius: 6px !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      background: rgba(255, 255, 255, 0.03) !important;
+      padding: 0 8px !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      font-size: 0.70rem !important;
+      transition: all 0.15s ease !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
     }
-    .tb-lang-toggle:hover {
-      border-color: #38bdf8;
+    .tb-lang-btn:hover {
+      border-color: rgba(56, 189, 248, 0.3) !important;
+      background: rgba(255, 255, 255, 0.06) !important;
     }
-    .tb-globe { font-size: 0.78rem; }
-    .tb-lang-opt { color: #64748b; font-weight: 600; }
-    .tb-lang-opt.active { color: #38bdf8; font-weight: 800; }
-    .tb-lang-sep { color: #475569; font-size: 0.68rem; }
+    .tb-lang-opt { color: #64748b !important; font-weight: 500 !important; }
+    .tb-lang-opt.active { color: #38bdf8 !important; font-weight: 700 !important; }
 
     /* Workspace */
     #app-workspace {
-      flex: 1;
-      display: flex;
-      flex-direction: row;
-      height: calc(100vh - 48px);
-      overflow: hidden;
-      position: relative;
-      min-height: 0;
-      width: 100vw;
+      flex: 1 1 auto !important;
+      display: flex !important;
+      flex-direction: row !important;
+      height: calc(100vh - 44px) !important;
+      overflow: hidden !important;
+      position: relative !important;
+      min-height: 0 !important;
+      width: 100vw !important;
     }
-
     #sidebar, #main-content, #inspector {
       height: 100% !important;
     }
-
 </style>
 </head>
 <body>
   <!-- =========================================================================
-       Top Full-Width Native macOS Studio App Toolbar
-       Spanning 100vw directly below macOS titlebar from left edge to right edge
+       Linear x Apple HIG Native Studio App Toolbar (Unified 44px, No-Overlap)
        ========================================================================= -->
   <header class="app-top-toolbar" id="app-top-toolbar">
-    <!-- Left Zone: Sidebar Toggle + View Mode Tabs + UI Mode Toggle -->
+    <!-- Left Zone: Sidebar Toggle + View Mode Switcher + UI Mode Switcher -->
     <div class="tb-left-zone">
-      <button class="tb-pane-btn" id="btn-toggle-sidebar" onclick="toggleSidebarPane()" title="左サイドバーを開閉 (⌘B)">
-        <span class="tb-icon">◀</span>
-        <span class="tb-icon-sidebar">◧</span>
+      <button class="tb-btn" id="btn-toggle-sidebar" onclick="toggleSidebarPane()" title="左サイドバーを開閉 (⌘B)">
+        <span style="font-size: 0.72rem;">◀</span>
+        <span style="font-size: 0.78rem;">◧</span>
       </button>
 
       <div class="tb-separator"></div>
 
-      <!-- View Mode Tabs (Architecture, Sequence, CodeRabbit) -->
-      <div class="tb-segmented-tabs" role="tablist">
-        <button class="tb-seg-btn active view-mode-btn" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示 (1)">
-          <span class="tb-icon">🗺️</span>
-          <span class="tb-text" data-i18n="mode_arch">構成図</span>
+      <!-- View Mode Tabs (Segmented Control) -->
+      <div class="tb-segmented" role="tablist">
+        <button class="tb-seg-item active view-mode-btn" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示 (1)">
+          <span>🗺️</span>
+          <span data-i18n="mode_arch">構成図</span>
         </button>
-        <button class="tb-seg-btn view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示 (2)">
-          <span class="tb-icon">⏱️</span>
-          <span class="tb-text" data-i18n="mode_seq">シーケンス</span>
+        <button class="tb-seg-item view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示 (2)">
+          <span>⏱️</span>
+          <span data-i18n="mode_seq">シーケンス</span>
         </button>
-        <button class="tb-seg-btn view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示 (3)">
-          <span class="tb-icon">🐰</span>
-          <span class="tb-text" data-i18n="mode_cr">AI監査</span>
+        <button class="tb-seg-item view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示 (3)">
+          <span>🐰</span>
+          <span data-i18n="mode_cr">AI監査</span>
         </button>
       </div>
 
       <div class="tb-separator"></div>
 
-      <!-- UI Mode (Simple vs Dev) -->
-      <div class="tb-ui-mode-toggle ui-mode-toggle" id="ui-mode-toggle" title="表示モード切替 (シンプル / 開発者)">
-        <button class="tb-ui-btn ui-mode-btn active" id="btn-ui-simple" onclick="setUiMode('simple')" title="シンプル表示 (初心者・管理者向け)">
-          <span class="tb-icon">🔰</span>
-          <span class="tb-text" data-i18n="mode_simple">シンプル</span>
+      <!-- UI Mode (Simple vs Dev) Compact Switcher -->
+      <div class="tb-ui-toggle ui-mode-toggle" id="ui-mode-toggle" title="表示モード切替 (シンプル / 開発者)">
+        <button class="tb-ui-item ui-mode-btn active" id="btn-ui-simple" onclick="setUiMode('simple')" title="シンプル表示 (初心者・管理者向け)">
+          <span>🔰</span>
+          <span data-i18n="mode_simple">シンプル</span>
         </button>
-        <button class="tb-ui-btn ui-mode-btn" id="btn-ui-dev" onclick="setUiMode('dev')" title="開発者向け詳細表示 (全9タブ・ターミナル・DB・API等)">
-          <span class="tb-icon">🛠️</span>
-          <span class="tb-text" data-i18n="mode_dev">開発者</span>
+        <button class="tb-ui-item ui-mode-btn" id="btn-ui-dev" onclick="setUiMode('dev')" title="開発者向け詳細表示 (全9タブ・ターミナル・DB・API等)">
+          <span>🛠️</span>
+          <span data-i18n="mode_dev">開発者</span>
         </button>
       </div>
     </div>
 
-    <!-- Center Zone: Breadcrumb / Search Palette Trigger -->
+    <!-- Center Zone: Breadcrumb & Command Palette Trigger (Never Overlaps, Ellipsis Guaranteed) -->
     <div class="tb-center-zone">
-      <div class="tb-search-palette-badge current-repo-badge" id="current-repo-badge" onclick="openCommandPalette()" title="クイックコマンドパレットを開く (⌘K)">
-        <span class="tb-repo-icon">📁</span>
+      <div class="tb-search-pill current-repo-badge" id="current-repo-badge" onclick="openCommandPalette()" title="クイックコマンドパレットを開く (⌘K)">
+        <span style="font-size: 0.76rem; flex-shrink: 0;">📁</span>
         <span class="tb-repo-name" id="badge-repo-name">RepoCHK Mac</span>
-        <span class="tb-repo-sep">/</span>
+        <span style="color: #475569; font-size: 0.68rem; flex-shrink: 0;">/</span>
         <span class="tb-mode-name" id="badge-mode-name">構成図</span>
         <kbd class="tb-kbd">⌘K</kbd>
       </div>
     </div>
 
-    <!-- Right Zone: Actions & Tool Controls -->
+    <!-- Right Zone: Action Controls & Utilities -->
     <div class="tb-right-zone">
-      <!-- Primary Action: GitHub URL Add & List Manage -->
-      <button class="tb-action-btn tb-btn-add" onclick="openAnalyzeModal()" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します (⌘N)">
-        <span class="tb-icon">➕</span>
-        <span class="tb-text" data-i18n="btn_add">追加</span>
+      <!-- Primary Action: GitHub Add -->
+      <button class="tb-btn-primary" onclick="openAnalyzeModal()" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します (⌘N)">
+        <span>➕</span>
+        <span data-i18n="btn_add">追加</span>
       </button>
 
       <!-- Settings Button -->
-      <button class="tb-action-btn tb-btn-settings" onclick="openAdminSettingsModal()" title="AI APIキー設定 & 脆弱性監査MCP/スキル設定 (⌘,)">
-        <span class="tb-icon">⚙️</span>
-        <span class="tb-text" data-i18n="btn_settings">設定</span>
+      <button class="tb-btn" onclick="openAdminSettingsModal()" title="AI APIキー設定 & 脆弱性監査MCP/スキル設定 (⌘,)">
+        <span>⚙️</span>
+        <span data-i18n="btn_settings">設定</span>
       </button>
 
       <div class="tb-separator"></div>
 
-      <!-- Auto Sync Live Chip & Manual Sync -->
-      <div class="tb-sync-chip" id="header-auto-sync-chip" title="自動定期更新の間隔 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
+      <!-- Unified Auto-Sync & Manual Refresh Status Chip -->
+      <div class="tb-sync-unified" id="header-auto-sync-chip" title="自動定期更新中 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
         <span class="tb-pulse-dot dot-pulse" id="header-sync-pulse"></span>
         <span id="header-sync-chip-text"><span class="chip-label">60分毎 </span>(60:00)</span>
+        <span id="sync-btn" style="font-size: 0.74rem; margin-left: 2px;">🔄</span>
       </div>
-
-      <button class="tb-action-btn tb-btn-sync" id="sync-btn" onclick="triggerGitHubSync()" title="GitHub最新コミット・差分を手動同期">
-        <span class="tb-icon">🔄</span>
-        <span class="tb-text" data-i18n="btn_sync">同期</span>
-      </button>
 
       <div class="tb-separator"></div>
 
-      <!-- Export SVG / PNG -->
+      <!-- Export Controls (SVG / PNG) -->
       <div class="tb-btn-group export-controls-group" title="ダイアグラムを画像として保存">
         <button class="tb-group-btn btn-export" onclick="exportDiagramAsSvg()" title="ベクトル画像 (SVG) として保存">
-          <span class="tb-icon">📐</span>
-          <span class="tb-text" data-i18n="btn_export_svg">SVG</span>
+          <span>📐</span>
+          <span data-i18n="btn_export_svg">SVG</span>
         </button>
         <button class="tb-group-btn btn-export" onclick="exportDiagramAsPng()" title="高解像度画像 (PNG) として保存">
-          <span class="tb-icon">📷</span>
-          <span class="tb-text" data-i18n="btn_export_png">PNG</span>
+          <span>📷</span>
+          <span data-i18n="btn_export_png">PNG</span>
         </button>
       </div>
 
       <!-- Zoom Controls -->
       <div class="tb-btn-group zoom-controls-group" title="ダイアグラム表示倍率の操作">
         <button class="tb-group-btn zoom-btn" onclick="zoomIn()" title="ズームイン (拡大)">➕</button>
-        <button class="tb-group-btn zoom-btn" onclick="zoomOut()" title="ズームアウト (縮小)">➖</button>
         <button class="tb-group-btn zoom-btn" onclick="resetZoom()" title="初期サイズにリセット (100%)">↺</button>
+        <button class="tb-group-btn zoom-btn" onclick="zoomOut()" title="ズームアウト (縮小)">➖</button>
       </div>
 
       <div class="tb-separator"></div>
 
       <!-- Language Switcher (JA / EN) -->
-      <div class="tb-lang-toggle lang-switch-toggle" onclick="toggleLanguage()" title="言語切り替え / Switch Language (日本語 ⇄ English)">
-        <span class="tb-globe">🌐</span>
+      <div class="tb-lang-btn lang-switch-toggle" onclick="toggleLanguage()" title="言語切り替え / Switch Language (日本語 ⇄ English)">
+        <span style="font-size: 0.74rem;">🌐</span>
         <span class="tb-lang-opt lang-opt active" id="lang-opt-ja">JA</span>
-        <span class="tb-lang-sep">/</span>
+        <span style="color: #475569; font-size: 0.65rem;">/</span>
         <span class="tb-lang-opt lang-opt" id="lang-opt-en">EN</span>
       </div>
 
-      <!-- Guide & Shortcuts -->
-      <button class="tb-group-btn pane-toggle-btn" id="btn-toggle-guide" onclick="toggleGuideBar()" title="初心者ガイドの表示/非表示 (Toggle Quick Guide)">
-        <span style="font-size: 0.8rem;">❓</span>
-        <span class="tb-text" data-i18n="btn_guide" style="font-size: 0.72rem; font-weight: 600;">ガイド</span>
-      </button>
-      <button class="tb-group-btn pane-toggle-btn" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)">
-        <span style="font-size: 0.8rem;">⌨️</span>
+      <!-- Shortcuts & Guide -->
+      <button class="tb-btn" style="padding: 0 7px;" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)">
+        <span style="font-size: 0.78rem;">⌨️</span>
       </button>
 
       <div class="tb-separator"></div>
 
       <!-- Inspector Toggle -->
-      <button class="tb-pane-btn" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペインを開閉 (⌘I)">
-        <span class="tb-icon-inspector">◨</span>
-        <span class="tb-icon">▶</span>
+      <button class="tb-btn" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペインを開閉 (⌘I)">
+        <span style="font-size: 0.78rem;">◨</span>
+        <span style="font-size: 0.70rem;">▶</span>
       </button>
     </div>
   </header>

@@ -188,44 +188,6 @@ struct MainContentView: View {
                 }
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .automatic) {
-                Button(action: {
-                    coordinator.webView?.evaluateJavaScript("openAnalyzeModal()", completionHandler: nil)
-                }) {
-                    Label("GitHub追加・リスト管理", systemImage: "plus.magnifyingglass")
-                }
-                .help("GitHub組織/リポジトリURLの追加分析と保有リストの管理・削除を行います (⌘N)")
-
-                Button(action: {
-                    coordinator.webView?.evaluateJavaScript("openAdminSettingsModal()", completionHandler: nil)
-                }) {
-                    Label("AIキー・監査設定", systemImage: "key.radiowaves.forward.fill")
-                }
-                .help("OpenAI / Claude / Gemini / Groq APIキーと PHP・Node.js 脆弱性監査MCP/スキルを設定します (⌘,)")
-
-                Button(action: {
-                    coordinator.webView?.evaluateJavaScript("openActionRequiredHubModal()", completionHandler: nil)
-                }) {
-                    Label("要対応一覧", systemImage: "exclamationmark.triangle.fill")
-                }
-                .help("全リポジトリの要対応アラート・理由・対策Diffを一覧表示します")
-
-                Button(action: {
-                    coordinator.webView?.evaluateJavaScript("openHealthModal()", completionHandler: nil)
-                }) {
-                    Label("死活監視", systemImage: "waveform.path.ecg")
-                }
-                .help("システム死活監視・疎通ステータスを確認します")
-
-                Button(action: {
-                    coordinator.webView?.reload()
-                }) {
-                    Label("再読み込み", systemImage: "arrow.clockwise")
-                }
-                .help("画面を再読み込みします (⌘R)")
-            }
-        }
     }
 }
 
