@@ -4976,9 +4976,449 @@ def build_portal_html(data, is_shareable=False):
     }
     .term-run-btn:hover { background: #3b82f6; }
 
+
+
+    /* ==========================================================================
+       Native macOS Full-Width Dedicated Studio Toolbar
+       Spanning 100vw directly under macOS titlebar
+       ========================================================================== */
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex !important;
+      flex-direction: column !important;
+      height: 100vh !important;
+      overflow: hidden !important;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app-top-toolbar {
+      height: 48px;
+      min-height: 48px;
+      max-height: 48px;
+      width: 100vw;
+      box-sizing: border-box;
+      background: linear-gradient(180deg, #161b26 0%, #0c1017 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      gap: 8px;
+      z-index: 100;
+      flex-shrink: 0;
+      user-select: none;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    #app-top-toolbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tb-left-zone, .tb-right-zone {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .tb-center-zone {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      min-width: 0;
+      padding: 0 10px;
+    }
+
+    .tb-separator {
+      width: 1px;
+      height: 20px;
+      background: rgba(255, 255, 255, 0.09);
+      margin: 0 3px;
+      flex-shrink: 0;
+    }
+
+    .tb-pane-btn {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 5px 9px;
+      color: #94a3b8;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.76rem;
+      transition: all 0.15s ease;
+    }
+    .tb-pane-btn:hover {
+      background: rgba(51, 65, 85, 0.8);
+      color: #f8fafc;
+      border-color: #38bdf8;
+    }
+
+    /* Segmented Tabs (Architecture / Sequence / CodeRabbit) */
+    .tb-segmented-tabs, .tb-ui-mode-toggle {
+      display: inline-flex;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .tb-seg-btn, .tb-ui-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #94a3b8;
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .tb-seg-btn:hover, .tb-ui-btn:hover {
+      color: #f1f5f9;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .tb-seg-btn.active, .tb-ui-btn.active {
+      background: linear-gradient(135deg, #1e293b 0%, #283548 100%);
+      color: #38bdf8;
+      font-weight: 700;
+      border-color: rgba(56, 189, 248, 0.35);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+    .tb-ui-btn.active {
+      color: #f8fafc;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Breadcrumb / Search Palette Trigger */
+    .tb-search-palette-badge {
+      max-width: 380px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      padding: 4px 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+    .tb-search-palette-badge:hover {
+      border-color: #38bdf8;
+      background: rgba(15, 23, 42, 0.95);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+    }
+    .tb-repo-icon { font-size: 0.8rem; }
+    .tb-repo-name { font-size: 0.74rem; font-weight: 700; color: #f1f5f9; }
+    .tb-repo-sep { color: #64748b; font-size: 0.72rem; }
+    .tb-mode-name { font-size: 0.72rem; color: #38bdf8; font-weight: 600; }
+    .tb-kbd {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #94a3b8;
+      font-size: 0.65rem;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    /* Action Buttons */
+    .tb-action-btn {
+      border: none;
+      border-radius: 7px;
+      padding: 5px 11px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .tb-action-btn:hover {
+      transform: translateY(-1px);
+    }
+    .tb-btn-add {
+      background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important;
+      border: 1px solid #a78bfa !important;
+      color: #fff !important;
+      box-shadow: 0 2px 10px rgba(124, 58, 237, 0.35);
+    }
+    .tb-btn-add:hover {
+      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.55);
+    }
+    .tb-btn-settings {
+      background: linear-gradient(135deg, #0f766e 0%, #047857 100%) !important;
+      border: 1px solid #34d399 !important;
+      color: #fff !important;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+    }
+    .tb-btn-settings:hover {
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.45);
+    }
+    .tb-btn-sync {
+      background: rgba(30, 41, 59, 0.6) !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      color: #e2e8f0 !important;
+    }
+    .tb-btn-sync:hover {
+      background: rgba(51, 65, 85, 0.8) !important;
+      border-color: #38bdf8 !important;
+    }
+
+    /* Auto Sync Chip */
+    .tb-sync-chip {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 0.72rem;
+      color: #34d399;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .tb-sync-chip:hover {
+      border-color: #34d399;
+      box-shadow: 0 0 10px rgba(52, 211, 153, 0.3);
+    }
+    .tb-pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 8px #34d399;
+      animation: tbPulse 2s infinite;
+    }
+    @keyframes tbPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Button Groups (Export, Zoom) */
+    .tb-btn-group {
+      display: inline-flex;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 7px;
+      padding: 2px;
+      gap: 1px;
+    }
+    .tb-group-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 4px 7px;
+      border-radius: 5px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .tb-group-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+    }
+
+    /* Language Switcher */
+    .tb-lang-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      padding: 3px 9px;
+      cursor: pointer;
+      font-size: 0.72rem;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .tb-lang-toggle:hover {
+      border-color: #38bdf8;
+    }
+    .tb-globe { font-size: 0.78rem; }
+    .tb-lang-opt { color: #64748b; font-weight: 600; }
+    .tb-lang-opt.active { color: #38bdf8; font-weight: 800; }
+    .tb-lang-sep { color: #475569; font-size: 0.68rem; }
+
+    /* Workspace */
+    #app-workspace {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      height: calc(100vh - 48px);
+      overflow: hidden;
+      position: relative;
+      min-height: 0;
+      width: 100vw;
+    }
+
+    #sidebar, #main-content, #inspector {
+      height: 100% !important;
+    }
+
 </style>
 </head>
 <body>
+  <!-- =========================================================================
+       Top Full-Width Native macOS Studio App Toolbar
+       Spanning 100vw directly below macOS titlebar from left edge to right edge
+       ========================================================================= -->
+  <header class="app-top-toolbar" id="app-top-toolbar">
+    <!-- Left Zone: Sidebar Toggle + View Mode Tabs + UI Mode Toggle -->
+    <div class="tb-left-zone">
+      <button class="tb-pane-btn" id="btn-toggle-sidebar" onclick="toggleSidebarPane()" title="左サイドバーを開閉 (⌘B)">
+        <span class="tb-icon">◀</span>
+        <span class="tb-icon-sidebar">◧</span>
+      </button>
+
+      <div class="tb-separator"></div>
+
+      <!-- View Mode Tabs (Architecture, Sequence, CodeRabbit) -->
+      <div class="tb-segmented-tabs" role="tablist">
+        <button class="tb-seg-btn active view-mode-btn" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示 (1)">
+          <span class="tb-icon">🗺️</span>
+          <span class="tb-text" data-i18n="mode_arch">構成図</span>
+        </button>
+        <button class="tb-seg-btn view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示 (2)">
+          <span class="tb-icon">⏱️</span>
+          <span class="tb-text" data-i18n="mode_seq">シーケンス</span>
+        </button>
+        <button class="tb-seg-btn view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示 (3)">
+          <span class="tb-icon">🐰</span>
+          <span class="tb-text" data-i18n="mode_cr">AI監査</span>
+        </button>
+      </div>
+
+      <div class="tb-separator"></div>
+
+      <!-- UI Mode (Simple vs Dev) -->
+      <div class="tb-ui-mode-toggle ui-mode-toggle" id="ui-mode-toggle" title="表示モード切替 (シンプル / 開発者)">
+        <button class="tb-ui-btn ui-mode-btn active" id="btn-ui-simple" onclick="setUiMode('simple')" title="シンプル表示 (初心者・管理者向け)">
+          <span class="tb-icon">🔰</span>
+          <span class="tb-text" data-i18n="mode_simple">シンプル</span>
+        </button>
+        <button class="tb-ui-btn ui-mode-btn" id="btn-ui-dev" onclick="setUiMode('dev')" title="開発者向け詳細表示 (全9タブ・ターミナル・DB・API等)">
+          <span class="tb-icon">🛠️</span>
+          <span class="tb-text" data-i18n="mode_dev">開発者</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Center Zone: Breadcrumb / Search Palette Trigger -->
+    <div class="tb-center-zone">
+      <div class="tb-search-palette-badge current-repo-badge" id="current-repo-badge" onclick="openCommandPalette()" title="クイックコマンドパレットを開く (⌘K)">
+        <span class="tb-repo-icon">📁</span>
+        <span class="tb-repo-name" id="badge-repo-name">RepoCHK Mac</span>
+        <span class="tb-repo-sep">/</span>
+        <span class="tb-mode-name" id="badge-mode-name">構成図</span>
+        <kbd class="tb-kbd">⌘K</kbd>
+      </div>
+    </div>
+
+    <!-- Right Zone: Actions & Tool Controls -->
+    <div class="tb-right-zone">
+      <!-- Primary Action: GitHub URL Add & List Manage -->
+      <button class="tb-action-btn tb-btn-add" onclick="openAnalyzeModal()" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します (⌘N)">
+        <span class="tb-icon">➕</span>
+        <span class="tb-text" data-i18n="btn_add">追加</span>
+      </button>
+
+      <!-- Settings Button -->
+      <button class="tb-action-btn tb-btn-settings" onclick="openAdminSettingsModal()" title="AI APIキー設定 & 脆弱性監査MCP/スキル設定 (⌘,)">
+        <span class="tb-icon">⚙️</span>
+        <span class="tb-text" data-i18n="btn_settings">設定</span>
+      </button>
+
+      <div class="tb-separator"></div>
+
+      <!-- Auto Sync Live Chip & Manual Sync -->
+      <div class="tb-sync-chip" id="header-auto-sync-chip" title="自動定期更新の間隔 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
+        <span class="tb-pulse-dot dot-pulse" id="header-sync-pulse"></span>
+        <span id="header-sync-chip-text"><span class="chip-label">60分毎 </span>(60:00)</span>
+      </div>
+
+      <button class="tb-action-btn tb-btn-sync" id="sync-btn" onclick="triggerGitHubSync()" title="GitHub最新コミット・差分を手動同期">
+        <span class="tb-icon">🔄</span>
+        <span class="tb-text" data-i18n="btn_sync">同期</span>
+      </button>
+
+      <div class="tb-separator"></div>
+
+      <!-- Export SVG / PNG -->
+      <div class="tb-btn-group export-controls-group" title="ダイアグラムを画像として保存">
+        <button class="tb-group-btn btn-export" onclick="exportDiagramAsSvg()" title="ベクトル画像 (SVG) として保存">
+          <span class="tb-icon">📐</span>
+          <span class="tb-text" data-i18n="btn_export_svg">SVG</span>
+        </button>
+        <button class="tb-group-btn btn-export" onclick="exportDiagramAsPng()" title="高解像度画像 (PNG) として保存">
+          <span class="tb-icon">📷</span>
+          <span class="tb-text" data-i18n="btn_export_png">PNG</span>
+        </button>
+      </div>
+
+      <!-- Zoom Controls -->
+      <div class="tb-btn-group zoom-controls-group" title="ダイアグラム表示倍率の操作">
+        <button class="tb-group-btn zoom-btn" onclick="zoomIn()" title="ズームイン (拡大)">➕</button>
+        <button class="tb-group-btn zoom-btn" onclick="zoomOut()" title="ズームアウト (縮小)">➖</button>
+        <button class="tb-group-btn zoom-btn" onclick="resetZoom()" title="初期サイズにリセット (100%)">↺</button>
+      </div>
+
+      <div class="tb-separator"></div>
+
+      <!-- Language Switcher (JA / EN) -->
+      <div class="tb-lang-toggle lang-switch-toggle" onclick="toggleLanguage()" title="言語切り替え / Switch Language (日本語 ⇄ English)">
+        <span class="tb-globe">🌐</span>
+        <span class="tb-lang-opt lang-opt active" id="lang-opt-ja">JA</span>
+        <span class="tb-lang-sep">/</span>
+        <span class="tb-lang-opt lang-opt" id="lang-opt-en">EN</span>
+      </div>
+
+      <!-- Guide & Shortcuts -->
+      <button class="tb-group-btn pane-toggle-btn" id="btn-toggle-guide" onclick="toggleGuideBar()" title="初心者ガイドの表示/非表示 (Toggle Quick Guide)">
+        <span style="font-size: 0.8rem;">❓</span>
+        <span class="tb-text" data-i18n="btn_guide" style="font-size: 0.72rem; font-weight: 600;">ガイド</span>
+      </button>
+      <button class="tb-group-btn pane-toggle-btn" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)">
+        <span style="font-size: 0.8rem;">⌨️</span>
+      </button>
+
+      <div class="tb-separator"></div>
+
+      <!-- Inspector Toggle -->
+      <button class="tb-pane-btn" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペインを開閉 (⌘I)">
+        <span class="tb-icon-inspector">◨</span>
+        <span class="tb-icon">▶</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Workspace Container: Sidebar + Main + Inspector -->
+  <div id="app-workspace">
+
   <div id="sidebar">
     <div class="brand-header">
       <div class="brand-title" style="display: flex; align-items: center; gap: 8px;">
@@ -5119,116 +5559,12 @@ def build_portal_html(data, is_shareable=False):
   <div id="sidebar-resizer" title="ドラッグしてサイドバーの幅を調節 (ダブルクリックで初期化)"></div>
 
   <div id="main-content">
-    <div class="header-bar">
-      <!-- Hidden Title Elements for JS compatibility -->
+    <!-- Hidden Title Elements for JS compatibility -->
       <div style="display: none;">
         <div id="view-breadcrumb"></div>
         <h2 id="view-title"></h2>
         <div id="header-freshness-container"></div>
       </div>
-
-      <!-- Left: Toggle Sidebar + View Mode Tabs (Architecture, Sequence, CodeRabbit) -->
-      <div class="view-mode-container">
-        <button class="pane-toggle-btn pane-open" id="btn-toggle-sidebar" onclick="toggleSidebarPane()" title="左ペインを開閉 (⌘B)"><span>◀</span> <span>◧</span></button>
-        <div class="view-mode-tabs">
-          <button class="view-mode-btn active" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示">
-            <span class="btn-icon">🗺️</span>
-            <span class="btn-text" data-i18n="mode_arch">構成図</span>
-          </button>
-          <button class="view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示">
-            <span class="btn-icon">⏱️</span>
-            <span class="btn-text" data-i18n="mode_seq">シーケンス</span>
-          </button>
-          <button class="view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示">
-            <span class="btn-icon">🐰</span>
-            <span class="btn-text" data-i18n="mode_cr">AI監査</span>
-          </button>
-        </div>
-
-        <!-- Non-Technical Simple Mode vs Developer Mode Toggle -->
-        <div class="ui-mode-toggle" id="ui-mode-toggle" title="表示モード切替 (シンプル / 開発者) / Switch UI Mode">
-          <button class="ui-mode-btn active" id="btn-ui-simple" onclick="setUiMode('simple')" title="シンプル表示 (初心者・管理者向け)">
-            <span class="btn-icon">🔰</span>
-            <span class="btn-text" data-i18n="mode_simple">シンプル</span>
-          </button>
-          <button class="ui-mode-btn" id="btn-ui-dev" onclick="setUiMode('dev')" title="開発者向け詳細表示 (全9タブ・ターミナル・DB・API等)">
-            <span class="btn-icon">🛠️</span>
-            <span class="btn-text" data-i18n="mode_dev">開発者</span>
-          </button>
-        </div>
-
-        <!-- Header Central Context Breadcrumb (Raycast / Linear style) -->
-        <div class="current-repo-badge" id="current-repo-badge" onclick="openCommandPalette()" title="クイックコマンドパレットを開く (⌘K)">
-          <span class="repo-badge-icon">📁</span>
-          <span class="repo-badge-name" id="badge-repo-name">RepoCHK Mac</span>
-          <span class="repo-badge-sep">/</span>
-          <span class="repo-badge-mode" id="badge-mode-name">構成図</span>
-          <kbd class="kbd-badge header-kbd">⌘K</kbd>
-        </div>
-      </div>
-
-      <!-- Right: Action Buttons + Zoom Controls + Toggle Inspector (Reopen Button shown when collapsed) -->
-      <div class="header-top-right">
-        <!-- Beginner Guide Toggle Button (Reopen anytime) -->
-        <button class="pane-toggle-btn" id="btn-toggle-guide" onclick="toggleGuideBar()" title="初心者ガイドの表示/非表示 (Toggle Quick Guide)">
-          <span style="font-size: 0.82rem;">❓</span>
-          <span class="btn-text" data-i18n="btn_guide" style="font-size: 0.74rem; font-weight: 600;">ガイド</span>
-        </button>
-        <button class="pane-toggle-btn" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)">
-          <span style="font-size: 0.82rem;">⌨️</span>
-        </button>
-        <button class="btn btn-sync btn-settings" onclick="openAdminSettingsModal()" style="background: linear-gradient(135deg, #0f766e 0%, #047857 100%) !important; border-color: #34d399 !important;" title="OpenAI / Claude / Gemini / Groq APIキーと PHP・Node.js 脆弱性監査MCP/スキルを設定します (⌘,)">
-          <span class="btn-icon">⚙️</span>
-          <span class="btn-text" data-i18n="btn_settings">設定</span>
-        </button>
-        <button class="btn btn-sync" onclick="openAnalyzeModal()" style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important; border-color: #a78bfa !important;" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します">
-          <span class="btn-icon">➕</span>
-          <span class="btn-text" data-i18n="btn_add">追加</span>
-        </button>
-        <div class="header-auto-sync-chip" id="header-auto-sync-chip" title="自動定期更新の間隔 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
-          <span class="dot-pulse" id="header-sync-pulse" style="background: #34d399; width: 6px; height: 6px;"></span>
-          <span id="header-sync-chip-text"><span class="chip-label">60分毎 </span>(60:00)</span>
-        </div>
-        <button class="btn btn-sync" id="sync-btn" onclick="triggerGitHubSync()" title="GitHub最新コミット・差分を手動同期">
-          <span class="btn-icon">🔄</span>
-          <span class="btn-text" data-i18n="btn_sync">同期</span>
-        </button>
-
-        <!-- Bilingual Switcher (JA / EN) -->
-        <div class="lang-switch-toggle" onclick="toggleLanguage()" title="言語切り替え / Switch Language (日本語 ⇄ English)">
-          <span class="lang-switch-globe">🌐</span>
-          <span class="lang-opt active" id="lang-opt-ja">JA</span>
-          <span class="lang-sep">/</span>
-          <span class="lang-opt" id="lang-opt-en">EN</span>
-        </div>
-
-        <!-- Export Diagram Controls (SVG / PNG) -->
-        <div class="export-controls-group" title="ダイアグラムを画像として保存">
-          <button class="btn-export" onclick="exportDiagramAsSvg()" title="ベクトル画像 (SVG) として保存">
-            <span class="btn-icon">📐</span>
-            <span class="btn-text" data-i18n="btn_export_svg">SVG</span>
-          </button>
-          <button class="btn-export" onclick="exportDiagramAsPng()" title="高解像度画像 (PNG) として保存">
-            <span class="btn-icon">📷</span>
-            <span class="btn-text" data-i18n="btn_export_png">PNG</span>
-          </button>
-        </div>
-
-        <div class="zoom-controls-group" title="ダイアグラム表示倍率の操作">
-          <button class="zoom-btn" onclick="zoomIn()" title="ズームイン (拡大)">
-            <span>➕</span>
-          </button>
-          <button class="zoom-btn" onclick="zoomOut()" title="ズームアウト (縮小)">
-            <span>➖</span>
-          </button>
-          <button class="zoom-btn" onclick="resetZoom()" title="初期サイズにリセット (100%)">
-            <span>↺</span>
-          </button>
-        </div>
-
-        <button class="pane-toggle-btn pane-open" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペインを開閉 (⌘I)"><span>◨</span> <span>▶</span></button>
-      </div>
-    </div>
 
     <!-- Beginner Easy Guide Bar (Can be dismissed or toggled) -->
     <div class="beginner-guide-bar" id="beginner-guide-bar" style="background: linear-gradient(90deg, rgba(14, 165, 233, 0.12) 0%, rgba(99, 102, 241, 0.10) 100%); border-bottom: 1px solid rgba(56, 189, 248, 0.22); padding: 5px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 0.74rem; color: #cbd5e1; user-select: none;">
@@ -5360,7 +5696,9 @@ def build_portal_html(data, is_shareable=False):
     </div>
   </div>
 
-    <!-- Table Schema Detail Modal -->
+      </div> <!-- Close #app-workspace -->
+
+  <!-- Table Schema Detail Modal -->
   <div class="modal-backdrop" id="table-modal" onclick="if(event.target===this)closeTableModal()">
     <div class="modal-box" style="max-width: 780px; text-align: left; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-bottom: 14px;">
@@ -7565,7 +7903,7 @@ def build_portal_html(data, is_shareable=False):
           const execReportBtnHtml = isSimple ? `
             <button class="btn-exec-report-dl" onclick="downloadExecutiveSummaryReport('${encodeURIComponent(JSON.stringify(repoItem))}')" title="このリポジトリの経営・管理者向け要約レポート (.md) を出力保存">
               <span>📥</span>
-              <span>${dict.btn_download_exec_report || '要約レポートをダウンロード (.md)'}</span>
+              <span>${(dict.btn_download_exec_report || '要約レポートをダウンロード (.md)').replace(/^[📥\s]+/g, '')}</span>
             </button>
           ` : '';
 
@@ -8312,18 +8650,7 @@ def build_portal_html(data, is_shareable=False):
 
       const serializer = new XMLSerializer();
       const svgString = '<?xml version="1.0" encoding="UTF-8"?>\\n' + serializer.serializeToString(info.svgElement);
-      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-
-      const dict = I18N[currentLang] || I18N.ja;
-      showToast(dict.toast_svg_exported || 'SVG downloaded', 'success');
+      saveFileToUser(fileName, svgString, false, 'image/svg+xml;charset=utf-8');
     }
 
     function exportDiagramAsPng() {
@@ -8356,20 +8683,13 @@ def build_portal_html(data, is_shareable=False):
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
 
-        canvas.toBlob((blob) => {
-          if (!blob) return;
-          const pngUrl = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = pngUrl;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          setTimeout(() => URL.revokeObjectURL(pngUrl), 2000);
-
-          const dict = I18N[currentLang] || I18N.ja;
-          showToast(dict.toast_png_exported || 'PNG downloaded', 'success');
-        }, 'image/png');
+        try {
+          const dataUrl = canvas.toDataURL('image/png');
+          saveFileToUser(fileName, dataUrl, true, 'image/png');
+        } catch (canvasErr) {
+          console.error('Failed to export canvas as PNG:', canvasErr);
+          alert(currentLang === 'ja' ? 'PNG画像の生成に失敗しました。' : 'Failed to export PNG.');
+        }
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
@@ -9816,6 +10136,64 @@ def build_portal_html(data, is_shareable=False):
       }
     }
 
+    
+    /* ==========================================================================
+       Native & Web Hybrid File Save / Download Helper
+       Uses backend /api/save-file to save directly to ~/Downloads and reveal in Finder
+       Falls back to browser Blob URL download when running standalone
+       ========================================================================== */
+    async function saveFileToUser(fileName, content, isBase64 = false, mimeType = 'text/plain') {
+      const isEn = (typeof currentLang !== 'undefined' && currentLang === 'en');
+      try {
+        const resp = await fetch('/api/save-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: fileName,
+            content: content,
+            is_base64: isBase64
+          })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.ok) {
+            if (typeof showToast === 'function') {
+              showToast(isEn ? `📥 Saved to ~/Downloads: ${data.filename}` : `📥 ~/Downloads に保存しました: ${data.filename}`, 'success');
+            }
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn('Native backend /api/save-file unavailable, using browser download:', err);
+      }
+
+      // Fallback for standalone browser mode
+      try {
+        let url;
+        if (isBase64) {
+          url = content.startsWith('data:') ? content : `data:${mimeType};base64,${content}`;
+        } else {
+          const blob = new Blob([content], { type: mimeType });
+          url = URL.createObjectURL(blob);
+        }
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        if (!isBase64) setTimeout(() => URL.revokeObjectURL(url), 1000);
+        if (typeof showToast === 'function') {
+          showToast(isEn ? `📥 Exported ${fileName}` : `📥 ファイルを出力しました: ${fileName}`, 'info');
+        }
+        return true;
+      } catch (blobErr) {
+        console.error('File download completely failed:', blobErr);
+        alert(isEn ? 'Failed to save file.' : 'ファイルの保存に失敗しました。');
+        return false;
+      }
+    }
+
     function downloadExecutiveSummaryReport(repoDataStr) {
       let repoItem = null;
       try {
@@ -9864,19 +10242,7 @@ def build_portal_html(data, is_shareable=False):
       }
       md += `---\\n*Generated by RepoCHK Mac — Intuitive Repository & Security Intelligence*\\n`;
 
-      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-      if (typeof showToast === 'function') {
-        showToast(isEn ? '📥 Executive report downloaded' : '📥 要約レポートをダウンロードしました', 'success');
-      }
+      saveFileToUser(fileName, md, false, 'text/markdown;charset=utf-8');
     }
 
     /* ==========================================================================
@@ -10335,15 +10701,7 @@ def build_portal_html(data, is_shareable=False):
       md += `\\`\\`\\`text\\n${aiPrompt}\\n\\`\\`\\`\\n\\n`;
       md += `---\\n*Generated by RepoCHK Mac — Architecture & Vulnerability AI Studio*\\n`;
 
-      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      saveFileToUser(fileName, md, false, 'text/markdown;charset=utf-8');
     }
 
     /* ==========================================================================

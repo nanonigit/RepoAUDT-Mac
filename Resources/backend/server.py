@@ -246,6 +246,54 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": str(exc)})
             return
 
+        if self.path.startswith("/api/save-file"):
+            try:
+                import base64
+                import subprocess
+                body = json.loads(body_raw) if body_raw else {}
+                raw_filename = (body.get("filename") or "report.md").strip()
+                content = body.get("content") or ""
+                is_base64 = bool(body.get("is_base64", False))
+
+                clean_name = os.path.basename(raw_filename)
+                if not clean_name:
+                    clean_name = f"RepoCHK_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+
+                downloads_dir = Path.home() / "Downloads"
+                downloads_dir.mkdir(parents=True, exist_ok=True)
+                target_path = downloads_dir / clean_name
+
+                if target_path.exists():
+                    stem = target_path.stem
+                    suffix = target_path.suffix
+                    idx = 1
+                    while (downloads_dir / f"{stem}_{idx}{suffix}").exists():
+                        idx += 1
+                    target_path = downloads_dir / f"{stem}_{idx}{suffix}"
+
+                if is_base64:
+                    if "," in content:
+                        content = content.split(",", 1)[1]
+                    file_bytes = base64.b64decode(content)
+                    target_path.write_bytes(file_bytes)
+                else:
+                    target_path.write_text(content, encoding="utf-8")
+
+                try:
+                    subprocess.run(["open", "-R", str(target_path)], check=False)
+                except Exception:
+                    pass
+
+                self._send_json(200, {
+                    "ok": True,
+                    "saved_path": str(target_path),
+                    "filename": target_path.name,
+                    "message": f"Saved to ~/Downloads/{target_path.name}"
+                })
+            except Exception as exc:
+                self._send_json(500, {"ok": False, "error": str(exc)})
+            return
+
         if self.path.startswith("/api/terminal/exec"):
             try:
                 import subprocess
