@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,28 @@ import security_audit_engine
 APP_SUPPORT_DIR = security_audit_engine.APP_SUPPORT_DIR
 REPOS_CACHE_DIR = APP_SUPPORT_DIR / "repos"
 STATE_FILE = APP_SUPPORT_DIR / "analyzed_repos.json"
+_STATE_LOCK = threading.Lock()
+_GITHUB_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _validate_github_segment(segment: str, kind: str) -> str:
+    """Validate GitHub owner/repo names against path traversal and CLI flag injection."""
+    if (
+        not segment
+        or segment in (".", "..")
+        or segment.startswith("-")
+        or not _GITHUB_SEGMENT_RE.match(segment)
+    ):
+        raise ValueError(f"無効なGitHub {kind} 名です: '{segment}'")
+    return segment
+
+
+def _write_json_atomic(path: Path, payload: Dict[str, Any]) -> None:
+    """Atomically write JSON to disk via a temporary file in the same directory."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp_path, path)
 
 
 def ensure_dirs() -> None:
@@ -86,7 +109,7 @@ def parse_github_target(raw_input: str) -> Dict[str, Any]:
 
     # Handle https://github.com/orgs/<org>/... or https://github.com/users/<user>/...
     if parts[0] in ("orgs", "users") and len(parts) >= 2:
-        owner = parts[1]
+        owner = _validate_github_segment(parts[1], "owner")
         return {
             "mode": "org",
             "owner": owner,
@@ -96,7 +119,7 @@ def parse_github_target(raw_input: str) -> Dict[str, Any]:
 
     # Single segment -> Organization or User! (e.g. https://github.com/plusimpact or "plusimpact")
     if len(parts) == 1:
-        owner = parts[0]
+        owner = _validate_github_segment(parts[0], "owner")
         return {
             "mode": "org",
             "owner": owner,
@@ -106,7 +129,7 @@ def parse_github_target(raw_input: str) -> Dict[str, Any]:
 
     # Two or more segments -> check if second segment is a tab/page keyword under org/user
     if parts[1] in ("repositories", "projects", "packages", "people", "teams", "settings"):
-        owner = parts[0]
+        owner = _validate_github_segment(parts[0], "owner")
         return {
             "mode": "org",
             "owner": owner,
@@ -114,7 +137,8 @@ def parse_github_target(raw_input: str) -> Dict[str, Any]:
             "local_path": None,
         }
 
-    owner, repo = parts[0], parts[1]
+    owner = _validate_github_segment(parts[0], "owner")
+    repo = _validate_github_segment(parts[1], "repo")
     return {
         "mode": "repo",
         "owner": owner,
@@ -206,8 +230,8 @@ def list_org_or_user_repositories(owner: str, limit: int = 35) -> List[Dict[str,
                                     "language": item.get("language") or "Code",
                                 })
                             break
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"Notice: GitHub REST API fallback failed for {owner}: {exc}", file=sys.stderr)
 
     # Also check local directories under ~/Git/<owner>
     local_org_dir = Path.home() / "Git" / owner
@@ -300,8 +324,8 @@ def extract_git_metadata(repo_dir: Path, owner: str, repo: str, fallback_meta: O
                 updated_at = updated_at or gh_data.get("updated_at", "")
                 pushed_at = pushed_at or gh_data.get("pushed_at", "")
                 gh_desc = gh_desc or gh_data.get("description") or ""
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"Notice: gh api metadata lookup failed for {owner}/{repo}: {exc}", file=sys.stderr)
 
     commit_hash = run_cmd(["git", "log", "-1", "--format=%h"], cwd=repo_dir) or "HEAD"
     commit_date = run_cmd(["git", "log", "-1", "--format=%cI"], cwd=repo_dir)
@@ -422,7 +446,8 @@ def detect_tech_stack_and_deps(repo_dir: Path) -> Dict[str, Any]:
 
     req_path = repo_dir / "requirements.txt"
     pyproject_path = repo_dir / "pyproject.toml"
-    py_files = list(repo_dir.rglob("*.py"))
+    py_ignore = {".git", "node_modules", "vendor", "dist", "build", "__pycache__", ".venv", "venv"}
+    py_files = [p for p in repo_dir.rglob("*.py") if not any(part in py_ignore for part in p.parts)]
     if req_path.exists() or pyproject_path.exists() or py_files:
         runtime["python"] = "Python 3.11+"
         req_text = ""
@@ -1041,9 +1066,11 @@ def extract_data_models_from_repo(repo_dir: Path, repo_name: str) -> Dict[str, A
     schemas: Dict[str, Any] = {}
     ignore_dirs = {".git", "node_modules", "dist", "build", "__pycache__", ".next", "vendor"}
 
-    for sf in list(repo_dir.rglob("*.swift"))[:30]:
-        if any(p in ignore_dirs for p in sf.parts):
-            continue
+    swift_files = [
+        sf for sf in repo_dir.rglob("*.swift")
+        if not any(p in ignore_dirs for p in sf.parts)
+    ][:30]
+    for sf in swift_files:
         txt = sf.read_text(encoding="utf-8", errors="ignore")
         for m in re.finditer(r"struct\s+([A-Z][A-Za-z0-9_]+)\s*(?::\s*([^{]+))?\s*\{([^}]+)\}", txt):
             st_name = m.group(1)
@@ -1390,8 +1417,8 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
                 else:
                     eco_lines.append(f"  style {nid} fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#fff")
                 continue
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"Notice: deep analysis fallback to lightweight for {owner}/{rname}: {exc}", file=sys.stderr)
 
         # Lightweight entry for non-cloned repos so the entire org is immediately browsable
         ld, lspecs = build_lightweight_repo_entry(owner, rmeta, category_label=cat_label)
@@ -1531,7 +1558,7 @@ def analyze_any_github_target(raw_input: str) -> Dict[str, Any]:
         return analyze_repository(f"{parsed['owner']}/{parsed['repo']}")
 
 
-def load_saved_analyses() -> Dict[str, Any]:
+def _load_saved_analyses_unlocked() -> Dict[str, Any]:
     ensure_dirs()
     if STATE_FILE.exists():
         try:
@@ -1572,55 +1599,62 @@ def load_saved_analyses() -> Dict[str, Any]:
                         if not f.get("comment"):
                             f["comment"] = f.get("desc") or ""
             return data
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"Warning: failed to load analyzed_repos.json: {exc}", file=sys.stderr)
     return {"diagrams": [], "techSpecs": {}, "tableSchemas": {}, "deleted_ids": []}
 
 
+def load_saved_analyses() -> Dict[str, Any]:
+    with _STATE_LOCK:
+        return _load_saved_analyses_unlocked()
+
+
 def save_analysis_result(result: Dict[str, Any]) -> Dict[str, Any]:
-    state = load_saved_analyses()
-    new_diagrams = result.get("diagrams") or ([result["diagram"]] if "diagram" in result else [])
-    new_ids = {d["id"] for d in new_diagrams}
-    new_urls = {(d.get("github_url"), d.get("perspective")) for d in new_diagrams}
+    with _STATE_LOCK:
+        state = _load_saved_analyses_unlocked()
+        new_diagrams = result.get("diagrams") or ([result["diagram"]] if "diagram" in result else [])
+        new_ids = {d["id"] for d in new_diagrams}
+        new_urls = {(d.get("github_url"), d.get("perspective")) for d in new_diagrams}
 
-    # If user re-adds a previously deleted repo, remove it from deleted_ids
-    deleted_ids = set(state.get("deleted_ids", [])) - new_ids
-    state["deleted_ids"] = list(deleted_ids)
+        # If user re-adds a previously deleted repo, remove it from deleted_ids
+        deleted_ids = set(state.get("deleted_ids", [])) - new_ids
+        state["deleted_ids"] = list(deleted_ids)
 
-    existing = [
-        d for d in state.get("diagrams", [])
-        if d.get("id") not in new_ids and (d.get("github_url"), d.get("perspective")) not in new_urls
-    ]
-    state["diagrams"] = new_diagrams + existing
-    state.setdefault("techSpecs", {}).update(result.get("techSpecs", {}))
-    state.setdefault("tableSchemas", {}).update(result.get("tableSchemas", {}))
-    STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    return state
+        existing = [
+            d for d in state.get("diagrams", [])
+            if d.get("id") not in new_ids and (d.get("github_url"), d.get("perspective")) not in new_urls
+        ]
+        state["diagrams"] = new_diagrams + existing
+        state.setdefault("techSpecs", {}).update(result.get("techSpecs", {}))
+        state.setdefault("tableSchemas", {}).update(result.get("tableSchemas", {}))
+        _write_json_atomic(STATE_FILE, state)
+        return state
 
 
 def delete_saved_diagram(diagram_id: Optional[str] = None, category: Optional[str] = None, ids_list: Optional[List[str]] = None) -> Dict[str, Any]:
-    state = load_saved_analyses()
-    deleted_set = set(state.get("deleted_ids", []))
+    with _STATE_LOCK:
+        state = _load_saved_analyses_unlocked()
+        deleted_set = set(state.get("deleted_ids", []))
 
-    if diagram_id:
-        deleted_set.add(diagram_id)
-        state["diagrams"] = [d for d in state.get("diagrams", []) if d.get("id") != diagram_id]
+        if diagram_id:
+            deleted_set.add(diagram_id)
+            state["diagrams"] = [d for d in state.get("diagrams", []) if d.get("id") != diagram_id]
 
-    if ids_list:
-        for did in ids_list:
-            deleted_set.add(did)
-        id_lookup = set(ids_list)
-        state["diagrams"] = [d for d in state.get("diagrams", []) if d.get("id") not in id_lookup]
+        if ids_list:
+            for did in ids_list:
+                deleted_set.add(did)
+            id_lookup = set(ids_list)
+            state["diagrams"] = [d for d in state.get("diagrams", []) if d.get("id") not in id_lookup]
 
-    if category:
-        for d in state.get("diagrams", []):
-            if d.get("category") == category and d.get("id"):
-                deleted_set.add(d["id"])
-        state["diagrams"] = [d for d in state.get("diagrams", []) if d.get("category") != category]
+        if category:
+            for d in state.get("diagrams", []):
+                if d.get("category") == category and d.get("id"):
+                    deleted_set.add(d["id"])
+            state["diagrams"] = [d for d in state.get("diagrams", []) if d.get("category") != category]
 
-    state["deleted_ids"] = list(deleted_set)
-    STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    return state
+        state["deleted_ids"] = list(deleted_set)
+        _write_json_atomic(STATE_FILE, state)
+        return state
 
 
 if __name__ == "__main__":

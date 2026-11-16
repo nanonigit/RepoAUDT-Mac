@@ -67,6 +67,16 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
 }
 
 
+def get_candidate_env_files() -> List[Path]:
+    """Return candidate .env file paths searched for API key fallbacks."""
+    return [
+        APP_SUPPORT_DIR / ".env",
+        Path.cwd() / ".env",
+        Path.home() / ".config" / "RepoCHK Mac" / ".env",
+        Path.home() / ".config" / "RepoChex" / ".env",
+    ]
+
+
 def load_settings() -> Dict[str, Any]:
     APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
     settings = json.loads(json.dumps(DEFAULT_SETTINGS))
@@ -81,8 +91,8 @@ def load_settings() -> Dict[str, Any]:
                     settings["models"].update(saved["models"])
                 if isinstance(saved.get("skills"), dict):
                     settings["skills"].update(saved["skills"])
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"Warning: failed to load settings.json: {exc}", file=sys.stderr)
 
     # Fallback to environment variables or local Secrets/.env if not explicitly set in settings.json
     env_map = {
@@ -95,13 +105,7 @@ def load_settings() -> Dict[str, Any]:
         if not settings["keys"].get(prov) and os.environ.get(env_name):
             settings["keys"][prov] = os.environ[env_name]
 
-    candidate_envs = [
-        APP_SUPPORT_DIR / ".env",
-        Path.cwd() / ".env",
-        Path.home() / ".config" / "RepoCHK Mac" / ".env",
-        Path.home() / ".config" / "RepoChex" / ".env",
-    ]
-    for env_file in candidate_envs:
+    for env_file in get_candidate_env_files():
         if env_file.exists():
             try:
                 for line in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
@@ -114,8 +118,8 @@ def load_settings() -> Dict[str, Any]:
                     for prov, env_name in env_map.items():
                         if k_env == env_name and not settings["keys"].get(prov) and len(v_env) >= 12:
                             settings["keys"][prov] = v_env
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"Warning: failed to read env file {env_file}: {exc}", file=sys.stderr)
 
     return settings
 
@@ -123,7 +127,9 @@ def load_settings() -> Dict[str, Any]:
 def save_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
     current = load_settings()
     if "active_provider" in payload:
-        current["active_provider"] = payload["active_provider"]
+        prov_val = str(payload["active_provider"]).strip()
+        if prov_val in ("auto", "openai", "claude", "gemini", "groq"):
+            current["active_provider"] = prov_val
     if isinstance(payload.get("keys"), dict):
         for k in ("openai", "claude", "gemini", "groq"):
             if k in payload["keys"]:
@@ -146,8 +152,8 @@ def save_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
     SETTINGS_FILE.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
     try:
         os.chmod(SETTINGS_FILE, 0o600)
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"Warning: failed to set 0600 permissions on {SETTINGS_FILE}: {exc}", file=sys.stderr)
     return get_masked_settings(current)
 
 
@@ -229,8 +235,8 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                                 {"name": "GitHub Advisory", "url": f"https://github.com/advisories?query={pkg_name}"},
                             ],
                         })
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"Notice: OSV vulnerability query skipped/failed: {exc}", file=sys.stderr)
 
     return advisories
 
@@ -447,7 +453,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
                 php_ver = str(req_all.get("php", ""))
                 if php_ver:
                     runtime_info["php"] = f"PHP {php_ver}"
-                    if any(old_v in php_ver for old_v in ("5.", "7.", "8.0")):
+                    if re.search(r"(?:^|[^\d.])(5\.|7\.|8\.0(?:\b|$))", php_ver):
                         security_advisories.append({
                             "pkg": "php (Runtime)",
                             "installed": php_ver,
@@ -550,7 +556,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
             engines = pdata.get("engines") or {}
             node_ver = str(engines.get("node", "Node.js 20.x LTS"))
             runtime_info["node"] = node_ver
-            if any(old_n in node_ver for old_n in ("12", "14", "16", "18")):
+            if re.search(r"(?:^|[^\d.])(12|14|16|18)(?:\.|$|x|\s)", node_ver):
                 security_advisories.append({
                     "pkg": "Node.js Runtime",
                     "installed": node_ver,
@@ -568,8 +574,8 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
             all_deps.update(pdata.get("devDependencies") or {})
             for k, v in all_deps.items():
                 osv_query_list.append(("npm", k, str(v)))
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"Warning: failed to load settings.json: {exc}", file=sys.stderr)
 
     # =========================================================================
     # 3. Python / Go / Rust OSV Queue
@@ -674,7 +680,10 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
         try:
             with urllib.request.urlopen(req, timeout=25) as resp:
                 data = json.loads(resp.read().decode("utf-8", errors="ignore"))
-                return data["choices"][0]["message"]["content"]
+                choices = data.get("choices") or []
+                if not choices or not isinstance(choices[0], dict):
+                    raise RuntimeError(f"Unexpected {provider} response format: missing choices")
+                return choices[0].get("message", {}).get("content", "")
         except urllib.error.HTTPError as he:
             # If the model requires /v1/responses endpoint (e.g. codex/responses-only models), fallback automatically
             if provider == "openai" and he.code in (400, 404):
@@ -718,10 +727,13 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
         )
         with urllib.request.urlopen(req, timeout=25) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore"))
-            return data["content"][0]["text"]
+            blocks = data.get("content") or []
+            if not blocks or not isinstance(blocks[0], dict):
+                raise RuntimeError("Unexpected Claude response format: missing content")
+            return blocks[0].get("text", "")
 
     if provider == "gemini":
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         payload = {
             "systemInstruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"parts": [{"text": user_prompt}]}],
@@ -730,12 +742,20 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "User-Agent": "RepoCHK-Mac/1.0"},
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": api_key,
+                "User-Agent": "RepoCHK-Mac/1.0",
+            },
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=25) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore"))
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            candidates = data.get("candidates") or []
+            parts = (candidates[0].get("content") or {}).get("parts") or [] if candidates else []
+            if not parts or not isinstance(parts[0], dict):
+                raise RuntimeError("Unexpected Gemini response format: missing candidates")
+            return parts[0].get("text", "")
 
     raise ValueError(f"Unsupported provider: {provider}")
 
@@ -778,7 +798,7 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
             # If the entered key gave 401, check if local Secrets/.env has a working OpenAI key
             if mhe.code == 401:
                 fallback_key = ""
-                for env_file in candidate_envs:
+                for env_file in get_candidate_env_files():
                     if env_file.exists():
                         for line in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
                             if line.strip().startswith("OPENAI_API_KEY="):
@@ -799,6 +819,10 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
                                 # Auto-heal and save the working key from Secrets/.env
                                 settings["keys"]["openai"] = fallback_key
                                 SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+                                try:
+                                    os.chmod(SETTINGS_FILE, 0o600)
+                                except Exception:
+                                    pass
                                 api_key = fallback_key
                                 models_verified = True
                                 model_exists_in_org = model in all_mids2
@@ -930,5 +954,6 @@ def run_llm_deep_vulnerability_audit(
                     "fix_cmd": it.get("fix_cmd", ""),
                 })
         return valid_items, f"{provider.upper()} ({model})"
-    except Exception:
+    except Exception as exc:
+        print(f"Notice: LLM deep audit skipped/failed for {repo_name}: {exc}", file=sys.stderr)
         return [], f"{provider.upper()} ({model})"

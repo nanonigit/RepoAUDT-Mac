@@ -1167,9 +1167,9 @@ def collect_all_data():
     return repos_data
 
 def build_portal_html(data, is_shareable=False):
-    diagrams_json = json.dumps(data, ensure_ascii=False)
-    specs_json = json.dumps(TECH_SPECS, ensure_ascii=False)
-    table_schemas_json = json.dumps(TABLE_SCHEMAS, ensure_ascii=False)
+    diagrams_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    specs_json = json.dumps(TECH_SPECS, ensure_ascii=False).replace("</", "<\\/")
+    table_schemas_json = json.dumps(TABLE_SCHEMAS, ensure_ascii=False).replace("</", "<\\/")
 
     template = """<!DOCTYPE html>
 <html lang="ja">
@@ -1210,6 +1210,10 @@ def build_portal_html(data, is_shareable=False):
       height: 100vh;
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
+    }
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
 
     /* Left Sidebar */
@@ -5343,7 +5347,7 @@ def build_portal_html(data, is_shareable=False):
   <header class="app-top-toolbar" id="app-top-toolbar">
     <!-- Left Zone: Sidebar Toggle + View Mode Switcher + UI Mode Switcher -->
     <div class="tb-left-zone">
-      <button class="tb-btn" id="btn-toggle-sidebar" onclick="toggleSidebarPane()" title="左サイドバーを開閉 (⌘B)">
+      <button class="tb-btn" id="btn-toggle-sidebar" onclick="toggleSidebarPane()" title="左サイドバーを開閉 (⌘B)" data-i18n-title="title_toggle_sidebar">
         <span style="font-size: 0.72rem;">◀</span>
         <span style="font-size: 0.78rem;">◧</span>
       </button>
@@ -5352,15 +5356,15 @@ def build_portal_html(data, is_shareable=False):
 
       <!-- View Mode Tabs (Segmented Control) -->
       <div class="tb-segmented" role="tablist">
-        <button class="tb-seg-item active view-mode-btn" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示 (1)">
+        <button class="tb-seg-item active view-mode-btn" id="btn-mode-arch" onclick="switchViewMode('arch')" title="アーキテクチャ構成図を表示 (1)" data-i18n-title="title_mode_arch">
           <span>🗺️</span>
           <span data-i18n="mode_arch">構成図</span>
         </button>
-        <button class="tb-seg-item view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示 (2)">
+        <button class="tb-seg-item view-mode-btn" id="btn-mode-seq" onclick="switchViewMode('seq')" title="時系列実行シーケンスフローを表示 (2)" data-i18n-title="title_mode_seq">
           <span>⏱️</span>
           <span data-i18n="mode_seq">シーケンス</span>
         </button>
-        <button class="tb-seg-item view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示 (3)">
+        <button class="tb-seg-item view-mode-btn" id="btn-mode-coderabbit" onclick="switchViewMode('coderabbit')" title="CodeRabbit AIコード品質＆セキュリティ監査レポートを表示 (3)" data-i18n-title="title_mode_cr">
           <span>🐰</span>
           <span data-i18n="mode_cr">AI監査</span>
         </button>
@@ -5369,12 +5373,12 @@ def build_portal_html(data, is_shareable=False):
       <div class="tb-separator"></div>
 
       <!-- UI Mode (Simple vs Dev) Compact Switcher -->
-      <div class="tb-ui-toggle ui-mode-toggle" id="ui-mode-toggle" title="表示モード切替 (シンプル / 開発者)">
-        <button class="tb-ui-item ui-mode-btn active" id="btn-ui-simple" onclick="setUiMode('simple')" title="シンプル表示 (初心者・管理者向け)">
+      <div class="tb-ui-toggle ui-mode-toggle" id="ui-mode-toggle" title="表示モード切替 (シンプル / 開発者)" data-i18n-title="title_ui_mode">
+        <button class="tb-ui-item ui-mode-btn active" id="btn-ui-simple" onclick="setUiMode('simple')" title="シンプル表示 (初心者・管理者向け)" data-i18n-title="title_ui_simple">
           <span>🔰</span>
           <span data-i18n="mode_simple">シンプル</span>
         </button>
-        <button class="tb-ui-item ui-mode-btn" id="btn-ui-dev" onclick="setUiMode('dev')" title="開発者向け詳細表示 (全9タブ・ターミナル・DB・API等)">
+        <button class="tb-ui-item ui-mode-btn" id="btn-ui-dev" onclick="setUiMode('dev')" title="開発者向け詳細表示 (全9タブ・ターミナル・DB・API等)" data-i18n-title="title_ui_dev">
           <span>🛠️</span>
           <span data-i18n="mode_dev">開発者</span>
         </button>
@@ -5383,7 +5387,7 @@ def build_portal_html(data, is_shareable=False):
 
     <!-- Center Zone: Breadcrumb & Command Palette Trigger (Never Overlaps, Ellipsis Guaranteed) -->
     <div class="tb-center-zone">
-      <div class="tb-search-pill current-repo-badge" id="current-repo-badge" onclick="openCommandPalette()" title="クイックコマンドパレットを開く (⌘K)">
+      <div class="tb-search-pill current-repo-badge" id="current-repo-badge" role="button" tabindex="0" onclick="openCommandPalette()" title="クイックコマンドパレットを開く (⌘K)" data-i18n-title="title_cmd_palette">
         <span style="font-size: 0.76rem; flex-shrink: 0;">📁</span>
         <span class="tb-repo-name" id="badge-repo-name">RepoCHK Mac</span>
         <span style="color: #475569; font-size: 0.68rem; flex-shrink: 0;">/</span>
@@ -5395,13 +5399,13 @@ def build_portal_html(data, is_shareable=False):
     <!-- Right Zone: Action Controls & Utilities -->
     <div class="tb-right-zone">
       <!-- Primary Action: GitHub Add -->
-      <button class="tb-btn-primary" onclick="openAnalyzeModal()" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します (⌘N)">
+      <button class="tb-btn-primary" onclick="openAnalyzeModal()" title="任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します (⌘N)" data-i18n-title="title_btn_add">
         <span>➕</span>
         <span data-i18n="btn_add">追加</span>
       </button>
 
       <!-- Settings Button -->
-      <button class="tb-btn" onclick="openAdminSettingsModal()" title="AI APIキー設定 & 脆弱性監査MCP/スキル設定 (⌘,)">
+      <button class="tb-btn" onclick="openAdminSettingsModal()" title="AI APIキー設定 & 脆弱性監査MCP/スキル設定 (⌘,)" data-i18n-title="title_btn_settings">
         <span>⚙️</span>
         <span data-i18n="btn_settings">設定</span>
       </button>
@@ -5409,7 +5413,7 @@ def build_portal_html(data, is_shareable=False):
       <div class="tb-separator"></div>
 
       <!-- Unified Auto-Sync & Manual Refresh Status Chip -->
-      <div class="tb-sync-unified" id="header-auto-sync-chip" title="自動定期更新中 (クリックで今すぐ手動同期)" onclick="triggerGitHubSync()">
+      <div class="tb-sync-unified" id="header-auto-sync-chip" role="button" tabindex="0" title="自動定期更新中 (クリックで今すぐ手動同期)" data-i18n-title="title_sync_chip" onclick="triggerGitHubSync()">
         <span class="tb-pulse-dot dot-pulse" id="header-sync-pulse"></span>
         <span id="header-sync-chip-text"><span class="chip-label">60分毎 </span>(60:00)</span>
         <span id="sync-btn" style="font-size: 0.74rem; margin-left: 2px;">🔄</span>
@@ -5418,28 +5422,28 @@ def build_portal_html(data, is_shareable=False):
       <div class="tb-separator"></div>
 
       <!-- Export Controls (SVG / PNG) -->
-      <div class="tb-btn-group export-controls-group" title="ダイアグラムを画像として保存">
-        <button class="tb-group-btn btn-export" onclick="exportDiagramAsSvg()" title="ベクトル画像 (SVG) として保存">
+      <div class="tb-btn-group export-controls-group" title="ダイアグラムを画像として保存" data-i18n-title="title_export_group">
+        <button class="tb-group-btn btn-export" onclick="exportDiagramAsSvg()" title="ベクトル画像 (SVG) として保存" data-i18n-title="title_export_svg">
           <span>📐</span>
           <span data-i18n="btn_export_svg">SVG</span>
         </button>
-        <button class="tb-group-btn btn-export" onclick="exportDiagramAsPng()" title="高解像度画像 (PNG) として保存">
+        <button class="tb-group-btn btn-export" onclick="exportDiagramAsPng()" title="高解像度画像 (PNG) として保存" data-i18n-title="title_export_png">
           <span>📷</span>
           <span data-i18n="btn_export_png">PNG</span>
         </button>
       </div>
 
       <!-- Zoom Controls -->
-      <div class="tb-btn-group zoom-controls-group" title="ダイアグラム表示倍率の操作">
-        <button class="tb-group-btn zoom-btn" onclick="zoomIn()" title="ズームイン (拡大)">➕</button>
-        <button class="tb-group-btn zoom-btn" onclick="resetZoom()" title="初期サイズにリセット (100%)">↺</button>
-        <button class="tb-group-btn zoom-btn" onclick="zoomOut()" title="ズームアウト (縮小)">➖</button>
+      <div class="tb-btn-group zoom-controls-group" title="ダイアグラム表示倍率の操作" data-i18n-title="title_zoom_group">
+        <button class="tb-group-btn zoom-btn" onclick="zoomIn()" title="ズームイン (拡大)" data-i18n-title="title_zoom_in" aria-label="Zoom In">➕</button>
+        <button class="tb-group-btn zoom-btn" onclick="resetZoom()" title="初期サイズにリセット (100%)" data-i18n-title="title_zoom_reset" aria-label="Reset Zoom">↺</button>
+        <button class="tb-group-btn zoom-btn" onclick="zoomOut()" title="ズームアウト (縮小)" data-i18n-title="title_zoom_out" aria-label="Zoom Out">➖</button>
       </div>
 
       <div class="tb-separator"></div>
 
       <!-- Language Switcher (JA / EN) -->
-      <div class="tb-lang-btn lang-switch-toggle" onclick="toggleLanguage()" title="言語切り替え / Switch Language (日本語 ⇄ English)">
+      <div class="tb-lang-btn lang-switch-toggle" role="button" tabindex="0" onclick="toggleLanguage()" title="言語切り替え / Switch Language (日本語 ⇄ English)" aria-label="Switch Language">
         <span style="font-size: 0.74rem;">🌐</span>
         <span class="tb-lang-opt lang-opt active" id="lang-opt-ja">JA</span>
         <span style="color: #475569; font-size: 0.65rem;">/</span>
@@ -5447,14 +5451,14 @@ def build_portal_html(data, is_shareable=False):
       </div>
 
       <!-- Shortcuts & Guide -->
-      <button class="tb-btn" style="padding: 0 7px;" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)">
+      <button class="tb-btn" style="padding: 0 7px;" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)" data-i18n-title="title_shortcuts" aria-label="Keyboard Shortcuts">
         <span style="font-size: 0.78rem;">⌨️</span>
       </button>
 
       <div class="tb-separator"></div>
 
       <!-- Inspector Toggle -->
-      <button class="tb-btn" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペインを開閉 (⌘I)">
+      <button class="tb-btn" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペインを開閉 (⌘I)" data-i18n-title="title_toggle_inspector">
         <span style="font-size: 0.78rem;">◨</span>
         <span style="font-size: 0.70rem;">▶</span>
       </button>
@@ -5473,14 +5477,14 @@ def build_portal_html(data, is_shareable=False):
       <div class="live-status"><div class="live-dot"></div> NATIVE MACOS STUDIO (CodeRabbit + Mermaid)</div>
       <div style="margin-top: 10px; background: linear-gradient(135deg, rgba(30, 58, 138, 0.45) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid #3b82f6; border-radius: 9px; padding: 9px 10px;">
         <div style="font-size: 0.72rem; font-weight: 800; color: #93c5fd; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-          <span>🔍 GitHub URL からコード分析</span>
-          <span style="font-size: 0.64rem; color: #60a5fa; cursor: pointer;" onclick="openAnalyzeModal()">📋 保有リスト管理・削除 ↗</span>
+          <span data-i18n="sidebar_gh_title">🔍 GitHub URL からコード分析</span>
+          <span role="button" tabindex="0" style="font-size: 0.64rem; color: #60a5fa; cursor: pointer;" onclick="openAnalyzeModal()" data-i18n="sidebar_gh_manage">📋 保有リスト管理・削除 ↗</span>
         </div>
         <div style="display: flex; gap: 5px;">
-          <input id="sidebar-gh-url-input" type="text" placeholder="https://github.com/org または owner/repo"
+          <input id="sidebar-gh-url-input" type="text" placeholder="https://github.com/org または owner/repo" data-i18n-placeholder="sidebar_gh_placeholder"
             style="flex: 1; min-width: 0; background: #090d16; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; color: #f8fafc; font-size: 0.73rem; outline: none;"
             onkeydown="if(event.key==='Enter') triggerSidebarAnalyze()" />
-          <button onclick="triggerSidebarAnalyze()" id="sidebar-gh-analyze-btn"
+          <button onclick="triggerSidebarAnalyze()" id="sidebar-gh-analyze-btn" data-i18n="sidebar_gh_analyze_btn"
             style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: 1px solid #60a5fa; color: #fff; font-size: 0.72rem; font-weight: 800; padding: 6px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; min-width: 68px; text-align: center;">
             ➕ 分析
           </button>
@@ -5499,7 +5503,7 @@ def build_portal_html(data, is_shareable=False):
       
       <!-- Collapsible Accordion 1: 自動定期更新 & 死活監視 (デフォルト折りたたみ) -->
       <div class="sidebar-accordion collapsed" id="acc-group-sync">
-        <div class="sidebar-accordion-header" onclick="toggleSidebarAccordion('sync')" title="自動更新・死活監視パネルを折りたたむ / 展開">
+        <div class="sidebar-accordion-header" role="button" tabindex="0" aria-expanded="false" aria-controls="acc-body-sync" onclick="toggleSidebarAccordion('sync')" title="自動更新・死活監視パネルを折りたたむ / 展開" data-i18n-title="title_acc_sync">
           <span class="acc-title" data-i18n="acc_sync_title">⚡ 自動更新 &amp; 死活監視</span>
           <span class="acc-active-badge" id="acc-badge-sync">60分</span>
           <span class="acc-arrow" id="acc-arrow-sync">▼</span>
@@ -5512,7 +5516,7 @@ def build_portal_html(data, is_shareable=False):
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
-            <div class="health-monitoring-card" onclick="openHealthModal()" title="クリックして各サービスの死活状態・疎通レイテンシを確認">
+            <div class="health-monitoring-card" role="button" tabindex="0" onclick="openHealthModal()" title="クリックして各サービスの死活状態・疎通レイテンシを確認" data-i18n-title="title_health_card">
               <div style="display: flex; align-items: center; justify-content: space-between;">
                 <span style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #34d399;">
                   <span class="dot-pulse dot-green"></span>
@@ -5573,7 +5577,7 @@ def build_portal_html(data, is_shareable=False):
 
       <!-- Collapsible Accordion 2: 検索 & 鮮度フィルター (デフォルト折りたたみ) -->
       <div class="sidebar-accordion collapsed" id="acc-group-search">
-        <div class="sidebar-accordion-header" onclick="toggleSidebarAccordion('search')" title="検索＆鮮度フィルターを折りたたむ / 展開">
+        <div class="sidebar-accordion-header" role="button" tabindex="0" aria-expanded="false" aria-controls="acc-body-search" onclick="toggleSidebarAccordion('search')" title="検索＆鮮度フィルターを折りたたむ / 展開" data-i18n-title="title_acc_search">
           <span class="acc-title" data-i18n="acc_search_title">🔍 検索 &amp; 鮮度フィルター</span>
           <span class="acc-active-badge" id="acc-badge-search"></span>
           <span class="acc-arrow" id="acc-arrow-search">▼</span>
@@ -5581,13 +5585,13 @@ def build_portal_html(data, is_shareable=False):
         <div class="sidebar-accordion-body" id="acc-body-search">
           <!-- Freshness & Action Quick Filter Tabs -->
           <div class="filter-tabs-row" style="margin-top: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
-            <div class="filter-pill pill-action-req" style="grid-column: span 2;" onclick="setFreshnessFilter('action-req', this)" title="要対応アラートがあるリポジトリのみを絞り込み">
+            <div class="filter-pill pill-action-req" role="button" tabindex="0" style="grid-column: span 2;" onclick="setFreshnessFilter('action-req', this)" title="要対応アラートがあるリポジトリのみを絞り込み" data-i18n-title="title_filter_action_req">
               <span data-i18n="filter_action_req">🔴 要対応</span> (<span id="count-action-req">0</span>)
             </div>
-            <div class="filter-pill active" onclick="setFreshnessFilter('all', this)"><span data-i18n="filter_all">すべて</span> (<span id="count-all">0</span>)</div>
-            <div class="filter-pill pill-amber" onclick="setFreshnessFilter('amber', this)"><span data-i18n="filter_3d">🔥 ≤3日</span> (<span id="count-amber">0</span>)</div>
-            <div class="filter-pill pill-green" onclick="setFreshnessFilter('green', this)"><span data-i18n="filter_10d">🟢 4〜10日</span> (<span id="count-green">0</span>)</div>
-            <div class="filter-pill" onclick="setFreshnessFilter('gray', this)"><span data-i18n="filter_old">⚪ 11日+</span> (<span id="count-gray">0</span>)</div>
+            <div class="filter-pill active" role="button" tabindex="0" onclick="setFreshnessFilter('all', this)"><span data-i18n="filter_all">すべて</span> (<span id="count-all">0</span>)</div>
+            <div class="filter-pill pill-amber" role="button" tabindex="0" onclick="setFreshnessFilter('amber', this)"><span data-i18n="filter_3d">🔥 ≤3日</span> (<span id="count-amber">0</span>)</div>
+            <div class="filter-pill pill-green" role="button" tabindex="0" onclick="setFreshnessFilter('green', this)"><span data-i18n="filter_10d">🟢 4〜10日</span> (<span id="count-green">0</span>)</div>
+            <div class="filter-pill" role="button" tabindex="0" onclick="setFreshnessFilter('gray', this)"><span data-i18n="filter_old">⚪ 11日+</span> (<span id="count-gray">0</span>)</div>
           </div>
 
           <div class="search-box-wrap" style="margin-top: 6px; position: relative;">
@@ -5673,16 +5677,16 @@ def build_portal_html(data, is_shareable=False):
         <button class="btn-icon" onclick="toggleInspectorWidth()" title="幅を最大化 / 元に戻す">⛶</button>
       </div>
     </div>
-    <div class="inspector-tabs">
-      <div class="insp-tab active" data-tab-name="overview" onclick="switchInspTab('overview')"><span data-i18n="tab_overview">📋 概要</span></div>
-      <div class="insp-tab" data-tab-name="terminal" onclick="switchInspTab('terminal')"><span data-i18n="tab_terminal">💻 ターミナル</span></div>
-      <div class="insp-tab" data-tab-name="versions" onclick="switchInspTab('versions')"><span data-i18n="tab_versions">🛡️ バージョン</span></div>
-      <div class="insp-tab" data-tab-name="deploy" onclick="switchInspTab('deploy')"><span data-i18n="tab_deploy">🚀 インフラ</span></div>
-      <div class="insp-tab" data-tab-name="api" onclick="switchInspTab('api')"><span data-i18n="tab_api">🔌 API</span></div>
-      <div class="insp-tab" data-tab-name="db" onclick="switchInspTab('db')"><span data-i18n="tab_db">🗄️ DB</span></div>
-      <div class="insp-tab" data-tab-name="env" onclick="switchInspTab('env')"><span data-i18n="tab_env">⚙️ 環境変数</span></div>
-      <div class="insp-tab" data-tab-name="integrations" onclick="switchInspTab('integrations')"><span data-i18n="tab_integrations">🔗 連携</span></div>
-      <div class="insp-tab" data-tab-name="files" onclick="switchInspTab('files')"><span data-i18n="tab_files">📁 ファイル</span></div>
+    <div class="inspector-tabs" role="tablist">
+      <div class="insp-tab active" role="tab" tabindex="0" data-tab-name="overview" onclick="switchInspTab('overview')"><span data-i18n="tab_overview">📋 概要</span></div>
+      <div class="insp-tab" role="tab" tabindex="0" data-tab-name="terminal" onclick="switchInspTab('terminal')"><span data-i18n="tab_terminal">💻 ターミナル</span></div>
+      <div class="insp-tab" role="tab" tabindex="0" data-tab-name="versions" onclick="switchInspTab('versions')"><span data-i18n="tab_versions">🛡️ バージョン</span></div>
+      <div class="insp-tab" role="tab" tabindex="0" data-tab-name="deploy" onclick="switchInspTab('deploy')"><span data-i18n="tab_deploy">🚀 インフラ</span></div>
+      <div class="insp-tab" role="tab" tabindex="0" data-tab-name="api" onclick="switchInspTab('api')"><span data-i18n="tab_api">🔌 API</span></div>
+      <div class="insp-tab" role="tab" tabindex="0" data-tab-name="db" onclick="switchInspTab('db')"><span data-i18n="tab_db">🗄️ DB</span></div>
+      <div class="insp-tab" role="tab" tabindex="0" data-tab-name="env" onclick="switchInspTab('env')"><span data-i18n="tab_env">⚙️ 環境変数</span></div>
+      <div class="insp-tab" role="tab" tabindex="0" data-tab-name="integrations" onclick="switchInspTab('integrations')"><span data-i18n="tab_integrations">🔗 連携</span></div>
+      <div class="insp-tab" role="tab" tabindex="0" data-tab-name="files" onclick="switchInspTab('files')"><span data-i18n="tab_files">📁 ファイル</span></div>
     </div>
     <div id="inspector-body">
       <!-- Embedded Terminal View inside Inspector (Right Pane) -->
@@ -5957,9 +5961,41 @@ def build_portal_html(data, is_shareable=False):
        Hoisted to the top of <script> so all functions have safe access on load
        ========================================================================== */
     let currentLang = 'ja';
-    try {
-      currentLang = localStorage.getItem('repochex_lang') || 'ja';
-    } catch (_) {}
+    function safeStorageGet(key, fallback = null) {
+      try {
+        const v = localStorage.getItem(key);
+        return v !== null ? v : fallback;
+      } catch (_) {
+        return fallback;
+      }
+    }
+    function safeStorageSet(key, value) {
+      try {
+        localStorage.setItem(key, value);
+      } catch (_) {}
+    }
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    function encodeDataArg(obj) {
+      return encodeURIComponent(JSON.stringify(obj)).replace(/'/g, '%27');
+    }
+    currentLang = safeStorageGet('repochex_lang', 'ja');
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const target = e.target;
+      if (!target || typeof target.matches !== 'function') return;
+      if (target.matches('[role="button"][tabindex="0"], [role="tab"][tabindex="0"]')) {
+        e.preventDefault();
+        target.click();
+      }
+    });
 
     const I18N = {
       ja: {
@@ -6136,6 +6172,34 @@ def build_portal_html(data, is_shareable=False):
         btn_download_exec_report: "📥 経営・管理者向け要約レポートDL (.md)",
         btn_guide: "ガイド",
         sync_modal_desc: "リポジトリの最新コミットを確認し、依存ライブラリ・データベースバージョンを解析してアーキテクチャ図を更新しています...",
+        sidebar_gh_title: "🔍 GitHub URL からコード分析",
+        sidebar_gh_manage: "📋 保有リスト管理・削除 ↗",
+        sidebar_gh_placeholder: "https://github.com/org または owner/repo",
+        sidebar_gh_analyze_btn: "➕ 分析",
+        title_toggle_sidebar: "左サイドバーを開閉 (⌘B)",
+        title_mode_arch: "アーキテクチャ構成図を表示 (1)",
+        title_mode_seq: "時系列実行シーケンスフローを表示 (2)",
+        title_mode_cr: "CodeRabbit AIコード品質＆セキュリティ監査レポートを表示 (3)",
+        title_ui_mode: "表示モード切替 (シンプル / 開発者)",
+        title_ui_simple: "シンプル表示 (初心者・管理者向け)",
+        title_ui_dev: "開発者向け詳細表示 (全9タブ・ターミナル・DB・API等)",
+        title_cmd_palette: "クイックコマンドパレットを開く (⌘K)",
+        title_btn_add: "任意のGitHub URLを入力して構成図・シーケンス図・CodeRabbit監査を自動生成します (⌘N)",
+        title_btn_settings: "AI APIキー設定 & 脆弱性監査MCP/スキル設定 (⌘,)",
+        title_sync_chip: "自動定期更新中 (クリックで今すぐ手動同期)",
+        title_export_group: "ダイアグラムを画像として保存",
+        title_export_svg: "ベクトル画像 (SVG) として保存",
+        title_export_png: "高解像度画像 (PNG) として保存",
+        title_zoom_group: "ダイアグラム表示倍率の操作",
+        title_zoom_in: "ズームイン (拡大)",
+        title_zoom_reset: "初期サイズにリセット (100%)",
+        title_zoom_out: "ズームアウト (縮小)",
+        title_shortcuts: "キーボードショートカット一覧を表示 (?)",
+        title_toggle_inspector: "右ペインを開閉 (⌘I)",
+        title_acc_sync: "自動更新・死活監視パネルを折りたたむ / 展開",
+        title_health_card: "クリックして各サービスの死活状態・疎通レイテンシを確認",
+        title_acc_search: "検索＆鮮度フィルターを折りたたむ / 展開",
+        title_filter_action_req: "要対応アラートがあるリポジトリのみを絞り込み",
       },
       en: {
         mode_arch: "Architecture",
@@ -6311,6 +6375,34 @@ def build_portal_html(data, is_shareable=False):
         btn_download_exec_report: "📥 Download Executive Summary Report (.md)",
         btn_guide: "Guide",
         sync_modal_desc: "Checking latest commits across repositories, analyzing dependencies and database schemas to update architecture diagrams...",
+        sidebar_gh_title: "🔍 Analyze from GitHub URL",
+        sidebar_gh_manage: "📋 Manage Repos ↗",
+        sidebar_gh_placeholder: "https://github.com/org or owner/repo",
+        sidebar_gh_analyze_btn: "➕ Analyze",
+        title_toggle_sidebar: "Toggle Left Sidebar (⌘B)",
+        title_mode_arch: "Show Architecture Diagram (1)",
+        title_mode_seq: "Show Execution Sequence Flow (2)",
+        title_mode_cr: "Show CodeRabbit AI Quality & Security Audit (3)",
+        title_ui_mode: "Switch UI Mode (Simple / Developer)",
+        title_ui_simple: "Simple View (For Managers & Overview)",
+        title_ui_dev: "Developer View (All 9 Tabs, Terminal, DB, API)",
+        title_cmd_palette: "Open Quick Command Palette (⌘K)",
+        title_btn_add: "Analyze a GitHub URL to generate architecture, sequence & CodeRabbit audit (⌘N)",
+        title_btn_settings: "AI API Keys & Security Audit MCP/Skills Settings (⌘,)",
+        title_sync_chip: "Auto Sync Active (Click to sync now)",
+        title_export_group: "Export Diagram as Image",
+        title_export_svg: "Save as Vector Image (SVG)",
+        title_export_png: "Save as High-Res Image (PNG)",
+        title_zoom_group: "Diagram Zoom Controls",
+        title_zoom_in: "Zoom In",
+        title_zoom_reset: "Reset Zoom (100%)",
+        title_zoom_out: "Zoom Out",
+        title_shortcuts: "Show Keyboard Shortcuts (?)",
+        title_toggle_inspector: "Toggle Right Inspector (⌘I)",
+        title_acc_sync: "Collapse / Expand Auto Sync & Health Panel",
+        title_health_card: "Click to inspect service health & latency",
+        title_acc_search: "Collapse / Expand Search & Freshness Filters",
+        title_filter_action_req: "Filter to repositories with Action Required alerts",
       }
     };
 
@@ -6518,13 +6610,15 @@ def build_portal_html(data, is_shareable=False):
       const group = document.getElementById('acc-group-' + section);
       if (!group) return;
       const isCollapsed = group.classList.toggle('collapsed');
-      localStorage.setItem('repochex_acc_' + section, isCollapsed ? '1' : '0');
+      const header = group.querySelector('.sidebar-accordion-header');
+      if (header) header.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+      safeStorageSet('repochex_acc_' + section, isCollapsed ? '1' : '0');
       updateAccordionActiveIndicators();
     }
 
     // Auto Periodic Sync System
-    let autoSyncEnabled = (localStorage.getItem('repochex_auto_sync_enabled') ?? localStorage.getItem('repochecker_auto_sync_enabled')) !== '0';
-    let autoSyncIntervalMinutes = parseInt(localStorage.getItem('repochex_auto_sync_interval') || localStorage.getItem('repochecker_auto_sync_interval') || '60', 10);
+    let autoSyncEnabled = (safeStorageGet('repochex_auto_sync_enabled') ?? safeStorageGet('repochecker_auto_sync_enabled')) !== '0';
+    let autoSyncIntervalMinutes = parseInt(safeStorageGet('repochex_auto_sync_interval') || safeStorageGet('repochecker_auto_sync_interval') || '60', 10);
     if (isNaN(autoSyncIntervalMinutes) || autoSyncIntervalMinutes < 1) autoSyncIntervalMinutes = 60;
     let autoSyncRemainingSeconds = autoSyncIntervalMinutes * 60;
     let autoSyncTimerId = null;
@@ -7162,7 +7256,7 @@ def build_portal_html(data, is_shareable=False):
         grp.className = 'category-group';
         grp.innerHTML = `
           <div class="category-label" style="display: flex; align-items: center; justify-content: space-between;">
-            <span>${catName} (${list.length})</span>
+            <span>${escapeHtml(catName)} (${list.length})</span>
           </div>
         `;
 
@@ -7176,16 +7270,16 @@ def build_portal_html(data, is_shareable=False):
           el.innerHTML = `
             <div class="nav-item-top" style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
               <div class="repo-name" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                ${item.repo}
+                ${escapeHtml(item.repo)}
               </div>
               ${item._hasActionReq ? `
-                <span class="repo-badge-action-req" style="flex-shrink: 0;" onclick="showActionModalForRepo(event, ${index})" title="${dict.title_action_req || 'クリックして要対応の理由と対応方法を確認'}">
+                <span class="repo-badge-action-req" style="flex-shrink: 0;" onclick="showActionModalForRepo(event, ${index})" title="${escapeHtml(dict.title_action_req || 'クリックして要対応の理由と対応方法を確認')}">
                   ${dict.badge_action_req || '🔴 要対応 ↗'}
                 </span>
               ` : ''}
               ${item.is_root ? '<span class="badge-eco" style="flex-shrink: 0;">ECO</span>' : ''}
             </div>
-            <div class="persp-tag">perspective: ${item.perspective}</div>
+            <div class="persp-tag">perspective: ${escapeHtml(item.perspective)}</div>
             <div class="date-meta-row">
               <span class="created-date-label">${dict.label_created || '🐣 作成'}: ${createdStr}</span>
               <span class="freshness-badge ${fresh.colorClass}">
@@ -7719,19 +7813,19 @@ def build_portal_html(data, is_shareable=False):
               </div>
             </div>
             ${repoActions.map((act, idx) => {
-              const actJsonStr = encodeURIComponent(JSON.stringify(act));
-              const repoNameStr = encodeURIComponent(repoItem.repo || '');
+              const actJsonStr = encodeDataArg(act);
+              const repoNameStr = encodeURIComponent(repoItem.repo || '').replace(/'/g, '%27');
               return `
                 <div class="action-alert-card collapsed" id="action-alert-card-${idx}">
-                  <div class="action-alert-header" onclick="toggleActionCard('${idx}')" title="クリックして詳細を展開 / 折りたたむ">
+                  <div class="action-alert-header" role="button" tabindex="0" onclick="toggleActionCard('${idx}')" title="クリックして詳細を展開 / 折りたたむ">
                     <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
                       <span class="action-arrow" id="action-arrow-${idx}">▶</span>
                       <div style="min-width: 0; flex: 1;">
                         <div style="font-size: 0.8rem; font-weight: 800; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                          🔴 ${act.title}
+                          🔴 ${escapeHtml(act.title)}
                         </div>
                         <div style="font-size: 0.68rem; color: #fda4af; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                          🎯 ${act.file}
+                          🎯 ${escapeHtml(act.file)}
                         </div>
                       </div>
                     </div>
@@ -7744,16 +7838,17 @@ def build_portal_html(data, is_shareable=False):
                   <div class="action-alert-body" id="action-alert-body-${idx}">
                     <div style="background: rgba(15, 23, 42, 0.75); border-left: 3px solid #f87171; padding: 8px 10px; border-radius: 6px; margin-bottom: 8px;">
                       <div style="font-size: 0.7rem; font-weight: 800; color: #f87171; margin-bottom: 3px;">${dict.why_needed}</div>
-                      <div style="font-size: 0.78rem; color: #f1f5f9; line-height: 1.5;">${act.desc}</div>
+                      <div style="font-size: 0.78rem; color: #f1f5f9; line-height: 1.5;">${escapeHtml(act.desc)}</div>
                     </div>
                     <div style="background: rgba(6, 78, 59, 0.35); border-left: 3px solid #34d399; padding: 8px 10px; border-radius: 6px;">
                       <div style="font-size: 0.7rem; font-weight: 800; color: #34d399; margin-bottom: 4px;">${dict.how_to_fix}</div>
                       ${act.diff ? `
                         <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 4px;">${dict.recommended_diff}</div>
                         <pre class="cr-diff-container" style="margin: 0 0 8px 0; font-size: 0.72rem;">${act.diff.split(String.fromCharCode(10)).map(line => {
-                          if (line.startsWith('+')) return `<span class="cr-diff-add">${line}</span>`;
-                          if (line.startsWith('-')) return `<span class="cr-diff-del">${line}</span>`;
-                          return `<span>${line}</span>`;
+                          const safeLine = escapeHtml(line);
+                          if (line.startsWith('+')) return `<span class="cr-diff-add">${safeLine}</span>`;
+                          if (line.startsWith('-')) return `<span class="cr-diff-del">${safeLine}</span>`;
+                          return `<span>${safeLine}</span>`;
                         }).join('<br/>')}</pre>
                       ` : ''}
                       ${act.fix_cmd ? `
@@ -7946,9 +8041,9 @@ def build_portal_html(data, is_shareable=False):
           ` : '';
 
           const execReportBtnHtml = isSimple ? `
-            <button class="btn-exec-report-dl" onclick="downloadExecutiveSummaryReport('${encodeURIComponent(JSON.stringify(repoItem))}')" title="このリポジトリの経営・管理者向け要約レポート (.md) を出力保存">
+            <button class="btn-exec-report-dl" onclick="downloadExecutiveSummaryReport('${encodeDataArg(repoItem)}')" title="このリポジトリの経営・管理者向け要約レポート (.md) を出力保存">
               <span>📥</span>
-              <span>${(dict.btn_download_exec_report || '要約レポートをダウンロード (.md)').replace(/^[📥\s]+/g, '')}</span>
+              <span>${(dict.btn_download_exec_report || '要約レポートをダウンロード (.md)').replace(/^[📥\\s]+/g, '')}</span>
             </button>
           ` : '';
 
@@ -8094,7 +8189,7 @@ def build_portal_html(data, is_shareable=False):
           ${hasVuln ? `
             <div class="section-title" style="color: #f87171;">⚠️ 検出された既知の脆弱性 (クリックして公式ソースを表示)</div>
             ${advisories.map((adv, idx) => {
-              const advEncoded = encodeURIComponent(JSON.stringify(adv));
+              const advEncoded = encodeDataArg(adv);
               return `
                 <div class="sec-advisory-box" onclick="openVulnModal('${advEncoded}')">
                   <div class="sec-adv-header">
@@ -8133,7 +8228,7 @@ def build_portal_html(data, is_shareable=False):
           ${(deps.frameworks && deps.frameworks.length > 0) ? deps.frameworks.map(fw => {
             const isWarn = fw.status === 'warn';
             const matchedAdv = advisories.find(a => a.pkg.toLowerCase() === fw.name.toLowerCase() || (fw.cve && a.cve === fw.cve));
-            const advEncoded = matchedAdv ? encodeURIComponent(JSON.stringify(matchedAdv)) : '';
+            const advEncoded = matchedAdv ? encodeDataArg(matchedAdv) : '';
             return `
               <div class="dep-version-card ${isWarn ? 'has-vuln' : ''}" ${isWarn && advEncoded ? `onclick="openVulnModal('${advEncoded}')"` : ''}>
                 <div class="dep-name-col">
@@ -8689,7 +8784,7 @@ def build_portal_html(data, is_shareable=False):
         return;
       }
 
-      const repoSlug = (selectedDiagram?.repo || 'diagram').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const repoSlug = (selectedDiagram?.repo || 'diagram').replace(/[^a-zA-Z0-9_\\-]/g, '_');
       const modeSuffix = currentViewMode === 'seq' ? 'sequence' : 'architecture';
       const fileName = `RepoCHK_${repoSlug}_${modeSuffix}.svg`;
 
@@ -8705,7 +8800,7 @@ def build_portal_html(data, is_shareable=False):
         return;
       }
 
-      const repoSlug = (selectedDiagram?.repo || 'diagram').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const repoSlug = (selectedDiagram?.repo || 'diagram').replace(/[^a-zA-Z0-9_\\-]/g, '_');
       const modeSuffix = currentViewMode === 'seq' ? 'sequence' : 'architecture';
       const fileName = `RepoCHK_${repoSlug}_${modeSuffix}.png`;
 
@@ -9245,7 +9340,7 @@ def build_portal_html(data, is_shareable=False):
             <div class="hotspot-top-row">
               <span class="hotspot-title">🔴 要対応 #${i + 1}: ${act.title}</span>
               <div style="display: flex; align-items: center; gap: 6px;">
-                <button class="action-report-dl-btn" onclick="downloadSingleActionReport('${encodeURIComponent(JSON.stringify(act))}', '${encodeURIComponent(repo.repo || '')}')" title="この改善点の詳細レポート (.md) をダウンロード保存">
+                <button class="action-report-dl-btn" onclick="downloadSingleActionReport('${encodeDataArg(act)}', '${encodeURIComponent(repo.repo || '').replace(/'/g, '%27')}')" title="この改善点の詳細レポート (.md) をダウンロード保存">
                   📥 レポートDL
                 </button>
                 <span class="sec-legend-badge sec-legend-red">${act.severity || 'CRITICAL'}</span>
@@ -10353,9 +10448,8 @@ def build_portal_html(data, is_shareable=False):
 
     function setLanguage(lang) {
       currentLang = lang;
-      try {
-        localStorage.setItem('repochex_lang', lang);
-      } catch (_) {}
+      document.documentElement.lang = lang;
+      safeStorageSet('repochex_lang', lang);
 
       // Update switcher pills
       const optJa = document.getElementById('lang-opt-ja');
@@ -10377,6 +10471,14 @@ def build_portal_html(data, is_shareable=False):
         const key = el.getAttribute('data-i18n-placeholder');
         if (dict[key]) {
           el.setAttribute('placeholder', dict[key]);
+        }
+      });
+
+      // Update title tooltips
+      document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-title');
+        if (dict[key]) {
+          el.setAttribute('title', dict[key]);
         }
       });
 
@@ -10475,7 +10577,13 @@ def build_portal_html(data, is_shareable=False):
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
-          .replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener" style="color: #38bdf8; text-decoration: underline;">$1</a>');
+          .replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, (m, label, url) => {
+            const trimmedUrl = url.trim();
+            if (/^(https?:\\/\\/|\\/|#)/i.test(trimmedUrl)) {
+              return `<a href="${trimmedUrl}" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; text-decoration: underline;">${label}</a>`;
+            }
+            return label;
+          });
       }
 
       const dict = I18N[currentLang] || I18N.ja;

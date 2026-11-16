@@ -9,10 +9,12 @@ Serves the interactive WebUI and provides REST endpoints:
   - GET  /api/health   : Real-time service health & uptime check
 """
 
+import binascii
 import json
 import os
 import sys
 import time
+import urllib.parse
 import urllib.request
 from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -21,6 +23,7 @@ from typing import Any, Dict, Optional
 
 BACKEND_DIR = Path(__file__).resolve().parent
 WEBUI_DIR = BACKEND_DIR.parent / "webui"
+MAX_REQUEST_BODY_BYTES = 20 * 1024 * 1024
 sys.path.insert(0, str(BACKEND_DIR))
 
 import analyzer  # noqa: E402
@@ -95,8 +98,20 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
         origin = self.headers.get("Origin")
         if not origin:
             return None
-        # Allow local loopback origins and WKWebView null/file origins
-        if origin in ("null", "file://") or origin.startswith("http://127.0.0.1:") or origin.startswith("http://localhost:"):
+        # Allow WKWebView null/file origins
+        if origin in ("null", "file://"):
+            return origin
+        try:
+            parsed = urllib.parse.urlparse(origin)
+            _ = parsed.port
+        except ValueError:
+            return None
+        if (
+            parsed.scheme in ("http", "https")
+            and parsed.hostname in ("127.0.0.1", "localhost")
+            and not parsed.username
+            and not parsed.password
+        ):
             return origin
         return None
 
@@ -145,7 +160,18 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
         if origin and not self._get_allowed_origin():
             self._send_json(403, {"error": "Cross-Origin request forbidden"})
             return
-        length = int(self.headers.get("Content-Length", "0"))
+        raw_len = self.headers.get("Content-Length", "0")
+        try:
+            length = int(raw_len)
+        except ValueError:
+            self._send_json(400, {"error": "Invalid Content-Length header"})
+            return
+        if length < 0:
+            self._send_json(400, {"error": "Negative Content-Length header"})
+            return
+        if length > MAX_REQUEST_BODY_BYTES:
+            self._send_json(413, {"error": "Request body too large"})
+            return
         body_raw = self.rfile.read(length).decode("utf-8", errors="ignore") if length > 0 else "{}"
 
         if self.path.startswith("/api/sync"):
@@ -251,17 +277,20 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
                 import base64
                 import subprocess
                 body = json.loads(body_raw) if body_raw else {}
-                raw_filename = (body.get("filename") or "report.md").strip()
+                raw_filename = (body.get("filename") or "report.md").replace("\x00", "").strip()
                 content = body.get("content") or ""
                 is_base64 = bool(body.get("is_base64", False))
 
                 clean_name = os.path.basename(raw_filename)
-                if not clean_name:
+                if not clean_name or clean_name in (".", "..") or clean_name.startswith("."):
                     clean_name = f"RepoCHK_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
 
-                downloads_dir = Path.home() / "Downloads"
+                downloads_dir = (Path.home() / "Downloads").resolve()
                 downloads_dir.mkdir(parents=True, exist_ok=True)
-                target_path = downloads_dir / clean_name
+                target_path = (downloads_dir / clean_name).resolve()
+                if target_path.parent != downloads_dir:
+                    self._send_json(400, {"ok": False, "error": "Invalid filename"})
+                    return
 
                 if target_path.exists():
                     stem = target_path.stem
@@ -274,15 +303,19 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
                 if is_base64:
                     if "," in content:
                         content = content.split(",", 1)[1]
-                    file_bytes = base64.b64decode(content)
+                    try:
+                        file_bytes = base64.b64decode(content.strip(), validate=True)
+                    except (binascii.Error, ValueError) as b64_exc:
+                        self._send_json(400, {"ok": False, "error": f"Invalid base64 payload: {b64_exc}"})
+                        return
                     target_path.write_bytes(file_bytes)
                 else:
                     target_path.write_text(content, encoding="utf-8")
 
                 try:
-                    subprocess.run(["open", "-R", str(target_path)], check=False)
-                except Exception:
-                    pass
+                    subprocess.run(["open", "-R", str(target_path)], check=False, timeout=5)
+                except Exception as open_exc:
+                    print(f"Notice: could not reveal saved file in Finder: {open_exc}", file=sys.stderr)
 
                 self._send_json(200, {
                     "ok": True,
@@ -304,8 +337,14 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
                     self._send_json(400, {"error": "コマンドが指定されていません。"})
                     return
 
-                work_dir = Path.home() / "Git" / repo_name if repo_name else BACKEND_DIR.parent.parent
-                if not work_dir.exists():
+                if repo_name:
+                    repo_root = (Path.home() / "Git").resolve()
+                    candidate_dir = (repo_root / repo_name).resolve()
+                    if os.path.commonpath([str(repo_root), str(candidate_dir)]) != str(repo_root):
+                        self._send_json(400, {"error": "Invalid repository path"})
+                        return
+                    work_dir = candidate_dir if candidate_dir.is_dir() else BACKEND_DIR.parent.parent
+                else:
                     work_dir = BACKEND_DIR.parent.parent
 
                 t0 = time.time()
