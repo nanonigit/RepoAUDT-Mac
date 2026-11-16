@@ -9,6 +9,7 @@ Supports:
   4. Live LLM Deep Security & Code Quality Audit via OpenAI / Claude / Gemini / Groq APIs
 """
 
+import ast
 import json
 import os
 import re
@@ -403,6 +404,81 @@ def scan_secrets_and_credentials(
     return findings
 
 
+class SecurityASTVisitor(ast.NodeVisitor):
+    """AST visitor for Python SAST scanning (unsafe deserialization, SQLi, command injection)."""
+
+    def __init__(self, rel_path: str, lines: List[str], target_node: str) -> None:
+        self.rel_path = rel_path
+        self.lines = lines
+        self.target_node = target_node
+        self.findings: List[Dict[str, Any]] = []
+
+    def _line_text(self, lineno: int) -> str:
+        if 1 <= lineno <= len(self.lines):
+            return self.lines[lineno - 1].strip()
+        return ""
+
+    def visit_Call(self, node: ast.Call) -> None:
+        lineno = getattr(node, "lineno", 1)
+        func_name = ""
+        if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+            func_name = f"{node.func.value.id}.{node.func.attr}"
+        elif isinstance(node.func, ast.Attribute):
+            func_name = f"*.{node.func.attr}"
+        elif isinstance(node.func, ast.Name):
+            func_name = node.func.id
+
+        # 1. Unsafe deserialization (pickle.load/loads, yaml.load without SafeLoader)
+        if func_name in ("pickle.load", "pickle.loads", "cPickle.loads", "marshal.loads"):
+            raw_line = self._line_text(lineno)
+            self.findings.append({
+                "severity": "high",
+                "title": f"[Python AST監査] 安全でないデシリアライズ `{func_name}` ({Path(self.rel_path).name}:{lineno})",
+                "file": f"{self.rel_path}:{lineno} (Target: {self.target_node})",
+                "target_node": self.target_node,
+                "desc": f"`{self.rel_path}` の {lineno}行目で `{func_name}` が使用されています。信頼できないデータの逆シリアライズは任意コード実行 (RCE) につながります。",
+                "diff": f"- {raw_line}\n+ # Use json.loads() or validated schema parsing instead of pickle",
+                "fix_cmd": f"sed -n '{max(1, lineno-2)},{lineno+2}p' {self.rel_path}",
+            })
+        elif func_name == "yaml.load":
+            has_safe_loader = any(
+                kw.arg == "Loader" and "Safe" in ast.dump(kw.value)
+                for kw in node.keywords
+            )
+            if not has_safe_loader:
+                raw_line = self._line_text(lineno)
+                self.findings.append({
+                    "severity": "high",
+                    "title": f"[Python AST監査] `yaml.load` の非安全ローダー使用 ({Path(self.rel_path).name}:{lineno})",
+                    "file": f"{self.rel_path}:{lineno} (Target: {self.target_node})",
+                    "target_node": self.target_node,
+                    "desc": f"`{self.rel_path}` の {lineno}行目で SafeLoader を指定せずに `yaml.load` が呼ばれています。`yaml.safe_load` を使用してください。",
+                    "diff": f"- {raw_line}\n+ yaml.safe_load(...)",
+                    "fix_cmd": f"sed -n '{max(1, lineno-2)},{lineno+2}p' {self.rel_path}",
+                })
+
+        # 2. SQL injection via f-string / % / .format() inside .execute()
+        if func_name.endswith(".execute") and node.args:
+            first_arg = node.args[0]
+            if isinstance(first_arg, (ast.JoinedStr, ast.BinOp)) or (
+                isinstance(first_arg, ast.Call)
+                and isinstance(first_arg.func, ast.Attribute)
+                and first_arg.func.attr == "format"
+            ):
+                raw_line = self._line_text(lineno)
+                self.findings.append({
+                    "severity": "high",
+                    "title": f"[Python SQLi監査] 動的文字列フォーマットによるSQL実行 ({Path(self.rel_path).name}:{lineno})",
+                    "file": f"{self.rel_path}:{lineno} (Target: {self.target_node})",
+                    "target_node": self.target_node,
+                    "desc": f"`{self.rel_path}` の {lineno}行目で SQL クエリ文字列が直接フォーマット結合されています。プレースホルダによるパラメータバインディングを使用してください。",
+                    "diff": f"- {raw_line}\n+ cursor.execute('SELECT * FROM table WHERE id = ?', (param,))",
+                    "fix_cmd": f"sed -n '{max(1, lineno-2)},{lineno+2}p' {self.rel_path}",
+                })
+
+        self.generic_visit(node)
+
+
 def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     repo_dir: Path,
     components: List[Dict[str, Any]],
@@ -575,10 +651,25 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
             for k, v in all_deps.items():
                 osv_query_list.append(("npm", k, str(v)))
         except Exception as exc:
-            print(f"Warning: failed to load settings.json: {exc}", file=sys.stderr)
+            print(f"Warning: failed to parse package.json: {exc}", file=sys.stderr)
+
+    pkg_lock = repo_dir / "package-lock.json"
+    if pkg_lock.exists():
+        try:
+            ldata = json.loads(pkg_lock.read_text(encoding="utf-8", errors="ignore"))
+            packages_obj = ldata.get("packages") or {}
+            for pkg_path, meta in list(packages_obj.items())[:60]:
+                if not pkg_path or not isinstance(meta, dict):
+                    continue
+                ver = str(meta.get("version") or "").strip()
+                name = pkg_path.split("node_modules/")[-1] if "node_modules/" in pkg_path else pkg_path
+                if name and ver:
+                    osv_query_list.append(("npm", name, ver))
+        except Exception:
+            pass
 
     # =========================================================================
-    # 3. Python / Go / Rust OSV Queue
+    # 3. Python / Go / Rust OSV Queue & Python AST Security Visitor
     # =========================================================================
     req_txt = repo_dir / "requirements.txt"
     if req_txt.exists():
@@ -589,6 +680,23 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
             m = re.match(r"^([A-Za-z0-9_\-\.]+)\s*==\s*([0-9A-Za-z\.\-]+)", ln)
             if m:
                 osv_query_list.append(("PyPI", m.group(1), m.group(2)))
+
+    if skills_cfg.get("owasp_sast_skill", True):
+        py_files = [
+            p for p in repo_dir.rglob("*.py")
+            if not any(part in ignore_dirs or part == "tests" for part in p.parts)
+            and not p.name.startswith("test_")
+        ]
+        for pyf in py_files[:40]:
+            rel_py = str(pyf.relative_to(repo_dir))
+            try:
+                src_py = pyf.read_text(encoding="utf-8", errors="ignore")
+                tree = ast.parse(src_py, filename=rel_py)
+                visitor = SecurityASTVisitor(rel_py, src_py.splitlines(), match_comp(rel_py))
+                visitor.visit(tree)
+                sast_findings.extend(visitor.findings)
+            except Exception:
+                continue
 
     # =========================================================================
     # 4. Execute Live OSV.dev Vulnerability Database Query

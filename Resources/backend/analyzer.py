@@ -44,10 +44,16 @@ def _validate_github_segment(segment: str, kind: str) -> str:
 
 
 def _write_json_atomic(path: Path, payload: Dict[str, Any]) -> None:
-    """Atomically write JSON to disk via a temporary file in the same directory."""
+    """Atomically write JSON to disk via a temporary file and maintain a .bak backup snapshot."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2)
     tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    bak_path = path.with_suffix(path.suffix + ".bak")
+    tmp_path.write_text(serialized, encoding="utf-8")
+    try:
+        shutil.copy2(tmp_path, bak_path)
+    except Exception:
+        pass
     os.replace(tmp_path, path)
 
 
@@ -1560,9 +1566,13 @@ def analyze_any_github_target(raw_input: str) -> Dict[str, Any]:
 
 def _load_saved_analyses_unlocked() -> Dict[str, Any]:
     ensure_dirs()
-    if STATE_FILE.exists():
+    bak_file = STATE_FILE.with_suffix(STATE_FILE.suffix + ".bak")
+    candidates = [p for p in (STATE_FILE, bak_file) if p.exists()]
+    for candidate in candidates:
         try:
-            data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            data = json.loads(candidate.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                continue
             data.setdefault("diagrams", [])
             data.setdefault("techSpecs", {})
             data.setdefault("tableSchemas", {})
@@ -1598,9 +1608,14 @@ def _load_saved_analyses_unlocked() -> Dict[str, Any]:
                     for f in cr.get("findings") or []:
                         if not f.get("comment"):
                             f["comment"] = f.get("desc") or ""
+            if candidate == bak_file:
+                try:
+                    _write_json_atomic(STATE_FILE, data)
+                except Exception:
+                    pass
             return data
         except Exception as exc:
-            print(f"Warning: failed to load analyzed_repos.json: {exc}", file=sys.stderr)
+            print(f"Warning: failed to load {candidate.name}: {exc}", file=sys.stderr)
     return {"diagrams": [], "techSpecs": {}, "tableSchemas": {}, "deleted_ids": []}
 
 

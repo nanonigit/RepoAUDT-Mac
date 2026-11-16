@@ -8,12 +8,16 @@ final class BackendServerManager: ObservableObject {
     static let shared = BackendServerManager()
 
     private var serverProcess: Process?
+    private var isStopping: Bool = false
+    private var restartCount: Int = 0
+    private let maxAutoRestarts: Int = 5
     @Published private(set) var port: Int = 18765
     @Published private(set) var isReady: Bool = false
 
     private init() {}
 
     func startIfNeeded() {
+        isStopping = false
         if checkPortOpen(port: port) {
             isReady = true
             return
@@ -51,6 +55,21 @@ final class BackendServerManager: ObservableObject {
         env["PYTHONUNBUFFERED"] = "1"
         proc.environment = env
 
+        proc.terminationHandler = { [weak self] terminatedProc in
+            Task { @MainActor in
+                guard let self = self else { return }
+                if self.serverProcess === terminatedProc {
+                    self.serverProcess = nil
+                }
+                guard !self.isStopping, self.restartCount < self.maxAutoRestarts else { return }
+                self.restartCount += 1
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if !self.isStopping {
+                    self.startIfNeeded()
+                }
+            }
+        }
+
         do {
             try proc.run()
             self.serverProcess = proc
@@ -71,6 +90,7 @@ final class BackendServerManager: ObservableObject {
     }
 
     func stop() {
+        isStopping = true
         if let proc = serverProcess, proc.isRunning {
             proc.terminate()
         }
@@ -143,6 +163,21 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         alert.addButton(withTitle: "OK")
         alert.runModal()
         completionHandler()
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptConfirmPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping (Bool) -> Void
+    ) {
+        let alert = NSAlert()
+        alert.messageText = "RepoCHK Mac"
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "キャンセル")
+        let response = alert.runModal()
+        completionHandler(response == .alertFirstButtonReturn)
     }
 }
 

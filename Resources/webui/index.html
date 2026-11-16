@@ -4277,7 +4277,11 @@
         <span class="tb-lang-opt lang-opt" id="lang-opt-en">EN</span>
       </div>
 
-      <!-- Shortcuts & Guide -->
+      <!-- Shortcuts & Quick Guide -->
+      <button class="tb-btn pane-toggle-btn btn-quick-guide" id="btn-toggle-guide" onclick="toggleGuideBar()" title="クイックガイド (使い方バー) を表示 / 非表示" data-i18n-title="title_quick_guide">
+        <span style="font-size: 0.76rem;">🔰</span>
+        <span class="btn-text" data-i18n="btn_guide">ガイド</span>
+      </button>
       <button class="tb-btn" style="padding: 0 7px;" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)" data-i18n-title="title_shortcuts" aria-label="Keyboard Shortcuts">
         <span style="font-size: 0.78rem;">⌨️</span>
       </button>
@@ -4339,7 +4343,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/16 20:23:49</strong>
+              <strong id="portal-sync-time">2026/11/16 21:46:35</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -5021,6 +5025,7 @@
         title_zoom_in: "ズームイン (拡大)",
         title_zoom_reset: "初期サイズにリセット (100%)",
         title_zoom_out: "ズームアウト (縮小)",
+        title_quick_guide: "クイックガイド (使い方バー) を表示 / 非表示",
         title_shortcuts: "キーボードショートカット一覧を表示 (?)",
         title_toggle_inspector: "右ペインを開閉 (⌘I)",
         title_acc_sync: "自動更新・死活監視パネルを折りたたむ / 展開",
@@ -5224,6 +5229,7 @@
         title_zoom_in: "Zoom In",
         title_zoom_reset: "Reset Zoom (100%)",
         title_zoom_out: "Zoom Out",
+        title_quick_guide: "Show / Hide Quick Guide Bar",
         title_shortcuts: "Show Keyboard Shortcuts (?)",
         title_toggle_inspector: "Toggle Right Inspector (⌘I)",
         title_acc_sync: "Collapse / Expand Auto Sync & Health Panel",
@@ -5745,7 +5751,7 @@
       const origBtnHtml = syncBtn ? syncBtn.innerHTML : '';
       if (syncBtn) {
         syncBtn.disabled = true;
-        syncBtn.innerHTML = '<span class="modal-spinner" style="width: 14px; height: 14px; border-width: 2px;"></span> 同期中...';
+        syncBtn.innerHTML = '<span class="modal-spinner" style="width: 12px; height: 12px; border-width: 2px;"></span>';
         syncBtn.classList.add('loading');
       }
       if (headerChipText) {
@@ -5805,7 +5811,7 @@
               if (stateRes.ok) {
                 const newState = await stateRes.json();
                 if (newState && Array.isArray(newState.diagrams)) {
-                  diagrams = newState.diagrams;
+                  diagrams.splice(0, diagrams.length, ...newState.diagrams);
                   renderNav();
                 }
               }
@@ -5826,7 +5832,7 @@
       } finally {
         if (syncBtn) {
           syncBtn.disabled = false;
-          syncBtn.innerHTML = origBtnHtml || '<span>🔄</span><span>GitHub最新同期</span>';
+          syncBtn.innerHTML = origBtnHtml || '🔄';
           syncBtn.classList.remove('loading');
         }
         updateAutoSyncChipText();
@@ -8874,19 +8880,19 @@
 
         <div style="display: flex; flex-direction: column; gap: 10px;">
           ${healthData.services.map(s => `
-            <div style="background: #0b1120; border: 1px solid ${s.status === 'ONLINE' ? '#1e293b' : '#ef4444'}; border-left: 4px solid ${s.status === 'ONLINE' ? '#10b981' : '#ef4444'}; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div style="background: #0b1120; border: 1px solid ${s.status === 'ONLINE' ? '#1e293b' : (s.status === 'DEGRADED' ? '#f59e0b' : '#ef4444')}; border-left: 4px solid ${s.status === 'ONLINE' ? '#10b981' : (s.status === 'DEGRADED' ? '#f59e0b' : '#ef4444')}; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
               <div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <strong style="color: #f1f5f9; font-size: 0.88rem;">${s.name}</strong>
-                  <span style="font-size: 0.65rem; color: #94a3b8; background: #1e293b; padding: 1px 6px; border-radius: 4px;">${s.type}</span>
+                  <strong style="color: #f1f5f9; font-size: 0.88rem;">${escapeHtml(s.name)}</strong>
+                  <span style="font-size: 0.65rem; color: #94a3b8; background: #1e293b; padding: 1px 6px; border-radius: 4px;">${escapeHtml(s.type)}</span>
                 </div>
                 <div style="font-size: 0.75rem; color: #cbd5e1; margin-top: 3px;">
-                  ${s.details}
+                  ${escapeHtml(s.details)}
                 </div>
               </div>
               <div style="text-align: right; flex-shrink: 0;">
                 <span class="sec-legend-badge ${s.status === 'ONLINE' ? 'sec-legend-green' : 'sec-legend-red'}">
-                  ${s.status === 'ONLINE' ? '🟢 ONLINE' : '🔴 OFFLINE'}
+                  ${s.status === 'ONLINE' ? '🟢 ONLINE' : (s.status === 'DEGRADED' ? '🟡 DEGRADED' : '🔴 OFFLINE')}
                 </span>
                 <div style="font-size: 0.68rem; font-family: monospace; color: #38bdf8; margin-top: 4px;">
                   ${s.latency_ms} ms
@@ -8905,22 +8911,31 @@
       if (modal) modal.style.display = 'none';
     }
 
-    function refreshHealthCheck(btnEl) {
+    async function refreshHealthCheck(btnEl) {
       const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
       if (btnEl) {
         btnEl.textContent = dict.health_checking || '⏳ 確認中...';
         btnEl.disabled = true;
       }
-      // Simulate quick live ping re-verification
-      setTimeout(() => {
-        healthData.checked_at = currentLang === 'en' ? new Date().toUTCString() : new Date().toLocaleString('ja-JP');
-        openHealthModal();
-        const headerPulse = document.getElementById('health-status-summary-text');
-        if (headerPulse) {
-          const prefix = dict.health_summary_prefix || '🟢 死活監視:';
-          headerPulse.textContent = `${prefix} ${healthData.online_count}/${healthData.total} ONLINE`;
+      try {
+        const resp = await fetch('/api/health');
+        if (resp.ok) {
+          const liveHealth = await resp.json();
+          if (liveHealth && Array.isArray(liveHealth.services)) {
+            Object.assign(healthData, liveHealth);
+          }
+        } else {
+          healthData.checked_at = currentLang === 'en' ? new Date().toUTCString() : new Date().toLocaleString('ja-JP');
         }
-      }, 600);
+      } catch (_) {
+        healthData.checked_at = currentLang === 'en' ? new Date().toUTCString() : new Date().toLocaleString('ja-JP');
+      }
+      openHealthModal();
+      const headerPulse = document.getElementById('health-status-summary-text');
+      if (headerPulse) {
+        const prefix = dict.health_summary_prefix || '🟢 死活監視:';
+        headerPulse.textContent = `${prefix} ${healthData.online_count}/${healthData.total} ONLINE`;
+      }
     }
 
     function openActionRequiredHubModal() {
@@ -9636,7 +9651,8 @@
       const anyCollapsed = Array.from(cards).some(c => c.classList.contains('collapsed'));
       cards.forEach(c => c.classList.toggle('collapsed', !anyCollapsed));
       if (btnEl) {
-        btnEl.textContent = anyCollapsed ? 'すべて折りたたむ ▲' : 'すべて展開 ▼';
+        const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
+        btnEl.textContent = anyCollapsed ? (dict.collapse_all || 'すべて折りたたむ ▲') : (dict.expand_all || 'すべて展開 ▼');
       }
     }
 

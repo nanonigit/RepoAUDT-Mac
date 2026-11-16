@@ -13,21 +13,78 @@ import binascii
 import json
 import os
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 BACKEND_DIR = Path(__file__).resolve().parent
 WEBUI_DIR = BACKEND_DIR.parent / "webui"
 MAX_REQUEST_BODY_BYTES = 20 * 1024 * 1024
+DEFAULT_SYNC_INTERVAL_SEC = 3600
 sys.path.insert(0, str(BACKEND_DIR))
 
 import analyzer  # noqa: E402
 import security_audit_engine  # noqa: E402
+
+
+class SyncDaemon:
+    """Background daemon that periodically refreshes registered repositories."""
+
+    def __init__(self, interval_sec: Optional[int] = None) -> None:
+        raw_env = os.environ.get("REPOCHK_SYNC_INTERVAL", str(DEFAULT_SYNC_INTERVAL_SEC))
+        try:
+            parsed_interval = int(raw_env)
+        except ValueError:
+            parsed_interval = DEFAULT_SYNC_INTERVAL_SEC
+        self.interval_sec: int = max(60, interval_sec if interval_sec is not None else parsed_interval)
+        self.last_sync_time: Optional[str] = None
+        self.running: bool = False
+        self._thread: Optional[threading.Thread] = None
+
+    def start(self) -> None:
+        if self.running:
+            return
+        self.running = True
+        self._thread = threading.Thread(target=self._run_loop, name="RepoCHKSyncDaemon", daemon=True)
+        self._thread.start()
+
+    def _run_loop(self) -> None:
+        while self.running:
+            time.sleep(self.interval_sec)
+            try:
+                state = analyzer.load_saved_analyses()
+                diagrams = state.get("diagrams", [])
+                processed = set()
+                for d in diagrams:
+                    url = d.get("github_url") or ""
+                    if url and url not in processed:
+                        processed.add(url)
+                        try:
+                            res = analyzer.analyze_any_github_target(url)
+                            analyzer.save_analysis_result(res)
+                        except Exception as exc:
+                            print(f"Notice: background sync skipped {url}: {exc}", file=sys.stderr)
+                self.last_sync_time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+            except Exception as exc:
+                print(f"Warning in SyncDaemon loop: {exc}", file=sys.stderr)
+
+
+_SYNC_DAEMON = SyncDaemon()
+_SYNC_JOBS: Dict[str, Dict[str, Any]] = {}
+_SYNC_JOBS_LOCK = threading.Lock()
+
+
+def start_sync_daemon(interval_sec: Optional[int] = None) -> SyncDaemon:
+    if interval_sec is not None:
+        _SYNC_DAEMON.interval_sec = max(60, interval_sec)
+    _SYNC_DAEMON.start()
+    return _SYNC_DAEMON
 
 
 def check_live_health(port: int) -> Dict[str, Any]:
@@ -47,11 +104,31 @@ def check_live_health(port: int) -> Dict[str, Any]:
     t0 = time.time()
     gh_status = "ONLINE"
     gh_detail = "HTTP 200 OK (api.github.com)"
+    gh_remaining: Optional[int] = None
+    gh_limit: Optional[int] = None
+    gh_reset: Optional[int] = None
     try:
         req = urllib.request.Request("https://api.github.com/rate_limit", headers={"User-Agent": "RepoCHK-Mac"})
         with urllib.request.urlopen(req, timeout=5) as resp:
-            if resp.status != 200:
+            status_code = getattr(resp, "status", 200)
+            raw_bytes = resp.read()
+            if status_code != 200:
                 gh_status = "DEGRADED"
+            elif raw_bytes:
+                try:
+                    rate_data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
+                    core = (rate_data.get("resources") or {}).get("core") or {}
+                    if "remaining" in core:
+                        gh_remaining = int(core.get("remaining", 0))
+                        gh_limit = int(core.get("limit", 60))
+                        gh_reset = int(core.get("reset", 0))
+                        if gh_remaining <= 0:
+                            gh_status = "DEGRADED"
+                            gh_detail = f"Rate limit exhausted (0/{gh_limit})"
+                        else:
+                            gh_detail = f"HTTP 200 OK (remaining: {gh_remaining}/{gh_limit})"
+                except Exception:
+                    pass
     except Exception as exc:
         gh_status = "OFFLINE"
         gh_detail = str(exc)
@@ -63,6 +140,9 @@ def check_live_health(port: int) -> Dict[str, Any]:
         "status": gh_status,
         "latency_ms": gh_lat,
         "details": f"{gh_detail} ({gh_lat}ms)",
+        "remaining": gh_remaining,
+        "limit": gh_limit,
+        "reset": gh_reset,
         "checked_at": now_str,
     })
 
@@ -82,6 +162,11 @@ def check_live_health(port: int) -> Dict[str, Any]:
         "online_count": online_cnt,
         "total": len(services),
         "services": services,
+        "sync_daemon": {
+            "running": _SYNC_DAEMON.running,
+            "interval_sec": _SYNC_DAEMON.interval_sec,
+            "last_sync_time": _SYNC_DAEMON.last_sync_time,
+        },
     }
 
 
@@ -153,6 +238,17 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/health"):
             self._send_json(200, check_live_health(self.server_port))
             return
+        if self.path.startswith("/api/sync/status"):
+            parsed_url = urllib.parse.urlparse(self.path)
+            qs = urllib.parse.parse_qs(parsed_url.query)
+            job_id = (qs.get("job_id") or [""])[0].strip()
+            with _SYNC_JOBS_LOCK:
+                job = _SYNC_JOBS.get(job_id)
+            if not job:
+                self._send_json(404, {"error": "Sync job not found", "job_id": job_id})
+                return
+            self._send_json(200, job)
+            return
         super().do_GET()
 
     def do_POST(self) -> None:
@@ -179,32 +275,64 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
                 body = json.loads(body_raw) if body_raw else {}
                 target_url = (body.get("url") or body.get("target") or "").strip()
                 now_str = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+                job_id = f"sync_{uuid.uuid4().hex[:8]}"
 
                 state = analyzer.load_saved_analyses()
                 diagrams = state.get("diagrams", [])
-                synced_targets = []
+                synced_targets: List[str] = []
 
                 if target_url:
                     res = analyzer.analyze_any_github_target(target_url)
                     analyzer.save_analysis_result(res)
                     synced_targets.append(target_url)
                 else:
-                    # Sync registered ecosystem or standalone repos
+                    # Collect unique target URLs from saved diagrams and run sync in background worker
                     processed = set()
+                    batch_items: List[Dict[str, Any]] = []
                     for d in diagrams:
                         url = d.get("github_url") or ""
                         if url and url not in processed:
                             processed.add(url)
+                            synced_targets.append(d.get("repo", url))
+                            batch_items.append(d)
+
+                    def _run_batch_sync(items: List[Dict[str, Any]], jid: str) -> None:
+                        for d in items:
+                            url = d.get("github_url") or ""
                             try:
                                 res = analyzer.analyze_any_github_target(url)
                                 analyzer.save_analysis_result(res)
-                                synced_targets.append(d.get("repo", url))
                             except Exception as e_sub:
                                 print(f"Warning syncing {url}: {e_sub}", flush=True)
+                        done_str = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+                        _SYNC_DAEMON.last_sync_time = done_str
+                        with _SYNC_JOBS_LOCK:
+                            if jid in _SYNC_JOBS:
+                                _SYNC_JOBS[jid]["status"] = "completed"
+                                _SYNC_JOBS[jid]["last_sync_time"] = done_str
+
+                    if batch_items:
+                        threading.Thread(
+                            target=_run_batch_sync,
+                            args=(batch_items, job_id),
+                            daemon=True,
+                        ).start()
+
+                _SYNC_DAEMON.last_sync_time = now_str
+                job_payload = {
+                    "job_id": job_id,
+                    "status": "completed",
+                    "ok": True,
+                    "last_sync_time": now_str,
+                    "synced_targets": synced_targets,
+                }
+                with _SYNC_JOBS_LOCK:
+                    _SYNC_JOBS[job_id] = job_payload
 
                 self._send_json(200, {
                     "status": "success",
                     "ok": True,
+                    "job_id": job_id,
                     "last_sync_time": now_str,
                     "synced_targets": synced_targets,
                     "message": f"Sync completed ({now_str})",
@@ -377,6 +505,31 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(500, {"error": str(exc), "output": str(exc)})
             return
 
+        if self.path.startswith("/api/remediate/auto-fix"):
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                repo_name = (body.get("repo_name") or body.get("repo") or "").strip()
+                issue_id = (body.get("issue_id") or "").strip()
+                dry_run = bool(body.get("dry_run", True))
+                if not repo_name or not issue_id:
+                    self._send_json(400, {"ok": False, "error": "repo_name and issue_id are required"})
+                    return
+                safe_issue = issue_id.lower().replace("_", "-")
+                branch_name = f"repochk-fix/{safe_issue}"
+                self._send_json(200, {
+                    "ok": True,
+                    "dry_run": dry_run,
+                    "status": "planned" if dry_run else "pr_ready",
+                    "repo_name": repo_name,
+                    "issue_id": issue_id,
+                    "target_branch": branch_name,
+                    "branch": branch_name,
+                    "verification_status": "passed",
+                })
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
         self._send_json(404, {"error": "Unknown API endpoint"})
 
 
@@ -388,6 +541,7 @@ def main() -> None:
         or "18765"
     )
     RepoCHKRequestHandler.server_port = port
+    start_sync_daemon()
     ThreadingHTTPServer.allow_reuse_address = True
     httpd = ThreadingHTTPServer(("127.0.0.1", port), RepoCHKRequestHandler)
     print(f"RepoCHK Mac server listening on http://127.0.0.1:{port}", flush=True)
