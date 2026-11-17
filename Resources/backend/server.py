@@ -179,6 +179,12 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         pass
 
+    def end_headers(self) -> None:
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        super().end_headers()
+
     def _get_allowed_origin(self) -> Optional[str]:
         origin = self.headers.get("Origin")
         if not origin:
@@ -228,6 +234,11 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(403, {"error": "Cross-Origin request forbidden"})
             return
 
+        if self.path == "/favicon.ico":
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if self.path.startswith("/api/state"):
             state = analyzer.load_saved_analyses()
             self._send_json(200, state)

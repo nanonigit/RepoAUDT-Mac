@@ -1176,7 +1176,8 @@ def build_portal_html(data, is_shareable=False):
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PLUS IMPACT — Architecture & Systems Portal</title>
+  <title>RepoCHK Mac — Architecture &amp; Vulnerability AI Studio</title>
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;text y='.9em' font-size='90'&gt;🛡️&lt;/text&gt;&lt;/svg&gt;">
   <script src="vendor/mermaid.min.js"></script>
   <script>if (typeof mermaid === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"><\\/script>')</script>
   <script src="vendor/svg-pan-zoom.min.js"></script>
@@ -5549,7 +5550,7 @@ def build_portal_html(data, is_shareable=False):
               <div class="auto-sync-interval-row">
                 <span style="font-size: 0.72rem; color: #94a3b8;" data-i18n="sync_interval_label">間隔:</span>
                 <div class="auto-sync-input-wrap" title="更新間隔（分）を入力">
-                  <input type="number" id="auto-sync-min-input" min="1" max="1440" value="60" 
+                  <input type="number" id="auto-sync-min-input" min="1" max="1440" value="60" aria-label="自動定期更新の間隔（分）"
                          onchange="setAutoSyncMinutes(this.value)" oninput="setAutoSyncMinutes(this.value)">
                   <span class="auto-sync-unit" data-i18n="sync_unit_label">分毎</span>
                 </div>
@@ -6446,6 +6447,33 @@ def build_portal_html(data, is_shareable=False):
     const sidebarResizer = document.getElementById('sidebar-resizer');
 
     let currentPanZoom = null;
+    let renderTokenCounter = 0;
+    function safeDestroyPanZoom() {
+      if (!currentPanZoom) return;
+      try {
+        currentPanZoom.destroy();
+      } catch (_) {}
+      currentPanZoom = null;
+    }
+    function safeResizePanZoom() {
+      if (!currentPanZoom) return;
+      const svgEl = document.querySelector('#diagram-wrapper svg');
+      if (!svgEl || !svgEl.isConnected || svgEl.clientWidth === 0 || svgEl.clientHeight === 0) return;
+      try {
+        currentPanZoom.resize();
+      } catch (_) {}
+    }
+    function safeFitPanZoom(zoomFactor = null) {
+      if (!currentPanZoom) return;
+      const svgEl = document.querySelector('#diagram-wrapper svg');
+      if (!svgEl || !svgEl.isConnected || svgEl.clientWidth === 0 || svgEl.clientHeight === 0) return;
+      try {
+        currentPanZoom.resize();
+        currentPanZoom.fit();
+        currentPanZoom.center();
+        if (zoomFactor) currentPanZoom.zoomBy(zoomFactor);
+      } catch (_) {}
+    }
     let selectedNodeData = null;
     let currentInspTab = 'overview';
     let currentFreshnessFilter = 'all';
@@ -6469,11 +6497,7 @@ def build_portal_html(data, is_shareable=False):
     resizer.addEventListener('dblclick', () => {
       inspector.style.width = '500px';
       localStorage.setItem('repochex_inspector_width', '500');
-      if (currentPanZoom) {
-        currentPanZoom.resize();
-        currentPanZoom.fit();
-        currentPanZoom.center();
-      }
+      safeFitPanZoom();
     });
 
     // Sidebar Resizer Logic (Left Sidebar Splitter)
@@ -6493,11 +6517,7 @@ def build_portal_html(data, is_shareable=False):
     sidebarResizer.addEventListener('dblclick', () => {
       sidebar.style.width = '320px';
       localStorage.setItem('repochex_sidebar_width', '320');
-      if (currentPanZoom) {
-        currentPanZoom.resize();
-        currentPanZoom.fit();
-        currentPanZoom.center();
-      }
+      safeFitPanZoom();
     });
 
     window.addEventListener('mousemove', (e) => {
@@ -6508,9 +6528,7 @@ def build_portal_html(data, is_shareable=False):
         if (newWidth >= minW && newWidth <= maxW) {
           sidebar.style.width = newWidth + 'px';
           localStorage.setItem('repochex_sidebar_width', newWidth);
-          if (currentPanZoom) {
-            currentPanZoom.resize();
-          }
+          safeResizePanZoom();
         }
       } else if (isResizing) {
         const newWidth = window.innerWidth - e.clientX;
@@ -6519,9 +6537,7 @@ def build_portal_html(data, is_shareable=False):
         if (newWidth >= minW && newWidth <= maxW) {
           inspector.style.width = newWidth + 'px';
           localStorage.setItem('repochex_inspector_width', newWidth);
-          if (currentPanZoom) {
-            currentPanZoom.resize();
-          }
+          safeResizePanZoom();
         }
       }
     });
@@ -6532,18 +6548,14 @@ def build_portal_html(data, is_shareable=False):
         sidebarResizer.classList.remove('dragging');
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-        if (currentPanZoom) {
-          currentPanZoom.resize();
-        }
+        safeResizePanZoom();
       }
       if (isResizing) {
         isResizing = false;
         resizer.classList.remove('dragging');
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-        if (currentPanZoom) {
-          currentPanZoom.resize();
-        }
+        safeResizePanZoom();
       }
     });
 
@@ -6554,7 +6566,7 @@ def build_portal_html(data, is_shareable=False):
       inspector.style.width = targetW + 'px';
       localStorage.setItem('repochex_inspector_width', targetW);
       if (currentPanZoom) {
-        setTimeout(() => currentPanZoom.resize(), 80);
+        setTimeout(() => safeResizePanZoom(), 80);
       }
     }
 
@@ -6566,10 +6578,7 @@ def build_portal_html(data, is_shareable=False):
     function refreshCanvasAfterPaneToggle() {
       if (!currentPanZoom) return;
       setTimeout(() => {
-        if (!currentPanZoom) return;
-        currentPanZoom.resize();
-        currentPanZoom.fit();
-        currentPanZoom.center();
+        safeFitPanZoom();
       }, PANE_RESIZE_DELAY_MS);
     }
 
@@ -6770,6 +6779,7 @@ def build_portal_html(data, is_shareable=False):
       if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') {
         if (e.key === 'Escape') {
           document.activeElement.blur();
+          closeAllModals();
         }
         return;
       }
@@ -7148,11 +7158,21 @@ def build_portal_html(data, is_shareable=False):
       alert('修正コマンドをクリップボードにコピーしました！\\nターミナルに貼り付けて実行してください。');
     }
 
+    function closeAllModals() {
+      closeVulnModal();
+      closeTableModal();
+      closeSyncModal();
+      if (typeof closeCommandPalette === 'function') closeCommandPalette();
+      if (typeof closeShortcutsModal === 'function') closeShortcutsModal();
+      if (typeof closeAdminSettingsModal === 'function') closeAdminSettingsModal();
+      if (typeof closeAnalyzeModal === 'function') closeAnalyzeModal();
+      if (typeof closeHealthModal === 'function') closeHealthModal();
+      if (typeof closeActionRequiredHubModal === 'function') closeActionRequiredHubModal();
+    }
+
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        closeVulnModal();
-        closeTableModal();
-        closeSyncModal();
+        closeAllModals();
       }
     });
 
@@ -7371,17 +7391,16 @@ def build_portal_html(data, is_shareable=False):
       inspContent.style.display = 'none';
       selectedNodeData = null;
 
-      if (currentPanZoom) {
-        currentPanZoom.destroy();
-        currentPanZoom = null;
-      }
+      safeDestroyPanZoom();
 
       diagramWrapper.innerHTML = '';
-      const uniqueId = 'svg-render-' + Date.now();
+      const myRenderToken = ++renderTokenCounter;
+      const uniqueId = 'svg-render-' + Date.now() + '-' + myRenderToken;
 
       try {
         if (window.mermaid) {
           const { svg } = await mermaid.render(uniqueId, item.diagram);
+          if (myRenderToken !== renderTokenCounter) return;
           diagramWrapper.innerHTML = svg;
           const svgElement = diagramWrapper.querySelector('svg');
           if (svgElement) {
@@ -7391,23 +7410,24 @@ def build_portal_html(data, is_shareable=False):
             svgElement.style.minWidth = '100%';
             svgElement.style.minHeight = '100%';
             
-            if (window.svgPanZoom) {
-              currentPanZoom = svgPanZoom(svgElement, {
-                zoomEnabled: true,
-                controlIconsEnabled: false,
-                fit: true,
-                center: true,
-                minZoom: 0.15,
-                maxZoom: 15,
-                zoomScaleSensitivity: 0.25
-              });
+            if (window.svgPanZoom && svgElement.isConnected && svgElement.clientWidth > 0 && svgElement.clientHeight > 0) {
+              try {
+                currentPanZoom = svgPanZoom(svgElement, {
+                  zoomEnabled: true,
+                  controlIconsEnabled: false,
+                  fit: true,
+                  center: true,
+                  minZoom: 0.15,
+                  maxZoom: 15,
+                  zoomScaleSensitivity: 0.25
+                });
+              } catch (_) {
+                currentPanZoom = null;
+              }
 
               setTimeout(() => {
-                if (currentPanZoom) {
-                  currentPanZoom.resize();
-                  currentPanZoom.fit();
-                  currentPanZoom.center();
-                  currentPanZoom.zoomBy(1.35);
+                if (myRenderToken === renderTokenCounter) {
+                  safeFitPanZoom(1.35);
                 }
               }, 60);
             }
@@ -8454,8 +8474,8 @@ def build_portal_html(data, is_shareable=False):
                 <div style="font-size: 0.76rem; color: #cbd5e1; margin-top: 4px;">${act.desc}</div>
                 ${act.fix_cmd ? `
                   <div class="hotspot-fix-box">
-                    <span class="hotspot-cmd">$ ${act.fix_cmd}</span>
-                    <button class="hotspot-copy-btn" onclick="copyToClipboard('${act.fix_cmd.replace(/'/g, "\'")}', this)">コピー</button>
+                    <span class="hotspot-cmd">$ ${escapeHtml(act.fix_cmd)}</span>
+                    <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">コピー</button>
                   </div>
                 ` : ''}
                 ${renderAiAgentPromptWidget(repoItem.repo, act)}
@@ -8844,8 +8864,8 @@ def build_portal_html(data, is_shareable=False):
       img.src = url;
     }
 
-    function zoomIn() { if (currentPanZoom) currentPanZoom.zoomIn(); }
-    function zoomOut() { if (currentPanZoom) currentPanZoom.zoomOut(); }
+    function zoomIn() { try { if (currentPanZoom) currentPanZoom.zoomIn(); } catch (_) {} }
+    function zoomOut() { try { if (currentPanZoom) currentPanZoom.zoomOut(); } catch (_) {} }
     
     let currentViewMode = 'arch'; // 'arch' or 'seq'
     let currentRepoSeqIndex = 0;
@@ -8888,6 +8908,7 @@ def build_portal_html(data, is_shareable=False):
         renderCurrentRepoSequence();
       } else if (mode === 'coderabbit') {
         if (btnCr) btnCr.classList.add('active');
+        safeDestroyPanZoom();
         if (seqBar) seqBar.style.display = 'none';
         if (wtPanel) wtPanel.style.display = 'none';
         if (canvasContainer) canvasContainer.style.display = 'none';
@@ -9003,8 +9024,8 @@ def build_portal_html(data, is_shareable=False):
                     ` : ''}
                     ${act.fix_cmd ? `
                       <div class="hotspot-fix-box">
-                        <span class="hotspot-cmd">$ ${act.fix_cmd}</span>
-                        <button class="hotspot-copy-btn" onclick="copyToClipboard('${act.fix_cmd.replace(/'/g, "\'")}', this)">${dict.cr_copy_cmd || '📋 コマンドをコピー'}</button>
+                        <span class="hotspot-cmd">$ ${escapeHtml(act.fix_cmd)}</span>
+                        <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">${dict.cr_copy_cmd || '📋 コマンドをコピー'}</button>
                       </div>
                     ` : ''}
                     ${renderAiAgentPromptWidget(repo.repo, act)}
@@ -9618,6 +9639,7 @@ def build_portal_html(data, is_shareable=False):
       const filterEl = document.getElementById('saved-repos-filter-input');
       if (!listEl) return;
 
+      const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
       const q = (filterEl && filterEl.value ? filterEl.value.trim().toLowerCase() : '');
       if (countEl) countEl.textContent = diagrams.length;
 
@@ -9636,32 +9658,32 @@ def build_portal_html(data, is_shareable=False):
       listEl.innerHTML = filtered.map(({ d, idx }) => {
         const hasAct = (d.deps && d.deps.security_advisories && d.deps.security_advisories.length > 0) ||
                        (d.coderabbit && d.coderabbit.action_items && d.coderabbit.action_items.length > 0);
-        const safeId = (d.id || '').replace(/'/g, "\'");
-        const safeRepo = (d.repo || '').replace(/'/g, "\'");
-        const safeUrl = (d.github_url || d.repo || '').replace(/'/g, "\'");
+        const safeId = (d.id || '').replace(/'/g, "\\'");
+        const safeRepo = (d.repo || '').replace(/'/g, "\\'");
+        const safeUrl = (d.github_url || d.repo || '').replace(/'/g, "\\'");
 
         return `
           <div class="saved-repo-row">
             <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;">
               <span style="font-size: 0.8rem; font-weight: 800; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                📦 ${d.repo}
+                📦 ${escapeHtml(d.repo)}
               </span>
               <span style="font-size: 0.65rem; background: #1e293b; color: #93c5fd; padding: 2px 6px; border-radius: 4px; white-space: nowrap;">
-                ${d.category || 'Repo'}
+                ${escapeHtml(d.category || 'Repo')}
               </span>
               <span style="font-size: 0.65rem; color: #64748b; white-space: nowrap;">
-                (${d.perspective || 'overall'})
+                (${escapeHtml(d.perspective || 'overall')})
               </span>
               ${hasAct ? '<span class="sec-legend-badge sec-legend-red" style="font-size: 0.62rem; padding: 1px 6px;">🔴 要対応</span>' : '<span class="sec-legend-badge sec-legend-green" style="font-size: 0.62rem; padding: 1px 6px;">🟢 正常</span>'}
             </div>
             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-              <button class="table-view-btn" onclick="selectDiagram(${idx}); closeAnalyzeModal();" title="${dict.modal_btn_show_repo || 'このリポジトリの構成図を開く'}">
+              <button class="table-view-btn" onclick="selectDiagram(${idx}); closeAnalyzeModal();" title="${escapeHtml(dict.modal_btn_show_repo || 'このリポジトリの構成図を開く')}">
                 ${dict.modal_btn_show_repo || '📂 表示'}
               </button>
-              <button class="table-view-btn" onclick="quickFillAndAnalyze('${safeUrl}')" title="${dict.modal_btn_reanalyze || 'GitHubから最新状態を再取得・再解析'}">
+              <button class="table-view-btn" onclick="quickFillAndAnalyze('${safeUrl}')" title="${escapeHtml(dict.modal_btn_reanalyze || 'GitHubから最新状態を再取得・再解析')}">
                 ${dict.modal_btn_reanalyze || '🔄 再解析'}
               </button>
-              <button class="nav-del-btn" style="padding: 4px 10px; font-size: 0.72rem;" onclick="deleteRepoById(event, '${safeId}', '${safeRepo}')" title="${dict.title_del || '保有リストから削除'}">
+              <button class="nav-del-btn" style="padding: 4px 10px; font-size: 0.72rem;" onclick="deleteRepoById(event, '${safeId}', '${safeRepo}')" title="${escapeHtml(dict.title_del || '保有リストから削除')}">
                 ${dict.btn_del || '🗑️ 削除'}
               </button>
             </div>
@@ -10186,8 +10208,8 @@ def build_portal_html(data, is_shareable=False):
             </div>
             ${act.fix_cmd ? `
               <div class="hotspot-fix-box" style="margin-top: 8px;">
-                <span class="hotspot-cmd">$ ${act.fix_cmd}</span>
-                <button class="hotspot-copy-btn" onclick="copyToClipboard('${act.fix_cmd.replace(/'/g, "\'")}', this)">📋 コマンドコピー</button>
+                <span class="hotspot-cmd">$ ${escapeHtml(act.fix_cmd)}</span>
+                <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">📋 コマンドコピー</button>
               </div>
             ` : ''}
             ${renderAiAgentPromptWidget(act.repo, act)}
@@ -11210,7 +11232,7 @@ def build_portal_html(data, is_shareable=False):
 
       currentInspTab = 'overview';
       document.querySelectorAll('.insp-tab').forEach(t => t.classList.remove('active'));
-      const ovTab = Array.from(document.querySelectorAll('.insp-tab')).find(t => t.textContent.includes('概要'));
+      const ovTab = document.querySelector('.insp-tab[data-tab-name="overview"]');
       if (ovTab) ovTab.classList.add('active');
 
       renderInspector();
@@ -11274,17 +11296,16 @@ def build_portal_html(data, is_shareable=False):
       inspContent.style.display = 'none';
       selectedNodeData = null;
 
-      if (currentPanZoom) {
-        currentPanZoom.destroy();
-        currentPanZoom = null;
-      }
+      safeDestroyPanZoom();
 
       diagramWrapper.innerHTML = '';
-      const uniqueId = 'svg-seq-' + Date.now();
+      const myRenderToken = ++renderTokenCounter;
+      const uniqueId = 'svg-seq-' + Date.now() + '-' + myRenderToken;
 
       try {
         if (window.mermaid && activeSeqCode) {
           mermaid.render(uniqueId, activeSeqCode).then(({ svg }) => {
+            if (myRenderToken !== renderTokenCounter) return;
             diagramWrapper.innerHTML = svg;
             const svgElement = diagramWrapper.querySelector('svg');
             if (svgElement) {
@@ -11294,23 +11315,24 @@ def build_portal_html(data, is_shareable=False):
               svgElement.style.minWidth = '100%';
               svgElement.style.minHeight = '100%';
 
-              if (window.svgPanZoom) {
-                currentPanZoom = svgPanZoom(svgElement, {
-                  zoomEnabled: true,
-                  controlIconsEnabled: false,
-                  fit: true,
-                  center: true,
-                  minZoom: 0.15,
-                  maxZoom: 15,
-                  zoomScaleSensitivity: 0.25
-                });
+              if (window.svgPanZoom && svgElement.isConnected && svgElement.clientWidth > 0 && svgElement.clientHeight > 0) {
+                try {
+                  currentPanZoom = svgPanZoom(svgElement, {
+                    zoomEnabled: true,
+                    controlIconsEnabled: false,
+                    fit: true,
+                    center: true,
+                    minZoom: 0.15,
+                    maxZoom: 15,
+                    zoomScaleSensitivity: 0.25
+                  });
+                } catch (_) {
+                  currentPanZoom = null;
+                }
 
                 setTimeout(() => {
-                  if (currentPanZoom) {
-                    currentPanZoom.resize();
-                    currentPanZoom.fit();
-                    currentPanZoom.center();
-                    currentPanZoom.zoomBy(1.25);
+                  if (myRenderToken === renderTokenCounter) {
+                    safeFitPanZoom(1.25);
                   }
                 }, 60);
               }
@@ -11456,7 +11478,7 @@ def build_portal_html(data, is_shareable=False):
 
           currentInspTab = 'overview';
           document.querySelectorAll('.insp-tab').forEach(t => t.classList.remove('active'));
-          const ovTab = Array.from(document.querySelectorAll('.insp-tab')).find(t => t.textContent.includes('概要'));
+          const ovTab = document.querySelector('.insp-tab[data-tab-name="overview"]');
           if (ovTab) ovTab.classList.add('active');
 
           renderInspector();
@@ -11496,7 +11518,7 @@ def build_portal_html(data, is_shareable=False):
 
           currentInspTab = 'overview';
           document.querySelectorAll('.insp-tab').forEach(t => t.classList.remove('active'));
-          const ovTab = Array.from(document.querySelectorAll('.insp-tab')).find(t => t.textContent.includes('概要'));
+          const ovTab = document.querySelector('.insp-tab[data-tab-name="overview"]');
           if (ovTab) ovTab.classList.add('active');
 
           renderInspector();
@@ -11505,20 +11527,14 @@ def build_portal_html(data, is_shareable=False):
     }
 
     function resetZoom() {
-      if (currentPanZoom) {
-        currentPanZoom.resetZoom();
-        currentPanZoom.fit();
-        currentPanZoom.center();
-        currentPanZoom.zoomBy(1.35);
-      }
+      try {
+        if (currentPanZoom) currentPanZoom.resetZoom();
+      } catch (_) {}
+      safeFitPanZoom(1.35);
     }
 
     window.addEventListener('resize', () => {
-      if (currentPanZoom) {
-        currentPanZoom.resize();
-        currentPanZoom.fit();
-        currentPanZoom.center();
-      }
+      safeFitPanZoom();
     });
 
     renderNav();
@@ -11681,7 +11697,7 @@ def build_portal_html(data, is_shareable=False):
         <button class="modal-close-btn" onclick="closeAdminSettingsModal()" data-i18n="btn_close">✕ 閉じる</button>
       </div>
 
-      <div class="action-hub-body" style="padding: 20px; overflow-y: auto; max-height: 80vh;">
+      <form class="action-hub-body" onsubmit="event.preventDefault(); return false;" autocomplete="off" style="padding: 20px; overflow-y: auto; max-height: 80vh; margin: 0;">
         <!-- Active AI Auditor Provider Selector -->
         <div style="background: #090d16; border: 1px solid #1e293b; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
           <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
@@ -11689,7 +11705,7 @@ def build_portal_html(data, is_shareable=False):
               <div style="font-size: 0.84rem; font-weight: 800; color: #34d399;">🤖 優先使用する AI コード・脆弱性監査エンジン</div>
               <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 2px;">設定済みのAPIキーを使って、ソースコードと依存パッケージの深層セキュリティ監査を実行します</div>
             </div>
-            <select id="adm-active-provider" style="background: #0f172a; border: 1.5px solid #34d399; color: #fff; padding: 7px 12px; border-radius: 7px; font-size: 0.8rem; font-weight: 700; outline: none;">
+            <select id="adm-active-provider" aria-label="優先使用する AI コード・脆弱性監査エンジン" style="background: #0f172a; border: 1.5px solid #34d399; color: #fff; padding: 7px 12px; border-radius: 7px; font-size: 0.8rem; font-weight: 700; outline: none;">
               <option value="auto">⚡ 自動選択 (設定済みキーを上から優先)</option>
               <option value="openai">🟢 OpenAI (GPT-4o / o3-mini)</option>
               <option value="claude">🟠 Anthropic Claude (Claude 3.7 / 3.5 Sonnet)</option>
@@ -11712,8 +11728,8 @@ def build_portal_html(data, is_shareable=False):
               <span id="adm-status-openai" class="sec-legend-badge" style="font-size: 0.62rem;">未設定</span>
             </div>
             <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-              <input id="adm-key-openai" type="password" placeholder="sk-proj-..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
-              <button class="table-view-btn" onclick="testProviderKey('openai')" style="white-space: nowrap;">⚡ 接続テスト</button>
+              <input id="adm-key-openai" type="password" autocomplete="off" aria-label="OpenAI API Key" placeholder="sk-proj-..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
+              <button type="button" class="table-view-btn" onclick="testProviderKey('openai')" style="white-space: nowrap;">⚡ 接続テスト</button>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8; gap: 6px; flex-wrap: wrap;">
               <span>監査モデル:</span>
@@ -11721,7 +11737,7 @@ def build_portal_html(data, is_shareable=False):
                 <button type="button" class="hotspot-copy-btn" style="font-size: 0.62rem; padding: 2px 6px;" onclick="document.getElementById('adm-model-openai').value='gpt-6-luna'">gpt-6-luna</button>
                 <button type="button" class="hotspot-copy-btn" style="font-size: 0.62rem; padding: 2px 6px;" onclick="document.getElementById('adm-model-openai').value='gpt-5.6-luna'">gpt-5.6-luna</button>
                 <button type="button" class="hotspot-copy-btn" style="font-size: 0.62rem; padding: 2px 6px;" onclick="document.getElementById('adm-model-openai').value='gpt-4o'">gpt-4o</button>
-                <input id="adm-model-openai" type="text" value="gpt-6-luna" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 120px;" />
+                <input id="adm-model-openai" type="text" aria-label="OpenAI 監査モデル" value="gpt-6-luna" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 120px;" />
               </div>
             </div>
           </div>
@@ -11733,12 +11749,12 @@ def build_portal_html(data, is_shareable=False):
               <span id="adm-status-claude" class="sec-legend-badge" style="font-size: 0.62rem;">未設定</span>
             </div>
             <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-              <input id="adm-key-claude" type="password" placeholder="sk-ant-api03-..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
-              <button class="table-view-btn" onclick="testProviderKey('claude')" style="white-space: nowrap;">⚡ 接続テスト</button>
+              <input id="adm-key-claude" type="password" autocomplete="off" aria-label="Anthropic Claude API Key" placeholder="sk-ant-api03-..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
+              <button type="button" class="table-view-btn" onclick="testProviderKey('claude')" style="white-space: nowrap;">⚡ 接続テスト</button>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
               <span>監査モデル:</span>
-              <input id="adm-model-claude" type="text" value="claude-3-7-sonnet-latest" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
+              <input id="adm-model-claude" type="text" aria-label="Anthropic Claude 監査モデル" value="claude-3-7-sonnet-latest" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
             </div>
           </div>
 
@@ -11749,12 +11765,12 @@ def build_portal_html(data, is_shareable=False):
               <span id="adm-status-gemini" class="sec-legend-badge" style="font-size: 0.62rem;">未設定</span>
             </div>
             <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-              <input id="adm-key-gemini" type="password" placeholder="AIzaSy..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
-              <button class="table-view-btn" onclick="testProviderKey('gemini')" style="white-space: nowrap;">⚡ 接続テスト</button>
+              <input id="adm-key-gemini" type="password" autocomplete="off" aria-label="Google Gemini API Key" placeholder="AIzaSy..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
+              <button type="button" class="table-view-btn" onclick="testProviderKey('gemini')" style="white-space: nowrap;">⚡ 接続テスト</button>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
               <span>監査モデル:</span>
-              <input id="adm-model-gemini" type="text" value="gemini-2.5-flash" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
+              <input id="adm-model-gemini" type="text" aria-label="Google Gemini 監査モデル" value="gemini-2.5-flash" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
             </div>
           </div>
 
@@ -11765,12 +11781,12 @@ def build_portal_html(data, is_shareable=False):
               <span id="adm-status-groq" class="sec-legend-badge" style="font-size: 0.62rem;">未設定</span>
             </div>
             <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-              <input id="adm-key-groq" type="password" placeholder="gsk_..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
-              <button class="table-view-btn" onclick="testProviderKey('groq')" style="white-space: nowrap;">⚡ 接続テスト</button>
+              <input id="adm-key-groq" type="password" autocomplete="off" aria-label="Groq Cloud API Key" placeholder="gsk_..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
+              <button type="button" class="table-view-btn" onclick="testProviderKey('groq')" style="white-space: nowrap;">⚡ 接続テスト</button>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
               <span>監査モデル:</span>
-              <input id="adm-model-groq" type="text" value="llama-3.3-70b-versatile" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
+              <input id="adm-model-groq" type="text" aria-label="Groq Cloud 監査モデル" value="llama-3.3-70b-versatile" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
             </div>
           </div>
         </div>
@@ -11816,14 +11832,14 @@ def build_portal_html(data, is_shareable=False):
         </div>
 
         <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap;">
-          <button class="table-view-btn" onclick="saveAdminSettings(false)" style="padding: 9px 18px; font-size: 0.8rem;">
+          <button type="button" class="table-view-btn" onclick="saveAdminSettings(false)" style="padding: 9px 18px; font-size: 0.8rem;">
             💾 設定・APIキーを保存
           </button>
-          <button onclick="saveAdminSettings(true)" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: 1px solid #6ee7b7; color: #fff; font-size: 0.82rem; font-weight: 800; padding: 9px 20px; border-radius: 8px; cursor: pointer;">
+          <button type="button" onclick="saveAdminSettings(true)" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: 1px solid #6ee7b7; color: #fff; font-size: 0.82rem; font-weight: 800; padding: 9px 20px; border-radius: 8px; cursor: pointer;">
             🛡️ 保存して現在選択中のリポジトリを今すぐAI・脆弱性再監査
           </button>
         </div>
-      </div>
+      </form>
     </div>
   </div>
 
