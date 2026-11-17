@@ -38,7 +38,7 @@ if [[ -f "$DIR/AppIcon.icns" ]]; then
 fi
 ditto "$DIR/Resources/backend" "$APP/Contents/Resources/backend"
 ditto "$DIR/Resources/webui" "$APP/Contents/Resources/webui"
-chmod +x "$APP/Contents/Resources/backend/server.py" "$APP/Contents/Resources/backend/analyzer.py"
+chmod +x "$APP/Contents/Resources/backend/server.py" "$APP/Contents/Resources/backend/analyzer.py" "$APP/Contents/Resources/backend/mcp_server.py"
 
 echo "[3/4] Code-signing and verifying app bundle..."
 codesign --force --deep --sign - "$APP"

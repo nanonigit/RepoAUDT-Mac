@@ -30,6 +30,7 @@ DEFAULT_SYNC_INTERVAL_SEC = 3600
 sys.path.insert(0, str(BACKEND_DIR))
 
 import analyzer  # noqa: E402
+import mcp_server  # noqa: E402
 import security_audit_engine  # noqa: E402
 
 
@@ -249,6 +250,9 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/health"):
             self._send_json(200, check_live_health(self.server_port))
             return
+        if self.path.startswith("/api/mcp"):
+            self._send_json(200, mcp_server.get_mcp_server_metadata())
+            return
         if self.path.startswith("/api/sync/status"):
             parsed_url = urllib.parse.urlparse(self.path)
             qs = urllib.parse.parse_qs(parsed_url.query)
@@ -280,6 +284,25 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(413, {"error": "Request body too large"})
             return
         body_raw = self.rfile.read(length).decode("utf-8", errors="ignore") if length > 0 else "{}"
+
+        if self.path.startswith("/api/mcp"):
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+            except Exception:
+                self._send_json(400, {"error": "Invalid JSON body"})
+                return
+            if isinstance(body, dict) and body.get("jsonrpc") == "2.0":
+                rpc_resp = mcp_server.handle_jsonrpc_request(body)
+                self._send_json(200, rpc_resp if rpc_resp is not None else {"ok": True})
+                return
+            if isinstance(body, dict) and body.get("tool"):
+                tool_name = str(body.get("tool") or "")
+                tool_args = body.get("arguments") if isinstance(body.get("arguments"), dict) else {}
+                res = mcp_server.execute_mcp_tool(tool_name, tool_args)
+                self._send_json(200, {"ok": not res.get("isError", False), "result": res})
+                return
+            self._send_json(400, {"error": "Provide a JSON-RPC 2.0 request or {'tool': '<name>', 'arguments': {...}}"})
+            return
 
         if self.path.startswith("/api/sync"):
             try:

@@ -855,5 +855,68 @@ class TestF17AutonomousRemediation(unittest.TestCase):
         self.assertIn(status, [400, 404])
 
 
+class TestF18McpServerIntegration(unittest.TestCase):
+    """F18: Built-in Model Context Protocol (MCP) Server (stdio & HTTP /api/mcp)"""
+
+    def test_f18_01_mcp_initialize_and_tools_list(self):
+        """MCP initialize and tools/list return protocol version and 5 tools."""
+        import mcp_server
+        init_resp = mcp_server.handle_jsonrpc_request({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2024-11-05"},
+        })
+        self.assertEqual(init_resp["result"]["serverInfo"]["name"], "repochk-mac-mcp")
+        tools_resp = mcp_server.handle_jsonrpc_request({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/list",
+        })
+        tool_names = [t["name"] for t in tools_resp["result"]["tools"]]
+        self.assertIn("list_analyzed_repositories", tool_names)
+        self.assertIn("get_repository_architecture", tool_names)
+        self.assertIn("get_security_audit_report", tool_names)
+        self.assertIn("analyze_github_repository", tool_names)
+        self.assertIn("scan_code_snippet_security", tool_names)
+
+    def test_f18_02_mcp_scan_code_snippet_security_ast(self):
+        """MCP scan_code_snippet_security detects eval() and bare except via Python AST."""
+        import mcp_server
+        call_resp = mcp_server.handle_jsonrpc_request({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "scan_code_snippet_security",
+                "arguments": {
+                    "filename": "vuln_sample.py",
+                    "code": "def bad(x):\n    try:\n        return eval(x)\n    except:\n        pass\n",
+                },
+            },
+        })
+        self.assertFalse(call_resp["result"]["isError"])
+        payload = json.loads(call_resp["result"]["content"][0]["text"])
+        self.assertGreaterEqual(payload["total_issues"], 1)
+
+    def test_f18_03_http_api_mcp_get_and_post(self):
+        """GET /api/mcp and POST /api/mcp return valid MCP metadata and JSON-RPC responses."""
+        status_get, _, body_get = simulate_http_request("GET", "/api/mcp")
+        self.assertEqual(status_get, 200)
+        meta = body_get if isinstance(body_get, dict) else json.loads(body_get)
+        self.assertEqual(meta["name"], "repochk-mac-mcp")
+        self.assertIn("mcpServers", meta["client_config"])
+
+        status_post, _, body_post = simulate_http_request("POST", "/api/mcp", {
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "resources/list",
+        })
+        self.assertEqual(status_post, 200)
+        rpc_data = body_post if isinstance(body_post, dict) else json.loads(body_post)
+        self.assertEqual(rpc_data["id"], 10)
+        self.assertGreaterEqual(len(rpc_data["result"]["resources"]), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

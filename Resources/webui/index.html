@@ -4344,7 +4344,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/17 09:10:08</strong>
+              <strong id="portal-sync-time">2026/11/17 15:45:01</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -5098,6 +5098,10 @@
         adm_skill_llm_desc: "上で設定された AI プロバイダーの API キーを使用し、リポジトリのコード構造・フレームワーク固有の脆弱性を AI が深層監査して「要対応アラート」に統合します。",
         adm_btn_save: "💾 設定・APIキーを保存",
         adm_btn_save_reaudit: "🛡️ 保存して現在選択中のリポジトリを今すぐAI・脆弱性再監査",
+        adm_mcp_server_header: "🔌 RepoCHK Mac 公式 MCP サーバー連携 (Claude Code / Cursor / Antigravity 用)",
+        adm_mcp_server_desc: "外部AIエージェントから RepoCHK Mac の構成図・シーケンス図・CVE/SAST監査レポートを直接呼び出せる標準 JSON-RPC 2.0 MCP サーバー (`mcp_server.py` / `/api/mcp`) が内蔵されています。",
+        adm_mcp_btn_copy_cfg: "📋 MCP設定JSONをコピー",
+        adm_mcp_btn_test: "⚡ MCPサーバー疎通＆ツール実行テスト",
       },
       en: {
         mode_arch: "Architecture",
@@ -5367,6 +5371,10 @@
         adm_skill_llm_desc: "Uses your configured AI provider key to perform deep architectural and framework-specific security auditing and surface Action Required alerts.",
         adm_btn_save: "💾 Save Settings &amp; API Keys",
         adm_btn_save_reaudit: "🛡️ Save &amp; Re-audit Selected Repository Now",
+        adm_mcp_server_header: "🔌 RepoCHK Mac Built-in MCP Server (For Claude Code / Cursor / Antigravity)",
+        adm_mcp_server_desc: "Exposes a standards-compliant JSON-RPC 2.0 Model Context Protocol server (`mcp_server.py` / `/api/mcp`) so external AI agents can query architecture diagrams, sequence flows, and CVE/SAST security reports.",
+        adm_mcp_btn_copy_cfg: "📋 Copy MCP Config JSON",
+        adm_mcp_btn_test: "⚡ Test MCP Server &amp; Tools",
       }
     };
 
@@ -8494,7 +8502,61 @@
           document.getElementById('adm-skill-sast').checked = s.skills.owasp_sast_skill !== false;
           document.getElementById('adm-skill-llm').checked = s.skills.llm_deep_audit !== false;
         }
+        try {
+          const mcpResp = await fetch('/api/mcp');
+          if (mcpResp.ok) {
+            const mcpMeta = await mcpResp.json();
+            const cfgPre = document.getElementById('adm-mcp-config-pre');
+            if (cfgPre && mcpMeta.client_config) {
+              cfgPre.textContent = JSON.stringify(mcpMeta.client_config, null, 2);
+            }
+          }
+        } catch (_) {}
       } catch (e) {}
+    }
+
+    async function copyMcpClientConfig() {
+      const isEn = currentLang === 'en';
+      const cfgPre = document.getElementById('adm-mcp-config-pre');
+      const text = cfgPre ? cfgPre.textContent : '';
+      if (text) {
+        await navigator.clipboard.writeText(text);
+        showToast(isEn ? '📋 Copied MCP Server JSON configuration!' : '📋 MCPサーバー設定JSONをクリップボードにコピーしました！', 'success');
+      }
+    }
+
+    async function testLocalMcpServer() {
+      const isEn = currentLang === 'en';
+      const outEl = document.getElementById('adm-mcp-test-output');
+      if (outEl) {
+        outEl.style.display = 'block';
+        outEl.textContent = isEn ? '⏳ Sending JSON-RPC 2.0 tools/list & tools/call to /api/mcp...' : '⏳ /api/mcp へ JSON-RPC 2.0 (tools/list & tools/call) を送信中...';
+      }
+      try {
+        const initResp = await fetch('/api/mcp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05' } })
+        });
+        const initData = await initResp.json();
+        const callResp = await fetch('/api/mcp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'list_analyzed_repositories', arguments: {} } })
+        });
+        const callData = await callResp.json();
+        const parsedContent = JSON.parse(callData?.result?.content?.[0]?.text || '{}');
+        if (outEl) {
+          outEl.textContent = (isEn
+            ? `✅ MCP Server Online (${initData?.result?.serverInfo?.name} v${initData?.result?.serverInfo?.version}) — ${parsedContent.total || 0} repositories accessible via MCP:\n`
+            : `✅ MCPサーバー正常稼働 (${initData?.result?.serverInfo?.name} v${initData?.result?.serverInfo?.version}) — MCP経由で ${parsedContent.total || 0} 件のリポジトリを参照可能:\n`)
+            + JSON.stringify(parsedContent, null, 2).slice(0, 600);
+        }
+      } catch (err) {
+        if (outEl) {
+          outEl.textContent = `❌ MCP Error: ${err.message}`;
+        }
+      }
     }
 
     function closeAdminSettingsModal() {
@@ -10834,6 +10896,36 @@
               <div style="font-size: 0.7rem; color: #94a3b8;" data-i18n="adm_skill_llm_desc">上で設定された AI プロバイダーの API キーを使用し、リポジトリのコード構造・フレームワーク固有の脆弱性を AI が深層監査して「要対応アラート」に統合します。</div>
             </div>
           </label>
+        </div>
+
+        <!-- Built-in MCP Server Integration Card -->
+        <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;" data-i18n="adm_mcp_server_header">
+          🔌 RepoCHK Mac 公式 MCP サーバー連携 (Claude Code / Cursor / Antigravity 用)
+        </div>
+        <div style="background: #090d16; border: 1px solid #38bdf8; border-radius: 10px; padding: 14px; margin-bottom: 18px;">
+          <div style="font-size: 0.72rem; color: #cbd5e1; margin-bottom: 10px; line-height: 1.5;" data-i18n="adm_mcp_server_desc">
+            外部AIエージェントから RepoCHK Mac の構成図・シーケンス図・CVE/SAST監査レポートを直接呼び出せる標準 JSON-RPC 2.0 MCP サーバー (`mcp_server.py` / `/api/mcp`) が内蔵されています。
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;">
+            <span class="sec-legend-badge sec-legend-green" style="font-family: monospace; font-size: 0.65rem;">🛠️ list_analyzed_repositories</span>
+            <span class="sec-legend-badge sec-legend-green" style="font-family: monospace; font-size: 0.65rem;">🛠️ get_repository_architecture</span>
+            <span class="sec-legend-badge sec-legend-green" style="font-family: monospace; font-size: 0.65rem;">🛠️ get_security_audit_report</span>
+            <span class="sec-legend-badge sec-legend-green" style="font-family: monospace; font-size: 0.65rem;">🛠️ analyze_github_repository</span>
+            <span class="sec-legend-badge sec-legend-green" style="font-family: monospace; font-size: 0.65rem;">🛠️ scan_code_snippet_security</span>
+          </div>
+          <pre id="adm-mcp-config-pre" style="background: #040711; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; color: #38bdf8; font-size: 0.7rem; font-family: 'JetBrains Mono', monospace; overflow-x: auto; margin: 0 0 10px 0;">{
+  "mcpServers": {
+    "repochk-mac": {
+      "command": "python3",
+      "args": ["/Applications/RepoCHK Mac.app/Contents/Resources/backend/mcp_server.py"]
+    }
+  }
+}</pre>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="table-view-btn" onclick="copyMcpClientConfig()" style="border-color: #38bdf8; color: #38bdf8;" data-i18n="adm_mcp_btn_copy_cfg">📋 MCP設定JSONをコピー</button>
+            <button type="button" class="table-view-btn" onclick="testLocalMcpServer()" style="border-color: #34d399; color: #34d399;" data-i18n="adm_mcp_btn_test">⚡ MCPサーバー疎通＆ツール実行テスト</button>
+          </div>
+          <pre id="adm-mcp-test-output" style="display: none; margin: 10px 0 0 0; background: #040711; border: 1px solid #10b981; border-radius: 6px; padding: 10px; color: #6ee7b7; font-size: 0.68rem; font-family: 'JetBrains Mono', monospace; max-height: 160px; overflow-y: auto; white-space: pre-wrap;"></pre>
         </div>
 
         <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap;">

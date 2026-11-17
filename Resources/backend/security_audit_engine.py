@@ -476,19 +476,65 @@ class SecurityASTVisitor(ast.NodeVisitor):
                     "fix_cmd": f"sed -n '{max(1, lineno-2)},{lineno+2}p' {self.rel_path}",
                 })
 
+        # 3. Arbitrary code execution via eval() / exec() or subprocess with shell=True
+        if func_name in ("eval", "exec"):
+            raw_line = self._line_text(lineno)
+            self.findings.append({
+                "severity": "high",
+                "title": f"[Python AST監査] 危険な動的コード実行 `{func_name}()` ({Path(self.rel_path).name}:{lineno})",
+                "file": f"{self.rel_path}:{lineno} (Target: {self.target_node})",
+                "target_node": self.target_node,
+                "desc": f"`{self.rel_path}` の {lineno}行目で `{func_name}()` が使用されています。外部入力が渡されると任意コード実行 (RCE) につながるため、`ast.literal_eval()` または安全なパーサーに置き換えてください。",
+                "diff": f"- {raw_line}\n+ ast.literal_eval(...)",
+                "fix_cmd": f"sed -n '{max(1, lineno-2)},{lineno+2}p' {self.rel_path}",
+            })
+        elif func_name.startswith("subprocess.") and any(
+            kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+            for kw in node.keywords
+        ):
+            raw_line = self._line_text(lineno)
+            self.findings.append({
+                "severity": "high",
+                "title": f"[Python AST監査] `shell=True` によるコマンドインジェクションリスク ({Path(self.rel_path).name}:{lineno})",
+                "file": f"{self.rel_path}:{lineno} (Target: {self.target_node})",
+                "target_node": self.target_node,
+                "desc": f"`{self.rel_path}` の {lineno}行目で `{func_name}(..., shell=True)` が使用されています。引数配列と `shell=False` を使用してください。",
+                "diff": f"- {raw_line}\n+ subprocess.run(['cmd', 'arg'], shell=False, check=True)",
+                "fix_cmd": f"sed -n '{max(1, lineno-2)},{lineno+2}p' {self.rel_path}",
+            })
+
+        self.generic_visit(node)
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+        lineno = getattr(node, "lineno", 1)
+        is_empty_pass = len(node.body) == 1 and isinstance(node.body[0], ast.Pass)
+        if node.type is None and is_empty_pass:
+            raw_line = self._line_text(lineno)
+            self.findings.append({
+                "severity": "medium",
+                "title": f"[Python AST監査] 空の `except: pass` による例外握りつぶし ({Path(self.rel_path).name}:{lineno})",
+                "file": f"{self.rel_path}:{lineno} (Target: {self.target_node})",
+                "target_node": self.target_node,
+                "desc": f"`{self.rel_path}` の {lineno}行目で裸の `except:` と `pass` により例外が完全に握りつぶされています。具体的な例外型を捕捉しログ出力を行ってください。",
+                "diff": f"- {raw_line}\n+ except Exception as exc:\n+     logger.warning('Handled error: %s', exc)",
+                "fix_cmd": f"sed -n '{max(1, lineno-2)},{lineno+2}p' {self.rel_path}",
+            })
         self.generic_visit(node)
 
 
 def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     repo_dir: Path,
     components: List[Dict[str, Any]],
+    force_sast: bool = False,
 ) -> Dict[str, Any]:
     """
     Security-Review Skill + Runtime EOL Scanner + OSV.dev Package CVE Scanner
     for PHP, Node.js/TypeScript, Python, Swift, Go, and Rust.
     """
     settings = load_settings()
-    skills_cfg = settings.get("skills", DEFAULT_SETTINGS["skills"])
+    skills_cfg = dict(settings.get("skills", DEFAULT_SETTINGS["skills"]))
+    if force_sast:
+        skills_cfg["owasp_sast_skill"] = True
 
     frameworks: List[Dict[str, str]] = []
     databases: List[Dict[str, str]] = []
@@ -684,7 +730,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     if skills_cfg.get("owasp_sast_skill", True):
         py_files = [
             p for p in repo_dir.rglob("*.py")
-            if not any(part in ignore_dirs or part == "tests" for part in p.parts)
+            if not any(part in ignore_dirs or part == "tests" for part in p.relative_to(repo_dir).parts)
             and not p.name.startswith("test_")
         ]
         for pyf in py_files[:40]:
