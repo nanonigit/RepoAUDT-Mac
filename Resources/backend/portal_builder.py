@@ -5706,31 +5706,31 @@ def build_portal_html(data, is_shareable=False):
               <span class="terminal-cwd-badge" id="terminal-cwd-display">~/Git</span>
             </div>
             <div style="display: flex; gap: 6px;">
-              <button class="term-chip" onclick="clearTerminalOutput()" title="出力をクリア">🧹 クリア</button>
+              <button class="term-chip" onclick="clearTerminalOutput()" title="出力をクリア" data-i18n="term_clear">🧹 クリア</button>
             </div>
           </div>
 
           <!-- Beginner Friendly Quick Action Chips -->
           <div class="terminal-quick-chips">
-            <span style="font-size: 0.68rem; color: #64748b; display: flex; align-items: center; gap: 2px;">⚡ クイック:</span>
-            <button class="term-chip" onclick="runTerminalCommand('git status')">📊 Git状態</button>
-            <button class="term-chip" onclick="runTerminalCommand('git log -n 3 --oneline')">📜 コミット履歴</button>
-            <button class="term-chip" onclick="runTerminalCommand('git pull origin main')">🔄 最新取得 (pull)</button>
-            <button class="term-chip" onclick="runTerminalCommand('ls -la')">📁 ファイル一覧</button>
-            <button class="term-chip" onclick="runTerminalCommand('python3 --version && node --version')">⚙️ 環境情報</button>
+            <span style="font-size: 0.68rem; color: #64748b; display: flex; align-items: center; gap: 2px;" data-i18n="term_quick_label">⚡ クイック:</span>
+            <button class="term-chip" onclick="runTerminalCommand('git status')" data-i18n="term_git_status">📊 Git状態</button>
+            <button class="term-chip" onclick="runTerminalCommand('git log -n 3 --oneline')" data-i18n="term_git_log">📜 コミット履歴</button>
+            <button class="term-chip" onclick="runTerminalCommand('git pull origin main')" data-i18n="term_git_pull">🔄 最新取得 (pull)</button>
+            <button class="term-chip" onclick="runTerminalCommand('ls -la')" data-i18n="term_ls">📁 ファイル一覧</button>
+            <button class="term-chip" onclick="runTerminalCommand('python3 --version && node --version')" data-i18n="term_env">⚙️ 環境情報</button>
           </div>
 
           <!-- Terminal Output Area -->
           <div class="terminal-output-scroll" id="terminal-output-area">
             <div style="color: #64748b; margin-bottom: 6px;">=== RepoCHK Mac Embedded Terminal (bash) ===</div>
-            <div style="color: #38bdf8; margin-bottom: 8px;">💡 上のクイックボタンを押すか、下の入力欄にコマンドを入力して [実行] できます。</div>
+            <div style="color: #38bdf8; margin-bottom: 8px;" data-i18n="term_hint">💡 上のクイックボタンを押すか、下の入力欄にコマンドを入力して [実行] できます。</div>
           </div>
 
           <!-- Terminal Input Row -->
           <div class="terminal-input-row">
             <span class="terminal-prompt">$</span>
-            <input type="text" id="terminal-input" placeholder="コマンドを入力... (例: git status, npm test, ls -la)" onkeydown="if(event.key==='Enter') submitTerminalInput()">
-            <button class="term-run-btn" onclick="submitTerminalInput()" id="terminal-exec-btn">実行 ↵</button>
+            <input type="text" id="terminal-input" placeholder="コマンドを入力... (例: git status, npm test, ls -la)" data-i18n-placeholder="term_input_placeholder" onkeydown="if(event.key==='Enter') submitTerminalInput()">
+            <button class="term-run-btn" onclick="submitTerminalInput()" id="terminal-exec-btn" data-i18n="term_run_btn">実行 ↵</button>
           </div>
         </div>
       </div>
@@ -5742,8 +5742,8 @@ def build_portal_html(data, is_shareable=False):
           中央の図のボックスをクリックするか、下のクイックボタンからシステムの詳細・安全性を確認できます。
         </div>
         <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
-          <button class="term-chip" onclick="switchInspTab('terminal')">💻 右側ターミナルを開く (⌘J)</button>
-          <button class="term-chip" onclick="switchViewMode('coderabbit')">🐰 AI品質監査を見る</button>
+          <button class="term-chip" onclick="switchInspTab('terminal')" data-i18n="empty_btn_term">💻 右側ターミナルを開く (⌘J)</button>
+          <button class="term-chip" onclick="switchViewMode('coderabbit')" data-i18n="empty_btn_cr">🐰 AI品質監査を見る</button>
         </div>
       </div>
       <div id="insp-content" style="display: none;"></div>
@@ -5764,20 +5764,20 @@ def build_portal_html(data, is_shareable=False):
           </div>
           <div style="font-size: 0.78rem; color: #cbd5e1; line-height: 1.45;" id="tm-table-desc">説明文</div>
         </div>
-        <button class="btn" onclick="closeTableModal()" style="padding: 4px 10px; font-size: 0.8rem;">✕ 閉じる</button>
+        <button class="btn" onclick="closeTableModal()" style="padding: 4px 10px; font-size: 0.8rem;" data-i18n="btn_close_x">✕ 閉じる</button>
       </div>
 
       <!-- Columns List -->
       <div style="margin-bottom: 16px;">
-        <div class="section-title" style="margin-bottom: 8px;">📋 カラム定義・データ型・制約一覧</div>
+        <div class="section-title" style="margin-bottom: 8px;" data-i18n="tm_cols_title">📋 カラム定義・データ型・制約一覧</div>
         <div class="table-scroll-container">
           <table class="schema-table">
             <thead>
               <tr>
-                <th>カラム名</th>
-                <th>データ型</th>
-                <th>制約</th>
-                <th>説明・用途</th>
+                <th data-i18n="tm_col_name">カラム名</th>
+                <th data-i18n="tm_col_type">データ型</th>
+                <th data-i18n="tm_col_const">制約</th>
+                <th data-i18n="tm_col_desc">説明・用途</th>
               </tr>
             </thead>
             <tbody id="tm-columns-body"></tbody>
@@ -5788,11 +5788,11 @@ def build_portal_html(data, is_shareable=False):
       <!-- Relations & Indexes -->
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 16px;">
         <div class="spec-card" style="margin-bottom: 0;">
-          <div style="font-weight: 700; color: #38bdf8; font-size: 0.74rem; margin-bottom: 6px;">🔗 外部キーリレーション</div>
+          <div style="font-weight: 700; color: #38bdf8; font-size: 0.74rem; margin-bottom: 6px;" data-i18n="tm_fk_title">🔗 外部キーリレーション</div>
           <div id="tm-relations-list" style="font-size: 0.72rem; color: #cbd5e1; display: flex; flex-direction: column; gap: 4px;"></div>
         </div>
         <div class="spec-card" style="margin-bottom: 0;">
-          <div style="font-weight: 700; color: #34d399; font-size: 0.74rem; margin-bottom: 6px;">⚡ インデックス構成</div>
+          <div style="font-weight: 700; color: #34d399; font-size: 0.74rem; margin-bottom: 6px;" data-i18n="tm_idx_title">⚡ インデックス構成</div>
           <div id="tm-indexes-list" style="font-size: 0.72rem; color: #cbd5e1; display: flex; flex-direction: column; gap: 4px;"></div>
         </div>
       </div>
@@ -5800,16 +5800,16 @@ def build_portal_html(data, is_shareable=False):
       <!-- Sample Query -->
       <div style="background: #090e1a; border: 1px solid #334155; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 0.74rem; font-weight: 700; color: #a5b4fc;">🛠️ クエリ構文サンプル (SQL)</span>
+          <span style="font-size: 0.74rem; font-weight: 700; color: #a5b4fc;" data-i18n="tm_sql_title">🛠️ クエリ構文サンプル (SQL)</span>
         </div>
         <div class="audit-cmd-box" style="margin-top: 0;">
           <code id="tm-sql-code">SELECT * FROM companies;</code>
-          <button class="btn-copy-cmd" onclick="copyTableSql()">コピー</button>
+          <button class="btn-copy-cmd" onclick="copyTableSql()" data-i18n="btn_copy_short">コピー</button>
         </div>
       </div>
 
       <div style="display: flex; justify-content: flex-end;">
-        <button class="btn" onclick="closeTableModal()">閉じる</button>
+        <button class="btn" onclick="closeTableModal()" data-i18n="btn_close">閉じる</button>
       </div>
     </div>
   </div>
@@ -5825,7 +5825,7 @@ def build_portal_html(data, is_shareable=False):
           </div>
           <div style="font-size: 0.9rem; font-weight: 700; color: #f1f5f9;" id="vm-title">脆弱性タイトル</div>
         </div>
-        <button class="btn" onclick="closeVulnModal()" style="padding: 4px 10px; font-size: 0.8rem;">✕ 閉じる</button>
+        <button class="btn" onclick="closeVulnModal()" style="padding: 4px 10px; font-size: 0.8rem;" data-i18n="btn_close_x">✕ 閉じる</button>
       </div>
 
       <div style="font-size: 0.78rem; color: #cbd5e1; line-height: 1.6; margin-bottom: 14px;" id="vm-summary">
@@ -5833,23 +5833,23 @@ def build_portal_html(data, is_shareable=False):
       </div>
 
       <div style="margin-bottom: 14px;">
-        <div style="font-size: 0.76rem; font-weight: 700; color: #94a3b8; margin-bottom: 8px;">🏛️ 信頼性のある公式情報源 (Authoritative Sources - クリックで開く)</div>
+        <div style="font-size: 0.76rem; font-weight: 700; color: #94a3b8; margin-bottom: 8px;" data-i18n="vm_sources_title">🏛️ 信頼性のある公式情報源 (Authoritative Sources - クリックで開く)</div>
         <div id="vm-sources-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
       </div>
 
       <div style="background: #090e1a; border: 1px solid #334155; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 0.74rem; font-weight: 700; color: #34d399;">🛠️ 推奨される対策・修正コマンド</span>
+          <span style="font-size: 0.74rem; font-weight: 700; color: #34d399;" data-i18n="vm_cmd_title">🛠️ 推奨される対策・修正コマンド</span>
           <span style="font-size: 0.7rem; color: #94a3b8;" id="vm-fixed-ver">修正バージョン</span>
         </div>
         <div class="audit-cmd-box" style="margin-top: 0;">
           <code id="vm-cmd-code">npm install next@latest</code>
-          <button class="btn-copy-cmd" onclick="copyVulnCmd()">コピー</button>
+          <button class="btn-copy-cmd" onclick="copyVulnCmd()" data-i18n="btn_copy_short">コピー</button>
         </div>
       </div>
 
       <div style="display: flex; justify-content: flex-end;">
-        <button class="btn" onclick="closeVulnModal()">閉じる</button>
+        <button class="btn" onclick="closeVulnModal()" data-i18n="btn_close">閉じる</button>
       </div>
     </div>
   </div>
@@ -5887,9 +5887,9 @@ def build_portal_html(data, is_shareable=False):
       <div class="cmd-footer">
         <span id="cmd-footer-count">38 items available</span>
         <div class="cmd-footer-keys">
-          <span><kbd class="kbd-badge">↑</kbd> <kbd class="kbd-badge">↓</kbd> 移動</span>
-          <span><kbd class="kbd-badge">↵</kbd> 実行</span>
-          <span><kbd class="kbd-badge">ESC</kbd> 閉じる</span>
+          <span><kbd class="kbd-badge">↑</kbd> <kbd class="kbd-badge">↓</kbd> <span data-i18n="cmd_nav_key">移動</span></span>
+          <span><kbd class="kbd-badge">↵</kbd> <span data-i18n="cmd_run_key">実行</span></span>
+          <span><kbd class="kbd-badge">ESC</kbd> <span data-i18n="btn_close">閉じる</span></span>
         </div>
       </div>
     </div>
@@ -5903,7 +5903,7 @@ def build_portal_html(data, is_shareable=False):
           <span style="font-size: 1.2rem;">⌨️</span>
           <strong style="color: #f8fafc; font-size: 1rem;" data-i18n="shortcuts_title">キーボードショートカット一覧</strong>
         </div>
-        <button class="btn" onclick="closeShortcutsModal()" style="padding: 3px 8px; font-size: 0.75rem;">✕ 閉じる</button>
+        <button class="btn" onclick="closeShortcutsModal()" style="padding: 3px 8px; font-size: 0.75rem;" data-i18n="btn_close_x">✕ 閉じる</button>
       </div>
       <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.8rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(30,41,59,0.5); border-radius: 6px;">
@@ -6206,6 +6206,71 @@ def build_portal_html(data, is_shareable=False):
         title_health_card: "クリックして各サービスの死活状態・疎通レイテンシを確認",
         title_acc_search: "検索＆鮮度フィルターを折りたたむ / 展開",
         title_filter_action_req: "要対応アラートがあるリポジトリのみを絞り込み",
+        term_clear: "🧹 クリア",
+        term_quick_label: "⚡ クイック:",
+        term_git_status: "📊 Git状態",
+        term_git_log: "📜 コミット履歴",
+        term_git_pull: "🔄 最新取得 (pull)",
+        term_ls: "📁 ファイル一覧",
+        term_env: "⚙️ 環境情報",
+        term_hint: "💡 上のクイックボタンを押すか、下の入力欄にコマンドを入力して [実行] できます。",
+        term_input_placeholder: "コマンドを入力... (例: git status, npm test, ls -la)",
+        term_run_btn: "実行 ↵",
+        empty_btn_term: "💻 右側ターミナルを開く (⌘J)",
+        empty_btn_cr: "🐰 AI品質監査を見る",
+        btn_close_x: "✕ 閉じる",
+        btn_copy_short: "コピー",
+        tm_cols_title: "📋 カラム定義・データ型・制約一覧",
+        tm_col_name: "カラム名",
+        tm_col_type: "データ型",
+        tm_col_const: "制約",
+        tm_col_desc: "説明・用途",
+        tm_fk_title: "🔗 外部キーリレーション",
+        tm_idx_title: "⚡ インデックス構成",
+        tm_sql_title: "🛠️ クエリ構文サンプル (SQL)",
+        vm_sources_title: "🏛️ 信頼性のある公式情報源 (Authoritative Sources - クリックで開く)",
+        vm_cmd_title: "🛠️ 推奨される対策・修正コマンド",
+        cmd_nav_key: "移動",
+        cmd_run_key: "実行",
+        modal_action_hub_title: "要対応アラート詳細・理由と対応方法の提案 (Action Required Hub)",
+        modal_action_hub_sub: "CodeRabbit AI 監査指摘 &amp; 依存パッケージ脆弱性 (CVE) の発生理由・修正パッチ一覧",
+        modal_health_title: "システム死活監視 &amp; 稼働ステータス (Health &amp; Uptime Monitor)",
+        modal_health_sub: "ローカルHTTPサービス、API、バックグラウンドプロセスの死活状況",
+        modal_analyze_title: "GitHub リポジトリ追加分析 &amp; 保有リスト管理 (RepoCHK Mac)",
+        modal_analyze_sub: "新しい組織URL・リポジトリURLの追加解析と、保有データの確認・不要リポジトリの削除が行えます",
+        modal_analyze_label: "➕ 新しく追加・分析したい 組織URL (<code style='color: #34d399;'>https://github.com/org</code>) または リポジトリURL (<code style='color: #38bdf8;'>owner/repo</code>):",
+        modal_analyze_placeholder: "例: https://github.com/nanonigit または https://github.com/nanonigit/RepoCHK-Mac",
+        modal_btn_browse: "📂 配下一覧を表示",
+        modal_btn_submit: "🚀 追加して分析",
+        modal_org_quick_title: "🏢 上の階層（組織 / ユーザー全体エコシステム）からまとめて追加:",
+        modal_org_quick_all: "👤 https://github.com/nanonigit (全体を追加)",
+        modal_org_quick_browse: "📂 nanonigit の配下一覧",
+        modal_direct_quick_title: "📦 個別リポジトリをダイレクトに追加:",
+        modal_org_browser_title: "📂 配下リポジトリ一覧",
+        modal_org_add_all_btn: "🏢 この組織の全体エコシステム＋全リポジトリを一括追加",
+        modal_analyze_persist_note: "解析結果は保有リストに自動保存され、次回起動時もそのまま保持されます。",
+        modal_saved_list_title: "📋 現在保有しているリポジトリ一覧",
+        modal_saved_list_note: "※アプリを閉じてもデータは自動保持されます",
+        modal_saved_filter_placeholder: "🔍 保有リスト内を検索...",
+        adm_modal_title: "⚙️ 管理画面：AI APIキー &amp; PHP/Node.js 脆弱性監査 MCP・スキル設定",
+        adm_modal_sub: "OpenAI / Claude / Gemini / Groq のAPIキー管理と、OSV脆弱性MCP・OWASP SASTスキルの監査設定",
+        adm_provider_title: "🤖 優先使用する AI コード・脆弱性監査エンジン",
+        adm_provider_sub: "設定済みのAPIキーを使って、ソースコードと依存パッケージの深層セキュリティ監査を実行します",
+        adm_opt_auto: "⚡ 自動選択 (設定済みキーを上から優先)",
+        adm_keys_header: "🔑 AI プロバイダー APIキー設定 <span style='font-size: 0.68rem; color: #94a3b8; font-weight: 500;'>(ローカルの ~/Library/Application Support/RepoCHK Mac/settings.json に暗号権限 0600 で安全に保存されます)</span>",
+        adm_btn_test: "⚡ 接続テスト",
+        adm_model_label: "監査モデル:",
+        adm_skills_header: "🛡️ 脆弱性・コード監査 MCP &amp; スキル構成 (PHP / Node.js / Python / Swift / Go 対応)",
+        adm_skill_osv_title: "🌐 OSV.dev 脆弱性データベース MCP (リアルタイム CVE 照合)",
+        adm_skill_osv_desc: "PHP (`composer.json` / Packagist)、Node.js (`package.json` / npm)、Python (`requirements.txt` / PyPI)、Go、Rust の全パッケージバージョンを Google OSV.dev API に照会し、既知の脆弱性 (CVE / GHSA) を自動検出します。",
+        adm_skill_rt_title: "🐘 PHP / Node.js / ランタイム EOL &amp; バージョン脆弱性監査スキル",
+        adm_skill_rt_desc: "PHP 5.x / 7.x / 8.0 等のセキュリティサポート終了 (EOL) ランタイムや、Node.js 旧世代エンジン、Laravel / WordPress / Express / Next.js / Axios 等の危険バージョンを監査します。",
+        adm_skill_sast_title: "🔒 OWASP Top 10 &amp; Security-Review SAST スキル (ソースコード脆弱性診断)",
+        adm_skill_sast_desc: "PHP の SQLインジェクション (`mysqli_query` 直接結合)、XSS (`echo $_GET`)、RCE (`eval` / `shell_exec` / `unserialize`)、Node.js/TS の SSRF・インジェクション、Python/Swift の危険な例外・強制アンラップを行単位で検出し修正 Diff を提案します。",
+        adm_skill_llm_title: "🧠 マルチLLM ディープ脆弱性・設計監査 (OpenAI / Claude / Gemini / Groq)",
+        adm_skill_llm_desc: "上で設定された AI プロバイダーの API キーを使用し、リポジトリのコード構造・フレームワーク固有の脆弱性を AI が深層監査して「要対応アラート」に統合します。",
+        adm_btn_save: "💾 設定・APIキーを保存",
+        adm_btn_save_reaudit: "🛡️ 保存して現在選択中のリポジトリを今すぐAI・脆弱性再監査",
       },
       en: {
         mode_arch: "Architecture",
@@ -6410,6 +6475,71 @@ def build_portal_html(data, is_shareable=False):
         title_health_card: "Click to inspect service health & latency",
         title_acc_search: "Collapse / Expand Search & Freshness Filters",
         title_filter_action_req: "Filter to repositories with Action Required alerts",
+        term_clear: "🧹 Clear",
+        term_quick_label: "⚡ Quick:",
+        term_git_status: "📊 Git Status",
+        term_git_log: "📜 Git Log",
+        term_git_pull: "🔄 Git Pull",
+        term_ls: "📁 List Files",
+        term_env: "⚙️ Env Info",
+        term_hint: "💡 Click a quick button above or enter a command below and press [Run].",
+        term_input_placeholder: "Enter command... (e.g. git status, npm test, ls -la)",
+        term_run_btn: "Run ↵",
+        empty_btn_term: "💻 Open Terminal (⌘J)",
+        empty_btn_cr: "🐰 View AI Audit",
+        btn_close_x: "✕ Close",
+        btn_copy_short: "Copy",
+        tm_cols_title: "📋 Column Definitions, Data Types &amp; Constraints",
+        tm_col_name: "Column",
+        tm_col_type: "Data Type",
+        tm_col_const: "Constraints",
+        tm_col_desc: "Description",
+        tm_fk_title: "🔗 Foreign Key Relations",
+        tm_idx_title: "⚡ Indexes",
+        tm_sql_title: "🛠️ Sample SQL Query",
+        vm_sources_title: "🏛️ Authoritative Security Sources (Click to Open)",
+        vm_cmd_title: "🛠️ Recommended Remediation Command",
+        cmd_nav_key: "Navigate",
+        cmd_run_key: "Run",
+        modal_action_hub_title: "Action Required Alerts &amp; Remediation Hub",
+        modal_action_hub_sub: "CodeRabbit AI audit findings &amp; dependency CVE vulnerabilities with remediation patches",
+        modal_health_title: "System Health &amp; Uptime Monitor",
+        modal_health_sub: "Live status of local HTTP backend, GitHub API, and background sync daemon",
+        modal_analyze_title: "Analyze GitHub Repository &amp; Manage Saved List",
+        modal_analyze_sub: "Analyze new GitHub Organization or Repository URLs and manage your saved repositories",
+        modal_analyze_label: "➕ Enter GitHub Organization URL (<code style='color: #34d399;'>https://github.com/org</code>) or Repository URL (<code style='color: #38bdf8;'>owner/repo</code>):",
+        modal_analyze_placeholder: "e.g. https://github.com/nanonigit or https://github.com/nanonigit/RepoCHK-Mac",
+        modal_btn_browse: "📂 Browse Repos",
+        modal_btn_submit: "🚀 Add &amp; Analyze",
+        modal_org_quick_title: "🏢 Add Organization / User Ecosystem:",
+        modal_org_quick_all: "👤 https://github.com/nanonigit (Add All)",
+        modal_org_quick_browse: "📂 Browse nanonigit Repos",
+        modal_direct_quick_title: "📦 Quick Add Individual Repositories:",
+        modal_org_browser_title: "📂 Organization Repositories",
+        modal_org_add_all_btn: "🏢 Add Entire Organization Ecosystem + All Repositories",
+        modal_analyze_persist_note: "Analysis results are automatically saved to your local list and persisted across restarts.",
+        modal_saved_list_title: "📋 Saved Repositories",
+        modal_saved_list_note: "* Automatically persisted on disk",
+        modal_saved_filter_placeholder: "🔍 Filter saved repos...",
+        adm_modal_title: "⚙️ Admin Settings: AI API Keys &amp; Security Audit MCP / Skills",
+        adm_modal_sub: "Manage OpenAI / Claude / Gemini / Groq API keys and configure OSV MCP &amp; OWASP SAST skills",
+        adm_provider_title: "🤖 Preferred AI Code &amp; Security Audit Provider",
+        adm_provider_sub: "Runs deep source code and dependency vulnerability auditing using your configured API key",
+        adm_opt_auto: "⚡ Auto Select (Prioritize configured keys in order)",
+        adm_keys_header: "🔑 AI Provider API Keys <span style='font-size: 0.68rem; color: #94a3b8; font-weight: 500;'>(Saved locally with 0600 permissions in ~/Library/Application Support/RepoCHK Mac/settings.json)</span>",
+        adm_btn_test: "⚡ Test Key",
+        adm_model_label: "Model:",
+        adm_skills_header: "🛡️ Vulnerability &amp; Code Audit MCP / Skills (PHP / Node.js / Python / Swift / Go)",
+        adm_skill_osv_title: "🌐 OSV.dev Vulnerability Database MCP (Live CVE Lookup)",
+        adm_skill_osv_desc: "Queries Google OSV.dev API in real time for PHP (`composer.json`), Node.js (`package.json` / `package-lock.json`), Python (`requirements.txt`), Go, and Rust packages to detect known CVEs/GHSAs.",
+        adm_skill_rt_title: "🐘 PHP / Node.js / Runtime EOL &amp; Version Security Audit Skill",
+        adm_skill_rt_desc: "Audits End-of-Life (EOL) runtimes (PHP 5.x/7.x/8.0, legacy Node.js) and vulnerable framework versions across Laravel, WordPress, Express, Next.js, and Axios.",
+        adm_skill_sast_title: "🔒 OWASP Top 10 &amp; Security-Review SAST Skill (Static Code Analysis)",
+        adm_skill_sast_desc: "Detects SQL injection, XSS, RCE (`eval` / `shell_exec` / `pickle`), SSRF, and unsafe deserialization at line level with recommended remediation diffs.",
+        adm_skill_llm_title: "🧠 Multi-LLM Deep Vulnerability &amp; Architecture Audit (OpenAI / Claude / Gemini / Groq)",
+        adm_skill_llm_desc: "Uses your configured AI provider key to perform deep architectural and framework-specific security auditing and surface Action Required alerts.",
+        adm_btn_save: "💾 Save Settings &amp; API Keys",
+        adm_btn_save_reaudit: "🛡️ Save &amp; Re-audit Selected Repository Now",
       }
     };
 
@@ -6837,15 +6967,17 @@ def build_portal_html(data, is_shareable=False):
       updateAccordionActiveIndicators();
 
       if (!autoSyncEnabled) {
-        if (chipText) chipText.innerHTML = '<span class="chip-label">更新</span>停止中';
+        if (chipText) chipText.innerHTML = currentLang === 'en' ? '<span class="chip-label">Sync </span>Paused' : '<span class="chip-label">更新</span>停止中';
         if (pulse) pulse.style.background = '#64748b';
-        if (sidebarCountdown) sidebarCountdown.textContent = '停止中';
+        if (sidebarCountdown) sidebarCountdown.textContent = currentLang === 'en' ? 'Paused' : '停止中';
         if (progressBar) progressBar.style.width = '0%';
         return;
       }
 
       const formatted = formatSecondsToMMSS(autoSyncRemainingSeconds);
-      if (chipText) chipText.innerHTML = `<span class="chip-label">${autoSyncIntervalMinutes}分毎 </span>(${formatted})`;
+      if (chipText) chipText.innerHTML = currentLang === 'en'
+        ? `<span class="chip-label">Every ${autoSyncIntervalMinutes}m </span>(${formatted})`
+        : `<span class="chip-label">${autoSyncIntervalMinutes}分毎 </span>(${formatted})`;
       if (pulse) pulse.style.background = '#34d399';
       if (sidebarCountdown) sidebarCountdown.textContent = formatted;
       if (progressBar) {
@@ -7029,29 +7161,30 @@ def build_portal_html(data, is_shareable=False):
     let currentVulnAdv = null;
     function openVulnModal(advJsonStr) {
       try {
+        const isEn = currentLang === 'en';
         const adv = typeof advJsonStr === 'string' ? JSON.parse(decodeURIComponent(advJsonStr)) : advJsonStr;
         currentVulnAdv = adv;
         document.getElementById('vm-sev-badge').textContent = (adv.severity || 'HIGH') + (adv.cvss ? ` (${adv.cvss.split(' ')[0]})` : '');
         document.getElementById('vm-cve-id').textContent = adv.cve || 'SECURITY-ADVISORY';
-        document.getElementById('vm-title').textContent = adv.title || '脆弱性警告';
+        document.getElementById('vm-title').textContent = adv.title || (isEn ? 'Security Vulnerability Advisory' : '脆弱性警告');
         document.getElementById('vm-summary').innerHTML = `
           <div style="background: #0b1120; border-left: 3px solid #f87171; padding: 8px 12px; margin-bottom: 10px; border-radius: 4px;">
-            <div style="font-weight: 700; color: #f87171; margin-bottom: 4px;">【脆弱性の概要・メカニズム】</div>
-            <div>${adv.summary || adv.msg || '既知のセキュリティ脆弱性が報告されています。'}</div>
+            <div style="font-weight: 700; color: #f87171; margin-bottom: 4px;">${isEn ? '[Vulnerability Overview & Mechanism]' : '【脆弱性の概要・メカニズム】'}</div>
+            <div>${adv.summary || adv.msg || (isEn ? 'A known security vulnerability has been reported.' : '既知のセキュリティ脆弱性が報告されています。')}</div>
           </div>
           ${adv.impact ? `
             <div style="margin-bottom: 10px;">
-              <strong style="color: #fbbf24;">【攻撃シナリオと影響】</strong><br>
+              <strong style="color: #fbbf24;">${isEn ? '[Attack Scenario & Impact]' : '【攻撃シナリオと影響】'}</strong><br>
               <span>${adv.impact}</span>
             </div>
           ` : ''}
-          <div style="display: flex; gap: 14px; background: #090e1a; padding: 6px 10px; border-radius: 4px; font-size: 0.72rem; color: #94a3b8;">
-            <span>対象パッケージ: <strong style="color: #fff;">${adv.pkg}</strong></span>
-            <span>検出バージョン: <strong style="color: #f87171;">${adv.installed}</strong></span>
-            <span>影響範囲: <code style="color: #cbd5e1;">${adv.affected || '未パッチ版'}</code></span>
+          <div style="display: flex; gap: 14px; background: #090e1a; padding: 6px 10px; border-radius: 4px; font-size: 0.72rem; color: #94a3b8; flex-wrap: wrap;">
+            <span>${isEn ? 'Package' : '対象パッケージ'}: <strong style="color: #fff;">${adv.pkg}</strong></span>
+            <span>${isEn ? 'Detected' : '検出バージョン'}: <strong style="color: #f87171;">${adv.installed}</strong></span>
+            <span>${isEn ? 'Affected' : '影響範囲'}: <code style="color: #cbd5e1;">${adv.affected || (isEn ? 'Unpatched' : '未パッチ版')}</code></span>
           </div>
         `;
-        document.getElementById('vm-fixed-ver').textContent = '修正バージョン: ' + (adv.fixed_in || '最新版へアップデート');
+        document.getElementById('vm-fixed-ver').textContent = (isEn ? 'Fixed in: ' : '修正バージョン: ') + (adv.fixed_in || (isEn ? 'Latest release' : '最新版へアップデート'));
         document.getElementById('vm-cmd-code').textContent = adv.remediation_cmd || `npm update ${adv.pkg}`;
 
         const list = document.getElementById('vm-sources-list');
@@ -7063,7 +7196,7 @@ def build_portal_html(data, is_shareable=False):
               </div>
               <div style="font-size: 0.67rem; color: #94a3b8; word-break: break-all; margin-top: 2px;">${s.url}</div>
             </div>
-            <span class="sec-source-tag">${s.type || '公式'}</span>
+            <span class="sec-source-tag">${s.type || (isEn ? 'Official' : '公式')}</span>
           </a>
         `).join('');
 
@@ -7087,15 +7220,16 @@ def build_portal_html(data, is_shareable=False):
     }
 
     function openTableModal(tableName) {
+      const isEn = currentLang === 'en';
       const schema = tableSchemas[tableName] || {
         name: tableName,
-        logical_name: '関連データベーステーブル',
-        desc: 'PostgreSQL 16.3 / AWS RDS Multi-AZ 上に格納される業務データモデルです。',
+        logical_name: isEn ? 'Related Database Table' : '関連データベーステーブル',
+        desc: isEn ? 'Business data model stored in PostgreSQL 16.3 / AWS RDS Multi-AZ.' : 'PostgreSQL 16.3 / AWS RDS Multi-AZ 上に格納される業務データモデルです。',
         pk: 'id (UUID)',
         columns: [
-          { name: 'id', type: 'UUID', constraints: 'PK, NOT NULL', desc: '一意識別子' },
-          { name: 'created_at', type: 'TIMESTAMPTZ', constraints: 'DEFAULT NOW()', desc: '作成日時' },
-          { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: 'DEFAULT NOW()', desc: '更新日時' }
+          { name: 'id', type: 'UUID', constraints: 'PK, NOT NULL', desc: isEn ? 'Unique Identifier' : '一意識別子' },
+          { name: 'created_at', type: 'TIMESTAMPTZ', constraints: 'DEFAULT NOW()', desc: isEn ? 'Created Timestamp' : '作成日時' },
+          { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: 'DEFAULT NOW()', desc: isEn ? 'Updated Timestamp' : '更新日時' }
         ],
         relations: [],
         indexes: ['PRIMARY KEY (id)'],
@@ -7127,12 +7261,12 @@ def build_portal_html(data, is_shareable=False):
       const rels = document.getElementById('tm-relations-list');
       rels.innerHTML = (schema.relations && schema.relations.length > 0) ? schema.relations.map(r => `
         <div><strong style="color: #38bdf8;">[${r.type}]</strong> ${r.target} <span style="color: #94a3b8;">(${r.desc})</span></div>
-      `).join('') : '<div style="color: #64748b;">外部連携の定義はありません。</div>';
+      `).join('') : `<div style="color: #64748b;">${isEn ? 'No foreign key relations defined.' : '外部連携の定義はありません。'}</div>`;
 
       const idxs = document.getElementById('tm-indexes-list');
       idxs.innerHTML = (schema.indexes && schema.indexes.length > 0) ? schema.indexes.map(i => `
         <div>⚡ <code>${i}</code></div>
-      `).join('') : '<div style="color: #64748b;">標準インデックスのみ</div>';
+      `).join('') : `<div style="color: #64748b;">${isEn ? 'Standard primary key index only' : '標準インデックスのみ'}</div>`;
 
       document.getElementById('tm-sql-code').textContent = schema.sample_query || `SELECT * FROM ${schema.name};`;
       document.getElementById('table-modal').style.display = 'flex';
@@ -7145,7 +7279,7 @@ def build_portal_html(data, is_shareable=False):
     function copyTableSql() {
       const code = document.getElementById('tm-sql-code').textContent;
       navigator.clipboard.writeText(code);
-      alert('サンプルSQLクエリをコピーしました！');
+      alert(currentLang === 'en' ? 'Sample SQL query copied!' : 'サンプルSQLクエリをコピーしました！');
     }
 
     function closeVulnModal() {
@@ -7155,7 +7289,9 @@ def build_portal_html(data, is_shareable=False):
     function copyVulnCmd() {
       const code = document.getElementById('vm-cmd-code').textContent;
       navigator.clipboard.writeText(code);
-      alert('修正コマンドをクリップボードにコピーしました！\\nターミナルに貼り付けて実行してください。');
+      alert(currentLang === 'en'
+        ? 'Remediation command copied to clipboard!\\nPaste and execute it in your terminal.'
+        : '修正コマンドをクリップボードにコピーしました！\\nターミナルに貼り付けて実行してください。');
     }
 
     function closeAllModals() {
@@ -8085,12 +8221,14 @@ def build_portal_html(data, is_shareable=False):
                 </span>
               </div>
               <div style="font-size: 0.76rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 10px;">
-                <b>${selectedNodeData.name}</b> は、システム全体の<b>${category}</b>です。${plainRoleDesc}
+                ${currentLang === 'en'
+                  ? `<b>${selectedNodeData.name}</b> acts as the <b>${category}</b> in the system. ${plainRoleDesc}`
+                  : `<b>${selectedNodeData.name}</b> は、システム全体の<b>${category}</b>です。${plainRoleDesc}`}
               </div>
               <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                <button class="term-chip" onclick="switchInspTab('terminal')" style="background: #1e3a8a; border-color: #3b82f6; color: #bfdbfe;" title="ターミナルを開く (⌘J)">💻 ターミナルで操作 (⌘J)</button>
-                <button class="term-chip" onclick="switchViewMode('coderabbit')" style="background: #4c1d95; border-color: #8b5cf6; color: #ddd6fe;" title="AI監査レポートを確認">🐰 AI監査</button>
-                ${alertCount > 0 ? `<button class="term-chip" onclick="document.getElementById('action-alert-card-0')?.scrollIntoView({behavior: 'smooth'})" style="background: #881337; border-color: #f43f5e; color: #fecdd3;">🚨 要対応箇所へジャンプ</button>` : ''}
+                <button class="term-chip" onclick="switchInspTab('terminal')" style="background: #1e3a8a; border-color: #3b82f6; color: #bfdbfe;" title="${currentLang === 'en' ? 'Open Terminal (⌘J)' : 'ターミナルを開く (⌘J)'}">${currentLang === 'en' ? '💻 Terminal (⌘J)' : '💻 ターミナルで操作 (⌘J)'}</button>
+                <button class="term-chip" onclick="switchViewMode('coderabbit')" style="background: #4c1d95; border-color: #8b5cf6; color: #ddd6fe;" title="${currentLang === 'en' ? 'View AI Audit Report' : 'AI監査レポートを確認'}">${currentLang === 'en' ? '🐰 AI Audit' : '🐰 AI監査'}</button>
+                ${alertCount > 0 ? `<button class="term-chip" onclick="document.getElementById('action-alert-card-0')?.scrollIntoView({behavior: 'smooth'})" style="background: #881337; border-color: #f43f5e; color: #fecdd3;">${currentLang === 'en' ? '🚨 Jump to Alerts' : '🚨 要対応箇所へジャンプ'}</button>` : ''}
               </div>
             </div>
           `;
@@ -8193,6 +8331,7 @@ def build_portal_html(data, is_shareable=False):
         }
       } else if (currentInspTab === 'versions') {
         // Versions & Security Tab with Authoritative Sources and Red/Green Status Legend
+        const isEn = currentLang === 'en';
         const advisories = deps.security_advisories || [];
         const hasVuln = advisories.length > 0;
 
@@ -8201,19 +8340,19 @@ def build_portal_html(data, is_shareable=False):
 
           <!-- Status Legend Bar (Explains Green vs Red clearly) -->
           <div class="sec-legend-card">
-            <div class="sec-legend-title">🛡️ セキュリティ状態のステータス基準</div>
+            <div class="sec-legend-title">${isEn ? '🛡️ Security Status Criteria' : '🛡️ セキュリティ状態のステータス基準'}</div>
             <div class="sec-legend-row">
-              <span class="sec-legend-badge sec-legend-green">🟢 安全</span>
-              <span style="color: #cbd5e1;">既知の重大な未パッチ脆弱性（CVE）なし。公式LTS・安定基準に適合</span>
+              <span class="sec-legend-badge sec-legend-green">${isEn ? '🟢 Safe' : '🟢 安全'}</span>
+              <span style="color: #cbd5e1;">${isEn ? 'No known critical unpatched CVEs. Meets official LTS & stability standards.' : '既知の重大な未パッチ脆弱性（CVE）なし。公式LTS・安定基準に適合'}</span>
             </div>
             <div class="sec-legend-row">
-              <span class="sec-legend-badge sec-legend-red">🔴 要対応</span>
-              <span style="color: #fca5a5;">既知の脆弱性（CVE）が報告。クリックして信頼性のあるソース（NVD/GitHub）と対策を確認</span>
+              <span class="sec-legend-badge sec-legend-red">${isEn ? '🔴 Action Req' : '🔴 要対応'}</span>
+              <span style="color: #fca5a5;">${isEn ? 'Known CVE reported. Click to inspect authoritative sources (NVD/GitHub) and fixes.' : '既知の脆弱性（CVE）が報告。クリックして信頼性のあるソース（NVD/GitHub）と対策を確認'}</span>
             </div>
           </div>
 
           ${hasVuln ? `
-            <div class="section-title" style="color: #f87171;">⚠️ 検出された既知の脆弱性 (クリックして公式ソースを表示)</div>
+            <div class="section-title" style="color: #f87171;">${isEn ? '⚠️ Detected Known Vulnerabilities (Click for official sources)' : '⚠️ 検出された既知の脆弱性 (クリックして公式ソースを表示)'}</div>
             ${advisories.map((adv, idx) => {
               const advEncoded = encodeDataArg(adv);
               return `
@@ -8223,13 +8362,13 @@ def build_portal_html(data, is_shareable=False):
                       <span class="sec-legend-badge sec-legend-red">${adv.severity || 'HIGH'}</span>
                       <strong style="color: #fff; font-family: monospace;">${adv.cve || 'CVE'}</strong>
                     </span>
-                    <span style="font-size: 0.68rem; color: #38bdf8;">詳細解説・対策を見る ↗</span>
+                    <span style="font-size: 0.68rem; color: #38bdf8;">${isEn ? 'Details & Remediation ↗' : '詳細解説・対策を見る ↗'}</span>
                   </div>
                   <div style="font-size: 0.8rem; font-weight: 700; color: #f1f5f9;">${adv.title || adv.pkg}</div>
                   <div class="sec-adv-msg">${adv.summary || adv.msg}</div>
                   
                   <div style="font-size: 0.68rem; color: #94a3b8; border-top: 1px dashed rgba(248, 113, 113, 0.3); padding-top: 6px;">
-                    🏛️ 信頼性のある公式ソース:
+                    ${isEn ? '🏛️ Authoritative Official Sources:' : '🏛️ 信頼性のある公式ソース:'}
                   </div>
                   <div class="sec-sources-row" onclick="event.stopPropagation()">
                     ${(adv.sources || []).map(s => `
@@ -8243,14 +8382,14 @@ def build_portal_html(data, is_shareable=False):
             }).join('')}
           ` : `
             <div class="spec-card" style="border-color: rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.08); padding: 10px 14px; margin-bottom: 12px;">
-              <span style="color: #34d399; font-weight: 700; font-size: 0.8rem;">🛡️ 主要フレームワーク セキュリティ状態</span>
+              <span style="color: #34d399; font-weight: 700; font-size: 0.8rem;">${isEn ? '🛡️ Core Framework Security Status' : '🛡️ 主要フレームワーク セキュリティ状態'}</span>
               <div style="font-size: 0.74rem; color: #cbd5e1; margin-top: 2px;">
-                既知の重大な未パッチ脆弱性（CVE）は報告されていません。最新バージョン基準に準拠しています。
+                ${isEn ? 'No known critical unpatched vulnerabilities (CVEs) reported. Compliant with latest security baselines.' : '既知の重大な未パッチ脆弱性（CVE）は報告されていません。最新バージョン基準に準拠しています。'}
               </div>
             </div>
           `}
 
-          <div class="section-title">📦 フレームワーク & ランタイム バージョン</div>
+          <div class="section-title">${isEn ? '📦 Framework & Runtime Versions' : '📦 フレームワーク & ランタイム バージョン'}</div>
           ${(deps.frameworks && deps.frameworks.length > 0) ? deps.frameworks.map(fw => {
             const isWarn = fw.status === 'warn';
             const matchedAdv = advisories.find(a => a.pkg.toLowerCase() === fw.name.toLowerCase() || (fw.cve && a.cve === fw.cve));
@@ -8264,37 +8403,37 @@ def build_portal_html(data, is_shareable=False):
                 <div style="display: flex; align-items: center; gap: 6px;">
                   <span class="dep-version-badge">${fw.version}</span>
                   <span class="dep-status-tag ${isWarn ? 'dep-status-warn' : 'dep-status-latest'}">
-                    ${isWarn ? '⚠️ 要対応 (解説 ↗)' : '安全'}
+                    ${isWarn ? (isEn ? '⚠️ Action Req (Details ↗)' : '⚠️ 要対応 (解説 ↗)') : (isEn ? 'Safe' : '安全')}
                   </span>
                   ${fw.security_link ? `
-                    <a href="${fw.security_link}" target="_blank" class="sec-link-btn" onclick="event.stopPropagation()" title="公式セキュリティ情報を開く">公式 ↗</a>
+                    <a href="${fw.security_link}" target="_blank" class="sec-link-btn" onclick="event.stopPropagation()" title="${isEn ? 'Open official security advisory' : '公式セキュリティ情報を開く'}">${isEn ? 'Docs ↗' : '公式 ↗'}</a>
                   ` : ''}
                 </div>
               </div>
             `;
-          }).join('') : '<div class="desc-text" style="color: #64748b;">フレームワークの明示的定義はありません。</div>'}
+          }).join('') : `<div class="desc-text" style="color: #64748b;">${isEn ? 'No explicit framework definitions found.' : 'フレームワークの明示的定義はありません。'}</div>`}
 
-          <div class="section-title" style="margin-top: 14px;">🗄️ データベース & ドライバ バージョン</div>
+          <div class="section-title" style="margin-top: 14px;">${isEn ? '🗄️ Database & Driver Versions' : '🗄️ データベース & ドライバ バージョン'}</div>
           <div class="dep-version-card">
             <div class="dep-name-col">
               <span class="dep-pkg-name">PostgreSQL Server</span>
-              <span class="dep-pkg-desc">AWS RDS Multi-AZ クラスター (公式LTSサポート)</span>
+              <span class="dep-pkg-desc">${isEn ? 'AWS RDS Multi-AZ Cluster (Official LTS Support)' : 'AWS RDS Multi-AZ クラスター (公式LTSサポート)'}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
               <span class="dep-version-badge">16.3</span>
-              <span class="dep-status-tag dep-status-latest">安全 (公式LTS)</span>
-              <a href="https://www.postgresql.org/support/security/" target="_blank" class="sec-link-btn" title="PostgreSQL公式セキュリティ通知を開く">公式 ↗</a>
+              <span class="dep-status-tag dep-status-latest">${isEn ? 'Safe (Official LTS)' : '安全 (公式LTS)'}</span>
+              <a href="https://www.postgresql.org/support/security/" target="_blank" class="sec-link-btn" title="PostgreSQL Security">${isEn ? 'Docs ↗' : '公式 ↗'}</a>
             </div>
           </div>
           <div class="dep-version-card">
             <div class="dep-name-col">
               <span class="dep-pkg-name">Redis Cache & Queue</span>
-              <span class="dep-pkg-desc">AWS ElastiCache Redis (マネージド推奨エンジン)</span>
+              <span class="dep-pkg-desc">${isEn ? 'AWS ElastiCache Redis (Managed Engine)' : 'AWS ElastiCache Redis (マネージド推奨エンジン)'}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
               <span class="dep-version-badge">7.2.4</span>
-              <span class="dep-status-tag dep-status-latest">安全 (AWS推奨)</span>
-              <a href="https://github.com/redis/redis/security/advisories" target="_blank" class="sec-link-btn" title="Redis公式セキュリティアドバイザリを開く">公式 ↗</a>
+              <span class="dep-status-tag dep-status-latest">${isEn ? 'Safe (AWS Recommended)' : '安全 (AWS推奨)'}</span>
+              <a href="https://github.com/redis/redis/security/advisories" target="_blank" class="sec-link-btn" title="Redis Security Advisories">${isEn ? 'Docs ↗' : '公式 ↗'}</a>
             </div>
           </div>
           ${(deps.databases && deps.databases.length > 0) ? deps.databases.map(db => `
@@ -8305,16 +8444,16 @@ def build_portal_html(data, is_shareable=False):
               </div>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <span class="dep-version-badge">${db.version}</span>
-                <span class="dep-status-tag dep-status-latest">安全</span>
+                <span class="dep-status-tag dep-status-latest">${isEn ? 'Safe' : '安全'}</span>
                 ${db.security_link ? `
-                  <a href="${db.security_link}" target="_blank" class="sec-link-btn" title="公式セキュリティアドバイザリを開く">公式 ↗</a>
+                  <a href="${db.security_link}" target="_blank" class="sec-link-btn" title="${isEn ? 'Open official security advisory' : '公式セキュリティアドバイザリを開く'}">${isEn ? 'Docs ↗' : '公式 ↗'}</a>
                 ` : ''}
               </div>
             </div>
           `).join('') : ''}
 
           ${(deps.ai_sdks && deps.ai_sdks.length > 0) ? `
-            <div class="section-title" style="margin-top: 14px;">🤖 AI / LLM SDK バージョン</div>
+            <div class="section-title" style="margin-top: 14px;">${isEn ? '🤖 AI / LLM SDK Versions' : '🤖 AI / LLM SDK バージョン'}</div>
             ${deps.ai_sdks.map(ai => `
               <div class="dep-version-card">
                 <div class="dep-name-col">
@@ -8323,61 +8462,63 @@ def build_portal_html(data, is_shareable=False):
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
                   <span class="dep-version-badge">${ai.version}</span>
-                  <span class="dep-status-tag dep-status-latest">安全</span>
+                  <span class="dep-status-tag dep-status-latest">${isEn ? 'Safe' : '安全'}</span>
                 </div>
               </div>
             `).join('')}
           ` : ''}
 
-          <div class="section-title" style="margin-top: 14px;">🛠️ 脆弱性診断 & セキュリティコマンド</div>
+          <div class="section-title" style="margin-top: 14px;">${isEn ? '🛠️ Vulnerability Audit & Security Commands' : '🛠️ 脆弱性診断 & セキュリティコマンド'}</div>
           <div class="audit-cmd-box">
             <code>npm audit</code>
-            <button class="btn-copy-cmd" onclick="navigator.clipboard.writeText('npm audit'); alert('監査コマンドをコピーしました！');">コピー</button>
+            <button class="btn-copy-cmd" onclick="navigator.clipboard.writeText('npm audit'); alert(currentLang === 'en' ? 'Audit command copied!' : '監査コマンドをコピーしました！');">${isEn ? 'Copy' : 'コピー'}</button>
           </div>
           <div style="margin-top: 6px; text-align: right;">
-            <a href="${repoItem.github_url}/security/dependabot" target="_blank" class="gh-link-btn" style="font-size: 0.68rem;">Dependabot アラート一覧 ↗</a>
+            <a href="${repoItem.github_url}/security/dependabot" target="_blank" class="gh-link-btn" style="font-size: 0.68rem;">${isEn ? 'Dependabot Alerts ↗' : 'Dependabot アラート一覧 ↗'}</a>
           </div>
         `;
       } else if (currentInspTab === 'deploy') {
+        const isEn = currentLang === 'en';
         const dep = spec.deploy || {};
         tabBody = `
           ${repoContextHtml}
-          <div class="section-title">🚀 デプロイ & インフラ構成</div>
+          <div class="section-title">${isEn ? '🚀 Deployment & Infrastructure' : '🚀 デプロイ & インフラ構成'}</div>
           <div class="spec-card">
             <div class="deploy-row">
-              <span class="deploy-label">実行プラットフォーム</span>
+              <span class="deploy-label">${isEn ? 'Runtime Platform' : '実行プラットフォーム'}</span>
               <span class="deploy-val">${dep.platform || 'AWS ECS / Vercel'}</span>
             </div>
             <div class="deploy-row">
-              <span class="deploy-label">データベース バージョン</span>
+              <span class="deploy-label">${isEn ? 'Database Version' : 'データベース バージョン'}</span>
               <span class="deploy-val" style="color: #34d399;">PostgreSQL 16.3 (RDS Multi-AZ)</span>
             </div>
             <div class="deploy-row">
-              <span class="deploy-label">キャッシュ / キュー</span>
+              <span class="deploy-label">${isEn ? 'Cache / Message Queue' : 'キャッシュ / キュー'}</span>
               <span class="deploy-val" style="color: #f87171;">Redis 7.2 (ElastiCache)</span>
             </div>
             <div class="deploy-row">
-              <span class="deploy-label">コンテナ / ビルド形式</span>
+              <span class="deploy-label">${isEn ? 'Container / Build Format' : 'コンテナ / ビルド形式'}</span>
               <span class="deploy-val">${dep.dockerfile || 'Node.js 20-alpine'}</span>
             </div>
             <div class="deploy-row">
-              <span class="deploy-label">リッスンポート</span>
+              <span class="deploy-label">${isEn ? 'Listen Port' : 'リッスンポート'}</span>
               <span class="deploy-val">${dep.port || '3000'}</span>
             </div>
             <div class="deploy-row">
-              <span class="deploy-label">ヘルスチェック</span>
+              <span class="deploy-label">${isEn ? 'Healthcheck Path' : 'ヘルスチェック'}</span>
               <span class="deploy-val">${dep.healthcheck || '/health'}</span>
             </div>
             <div class="deploy-row">
-              <span class="deploy-label">CI/CD パイプライン</span>
+              <span class="deploy-label">${isEn ? 'CI/CD Pipeline' : 'CI/CD パイプライン'}</span>
               <span class="deploy-val">${dep.ci_cd || 'GitHub Actions'}</span>
             </div>
           </div>
         `;
       } else if (currentInspTab === 'api') {
+        const isEn = currentLang === 'en';
         tabBody = `
           ${repoContextHtml}
-          <div class="section-title">🔌 通信インターフェース / エンドポイント (${(spec.endpoints || []).length})</div>
+          <div class="section-title">${isEn ? `🔌 Communication Interfaces / Endpoints (${(spec.endpoints || []).length})` : `🔌 通信インターフェース / エンドポイント (${(spec.endpoints || []).length})`}</div>
           ${(spec.endpoints && spec.endpoints.length > 0) ? spec.endpoints.map(ep => `
             <div class="endpoint-item">
               <div class="ep-row">
@@ -8387,18 +8528,19 @@ def build_portal_html(data, is_shareable=False):
               <div class="ep-desc">${ep.desc}</div>
               ${ep.auth ? `<div style="font-size: 0.68rem; color: #38bdf8; margin-top: 2px;">Auth: ${ep.auth}</div>` : ''}
             </div>
-          `).join('') : '<div class="desc-text" style="color: #64748b;">個別の公開APIエンドポイントはありません（内部サービス呼び出し）。</div>'}
+          `).join('') : `<div class="desc-text" style="color: #64748b;">${isEn ? 'No public API endpoints exposed directly (internal service invocation).' : '個別の公開APIエンドポイントはありません（内部サービス呼び出し）。'}</div>`}
         `;
       } else if (currentInspTab === 'db') {
+        const isEn = currentLang === 'en';
         let tables = spec.tables || [];
         let isFallback = false;
         if (tables.length === 0) {
           tables = [
-            { name: "companies", desc: "MAICEを利用する契約企業の基本アカウント情報、契約プラン、請求状態、ロケールを管理します。" },
-            { name: "positions", desc: "採用企業が募集する職種・求人枠情報。配属部署や応募要件、選考ステータスを管理します。" },
-            { name: "assessments", desc: "求人に対して実施されるAI面接の選考フェーズ定義。設問設計、採点Rubric、受検有効期限を統括します。" },
-            { name: "ai_interview_active_sessions", desc: "WebRTC/WebSocket接続状態、質問進行インデックス、一時回答バッファを管理し、面接の中断復帰やリアルタイムAI判定を支える高頻度更新テーブルです。" },
-            { name: "ai_interview_evaluations", desc: "面接完了後にLLMが生成した総合スコア、ルーブリック別評価点、要約サマリー、発話トランスクリプトを保持します。" }
+            { name: "companies", desc: isEn ? "Manages corporate account profiles, subscription plans, billing status, and locale settings." : "MAICEを利用する契約企業の基本アカウント情報、契約プラン、請求状態、ロケールを管理します。" },
+            { name: "positions", desc: isEn ? "Manages job openings, target departments, application requirements, and hiring pipeline status." : "採用企業が募集する職種・求人枠情報。配属部署や応募要件、選考ステータスを管理します。" },
+            { name: "assessments", desc: isEn ? "Defines AI interview stages, question sets, scoring rubrics, and assessment expiration windows." : "求人に対して実施されるAI面接の選考フェーズ定義。設問設計、採点Rubric、受検有効期限を統括します。" },
+            { name: "ai_interview_active_sessions", desc: isEn ? "High-frequency table tracking WebRTC/WebSocket session state, question progress index, and real-time buffers." : "WebRTC/WebSocket接続状態、質問進行インデックス、一時回答バッファを管理し、面接の中断復帰やリアルタイムAI判定を支える高頻度更新テーブルです。" },
+            { name: "ai_interview_evaluations", desc: isEn ? "Stores LLM-generated overall scores, rubric breakdowns, executive summaries, and interview transcripts." : "面接完了後にLLMが生成した総合スコア、ルーブリック別評価点、要約サマリー、発話トランスクリプトを保持します。" }
           ];
           isFallback = true;
         }
@@ -8406,9 +8548,11 @@ def build_portal_html(data, is_shareable=False):
         tabBody = `
           ${repoContextHtml}
           <div class="section-title">
-            🗄️ 関連データベーステーブル (${tables.length})
+            ${isEn ? `🗄️ Related Database Tables (${tables.length})` : `🗄️ 関連データベーステーブル (${tables.length})`}
             <span style="font-size: 0.68rem; font-weight: normal; color: #94a3b8;">
-              ${isFallback ? '(エコシステム主要テーブル - クリックで定義詳細)' : '(クリックでカラム定義・型・制約・SQLを表示)'}
+              ${isFallback
+                ? (isEn ? '(Core Ecosystem Tables - Click for schema details)' : '(エコシステム主要テーブル - クリックで定義詳細)')
+                : (isEn ? '(Click to inspect columns, types, constraints & SQL)' : '(クリックでカラム定義・型・制約・SQLを表示)')}
             </span>
           </div>
           ${tables.map(tb => {
@@ -8427,7 +8571,7 @@ def build_portal_html(data, is_shareable=False):
                     <span class="table-icon-badge">🗄️</span>
                     <span class="table-name-code">${tb.name}</span>
                   </div>
-                  <span class="table-view-btn">定義詳細 ↗</span>
+                  <span class="table-view-btn">${isEn ? 'Schema Details ↗' : '定義詳細 ↗'}</span>
                 </div>
 
                 <div class="table-logical-row">
@@ -8438,10 +8582,10 @@ def build_portal_html(data, is_shareable=False):
                 <div class="table-desc-text">${desc}</div>
 
                 <div class="table-card-footer">
-                  <span class="table-meta-badge">📊 列数: <strong>${colCount}</strong></span>
+                  <span class="table-meta-badge">${isEn ? '📊 Columns:' : '📊 列数:'} <strong>${colCount}</strong></span>
                   <span class="table-meta-badge">🔑 PK: <code>${pk}</code></span>
                   ${relCount > 0 ? `
-                    <span class="table-meta-badge">🔗 連携: <strong>${relCount}件</strong></span>
+                    <span class="table-meta-badge">${isEn ? `🔗 Relations: <strong>${relCount}</strong>` : `🔗 連携: <strong>${relCount}件</strong>`}</span>
                   ` : ''}
                 </div>
               </div>
@@ -8449,10 +8593,11 @@ def build_portal_html(data, is_shareable=False):
           }).join('')}
         `;
       } else if (currentInspTab === 'coderabbit') {
+        const isEn = currentLang === 'en';
         const cr = repoItem.coderabbit || {
           score: 90,
           status: "PASSED",
-          summary: `${repoItem.repo} の最新CodeRabbitコード品質レビューです。`,
+          summary: isEn ? `Latest CodeRabbit code quality review for ${repoItem.repo}.` : `${repoItem.repo} の最新CodeRabbitコード品質レビューです。`,
           action_items: [],
           findings: []
         };
@@ -8460,14 +8605,14 @@ def build_portal_html(data, is_shareable=False):
           ${repoContextHtml}
           <div class="cr-score-card" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;">
             <div>
-              <div style="font-size: 0.72rem; color: #94a3b8; font-weight: 700;">🐰 CODERABBIT 品質スコア</div>
+              <div style="font-size: 0.72rem; color: #94a3b8; font-weight: 700;">${isEn ? '🐰 CODERABBIT QUALITY SCORE' : '🐰 CODERABBIT 品質スコア'}</div>
               <div style="font-size: 0.8rem; color: #e2e8f0; margin-top: 2px;">${cr.summary}</div>
             </div>
             <div class="cr-score-val ${cr.score >= 90 ? 'score-high' : 'score-med'}">${cr.score}</div>
           </div>
 
           ${cr.action_items && cr.action_items.length > 0 ? `
-            <div class="section-title" style="color: #fca5a5;">🚨 要対応アクション (${cr.action_items.length})</div>
+            <div class="section-title" style="color: #fca5a5;">${isEn ? `🚨 Action Items (${cr.action_items.length})` : `🚨 要対応アクション (${cr.action_items.length})`}</div>
             ${cr.action_items.map(act => `
               <div class="action-hotspot-item">
                 <div class="hotspot-title">🔴 ${act.title}</div>
@@ -8475,25 +8620,26 @@ def build_portal_html(data, is_shareable=False):
                 ${act.fix_cmd ? `
                   <div class="hotspot-fix-box">
                     <span class="hotspot-cmd">$ ${escapeHtml(act.fix_cmd)}</span>
-                    <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">コピー</button>
+                    <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">${isEn ? 'Copy' : 'コピー'}</button>
                   </div>
                 ` : ''}
                 ${renderAiAgentPromptWidget(repoItem.repo, act)}
               </div>
             `).join('')}
-          ` : '<div class="desc-text" style="color: #34d399;">🟢 緊急の要対応事項はありません</div>'}
+          ` : `<div class="desc-text" style="color: #34d399;">${isEn ? '🟢 No urgent action items detected' : '🟢 緊急の要対応事項はありません'}</div>`}
 
           <div style="margin-top: 14px; text-align: center;">
             <button class="btn btn-primary" onclick="switchViewMode('coderabbit')" style="width: 100%; font-size: 0.78rem;">
-              🐰 全画面 CodeRabbit レポート詳細を開く ↗
+              ${isEn ? '🐰 Open Full-Screen CodeRabbit Report ↗' : '🐰 全画面 CodeRabbit レポート詳細を開く ↗'}
             </button>
           </div>
         `;
       } else if (currentInspTab === 'env') {
+        const isEn = currentLang === 'en';
         const envs = spec.env_vars || [];
         tabBody = `
           ${repoContextHtml}
-          <div class="section-title">⚙️ 環境変数 / 設定項目 (${envs.length})</div>
+          <div class="section-title">${isEn ? `⚙️ Environment Variables & Configs (${envs.length})` : `⚙️ 環境変数 / 設定項目 (${envs.length})`}</div>
           ${envs.length > 0 ? envs.map(ev => `
             <div class="env-item">
               <div class="env-title-row">
@@ -8502,13 +8648,14 @@ def build_portal_html(data, is_shareable=False):
               </div>
               <div class="env-desc">${ev.desc}</div>
             </div>
-          `).join('') : '<div class="desc-text" style="color: #64748b;">個別の環境変数定義はありません。</div>'}
+          `).join('') : `<div class="desc-text" style="color: #64748b;">${isEn ? 'No component-specific environment variables defined.' : '個別の環境変数定義はありません。'}</div>`}
         `;
       } else if (currentInspTab === 'integrations') {
+        const isEn = currentLang === 'en';
         const ints = spec.integrations || [];
         tabBody = `
           ${repoContextHtml}
-          <div class="section-title">🔗 外部・内部連携サービス (${ints.length})</div>
+          <div class="section-title">${isEn ? `🔗 External & Internal Integrations (${ints.length})` : `🔗 外部・内部連携サービス (${ints.length})`}</div>
           ${ints.length > 0 ? ints.map(it => `
             <div class="integration-item">
               <span class="integration-badge">${it.type}</span>
@@ -8517,12 +8664,13 @@ def build_portal_html(data, is_shareable=False):
                 <div class="integration-desc">${it.desc}</div>
               </div>
             </div>
-          `).join('') : '<div class="desc-text" style="color: #64748b;">明示的な外部連携サービスはありません。</div>'}
+          `).join('') : `<div class="desc-text" style="color: #64748b;">${isEn ? 'No explicit external service integrations defined.' : '明示的な外部連携サービスはありません。'}</div>`}
         `;
       } else if (currentInspTab === 'files') {
+        const isEn = currentLang === 'en';
         tabBody = `
           ${repoContextHtml}
-          <div class="section-title">📁 主要ソースファイル & エントリーポイント</div>
+          <div class="section-title">${isEn ? '📁 Key Source Files & Entry Points' : '📁 主要ソースファイル & エントリーポイント'}</div>
           ${(spec.files && spec.files.length > 0) ? spec.files.map(f => `
             <div class="file-item">📄 ${f}</div>
           `).join('') : `<div class="file-item">📄 ${path}</div>`}
@@ -9345,6 +9493,7 @@ def build_portal_html(data, is_shareable=False):
       const listEl = document.getElementById('action-hub-items-list');
       if (!modal || !listEl) return;
 
+      const isEn = currentLang === 'en';
       const advisories = (repo.deps && repo.deps.security_advisories) || [];
       const cr = repo.coderabbit || {};
       const actionItems = cr.action_items || [];
@@ -9353,41 +9502,41 @@ def build_portal_html(data, is_shareable=False):
         <div style="margin-bottom: 16px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px 16px;">
           <div style="display: flex; align-items: center; justify-content: space-between;">
             <h4 style="margin: 0; font-size: 0.95rem; color: #fee2e2; font-weight: 800;">
-              🚨 ${repo.repo} の要対応事項と改善提案
+              ${isEn ? `🚨 Action Items & Remediation Proposals for ${repo.repo}` : `🚨 ${repo.repo} の要対応事項と改善提案`}
             </h4>
-            <span class="sec-legend-badge sec-legend-red">要対応あり</span>
+            <span class="sec-legend-badge sec-legend-red">${isEn ? 'Action Required' : '要対応あり'}</span>
           </div>
           <div style="font-size: 0.76rem; color: #cbd5e1; margin-top: 4px;">
-            最新コードおよび依存パッケージの監査において、以下の緊急対策が検知されました。
+            ${isEn ? 'The following urgent security and code quality actions were detected during the latest audit.' : '最新コードおよび依存パッケージの監査において、以下の緊急対策が検知されました。'}
           </div>
         </div>
 
         ${actionItems.map((act, i) => `
           <div class="action-hotspot-item" style="margin-bottom: 14px;">
             <div class="hotspot-top-row">
-              <span class="hotspot-title">🔴 要対応 #${i + 1}: ${act.title}</span>
+              <span class="hotspot-title">🔴 ${isEn ? `Action #${i + 1}` : `要対応 #${i + 1}`}: ${act.title}</span>
               <div style="display: flex; align-items: center; gap: 6px;">
-                <button class="action-report-dl-btn" onclick="downloadSingleActionReport('${encodeDataArg(act)}', '${encodeURIComponent(repo.repo || '').replace(/'/g, '%27')}')" title="この改善点の詳細レポート (.md) をダウンロード保存">
-                  📥 レポートDL
+                <button class="action-report-dl-btn" onclick="downloadSingleActionReport('${encodeDataArg(act)}', '${encodeURIComponent(repo.repo || '').replace(/'/g, '%27')}')" title="${isEn ? 'Download detailed remediation report (.md)' : 'この改善点の詳細レポート (.md) をダウンロード保存'}">
+                  ${isEn ? '📥 Report' : '📥 レポートDL'}
                 </button>
                 <span class="sec-legend-badge sec-legend-red">${act.severity || 'CRITICAL'}</span>
               </div>
             </div>
             
             <div style="margin: 8px 0; background: rgba(15, 23, 42, 0.6); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #ef4444;">
-              <div style="font-size: 0.72rem; font-weight: 700; color: #f87171; margin-bottom: 3px;">⚠️ 要対応の理由 (WHY IT MATTERS):</div>
+              <div style="font-size: 0.72rem; font-weight: 700; color: #f87171; margin-bottom: 3px;">${isEn ? '⚠️ WHY IT MATTERS:' : '⚠️ 要対応の理由 (WHY IT MATTERS):'}</div>
               <div style="font-size: 0.8rem; color: #f1f5f9; line-height: 1.5;">${act.desc}</div>
             </div>
 
             <div style="margin: 8px 0; background: rgba(6, 78, 59, 0.2); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #10b981;">
-              <div style="font-size: 0.72rem; font-weight: 700; color: #34d399; margin-bottom: 3px;">🛠️ 対応方法の提案 (HOW TO FIX):</div>
+              <div style="font-size: 0.72rem; font-weight: 700; color: #34d399; margin-bottom: 3px;">${isEn ? '🛠️ HOW TO FIX:' : '🛠️ 対応方法の提案 (HOW TO FIX):'}</div>
               <div style="font-size: 0.78rem; color: #e2e8f0; line-height: 1.45;">
-                対象ファイル <code>${act.file}</code> を修正し、セキュリティパッチまたはメモリ解放処理を適用してください。
+                ${isEn ? `Update target file <code>${act.file}</code> and apply the security patch or resource cleanup.` : `対象ファイル <code>${act.file}</code> を修正し、セキュリティパッチまたはメモリ解放処理を適用してください。`}
               </div>
               ${act.fix_cmd ? `
                 <div class="hotspot-fix-box" style="margin-top: 8px;">
                   <span class="hotspot-cmd">$ ${act.fix_cmd}</span>
-                  <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">📋 コマンドをコピー</button>
+                  <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">${isEn ? '📋 Copy Command' : '📋 コマンドをコピー'}</button>
                 </div>
               ` : ''}
             </div>
@@ -9397,11 +9546,11 @@ def build_portal_html(data, is_shareable=False):
             <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
               ${act.official_source ? `
                 <a href="${act.official_source}" target="_blank" style="color: #38bdf8; font-size: 0.72rem; text-decoration: none;">
-                  🏛️ 公式アドバイザリ (NVD / GitHub) で詳細を確認 ↗
+                  ${isEn ? '🏛️ View Official Advisory (NVD / GitHub) ↗' : '🏛️ 公式アドバイザリ (NVD / GitHub) で詳細を確認 ↗'}
                 </a>
               ` : '<span></span>'}
               <button class="table-view-btn" onclick="navigateToRepoFromActionHub('${repo.id}')" style="background: #38bdf8; color: #0b1120;">
-                このリポジトリのCodeRabbitレポートを開く ↗
+                ${isEn ? 'Open CodeRabbit Report for this Repo ↗' : 'このリポジトリのCodeRabbitレポートを開く ↗'}
               </button>
             </div>
           </div>
@@ -9415,18 +9564,18 @@ def build_portal_html(data, is_shareable=False):
             </div>
             
             <div style="margin: 8px 0; background: rgba(15, 23, 42, 0.6); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #ef4444;">
-              <div style="font-size: 0.72rem; font-weight: 700; color: #f87171; margin-bottom: 3px;">⚠️ 要対応の理由 (CVE詳細):</div>
+              <div style="font-size: 0.72rem; font-weight: 700; color: #f87171; margin-bottom: 3px;">${isEn ? '⚠️ WHY IT MATTERS (CVE Details):' : '⚠️ 要対応の理由 (CVE詳細):'}</div>
               <div style="font-size: 0.8rem; color: #f1f5f9; line-height: 1.5;">${adv.summary || adv.msg}</div>
             </div>
 
             <div style="margin: 8px 0; background: rgba(6, 78, 59, 0.2); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #10b981;">
-              <div style="font-size: 0.72rem; font-weight: 700; color: #34d399; margin-bottom: 3px;">🛠️ 対応方法の提案:</div>
+              <div style="font-size: 0.72rem; font-weight: 700; color: #34d399; margin-bottom: 3px;">${isEn ? '🛠️ HOW TO FIX:' : '🛠️ 対応方法の提案:'}</div>
               <div style="font-size: 0.78rem; color: #e2e8f0;">
-                パッケージ <code>${adv.pkg}</code> を最新のパッチ適用済みバージョンへ更新してください。
+                ${isEn ? `Upgrade package <code>${adv.pkg}</code> to the latest patched version.` : `パッケージ <code>${adv.pkg}</code> を最新のパッチ適用済みバージョンへ更新してください。`}
               </div>
               <div class="hotspot-fix-box" style="margin-top: 8px;">
                 <span class="hotspot-cmd">$ npm update ${adv.pkg}</span>
-                <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent('npm update ' + adv.pkg)}">📋 コマンドをコピー</button>
+                <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent('npm update ' + adv.pkg)}">${isEn ? '📋 Copy Command' : '📋 コマンドをコピー'}</button>
               </div>
             </div>
           </div>
@@ -9496,12 +9645,17 @@ def build_portal_html(data, is_shareable=False):
           const mod = document.getElementById('adm-model-' + p);
           const isCfg = s.configured && s.configured[p];
           const masked = (s.keys_masked && s.keys_masked[p]) || '';
+          const isEn = currentLang === 'en';
           if (inp) {
             inp.value = '';
-            inp.placeholder = isCfg ? `設定済 (${masked}) — 新規キー入力で上書き` : 'APIキーを貼り付け...';
+            inp.placeholder = isCfg
+              ? (isEn ? `Configured (${masked}) — Enter new key to overwrite` : `設定済 (${masked}) — 新規キー入力で上書き`)
+              : (isEn ? 'Paste API key...' : 'APIキーを貼り付け...');
           }
           if (st) {
-            st.textContent = isCfg ? `🟢 設定済 (${masked})` : '⚪ 未設定';
+            st.textContent = isCfg
+              ? (isEn ? `🟢 Configured (${masked})` : `🟢 設定済 (${masked})`)
+              : (isEn ? '⚪ Not Set' : '⚪ 未設定');
             st.className = 'sec-legend-badge ' + (isCfg ? 'sec-legend-green' : '');
           }
           if (mod && s.models && s.models[p]) mod.value = s.models[p];
@@ -9522,6 +9676,7 @@ def build_portal_html(data, is_shareable=False):
     }
 
     async function testProviderKey(provider) {
+      const isEn = currentLang === 'en';
       const fb = document.getElementById('adm-test-feedback');
       const keyVal = (document.getElementById('adm-key-' + provider)?.value || '').trim();
       if (fb) {
@@ -9529,7 +9684,9 @@ def build_portal_html(data, is_shareable=False):
         fb.style.background = 'rgba(56, 189, 248, 0.12)';
         fb.style.border = '1px solid #38bdf8';
         fb.style.color = '#38bdf8';
-        fb.textContent = `⏳ ${provider.toUpperCase()} API への疎通・認証テストを実行中...`;
+        fb.textContent = isEn
+          ? `⏳ Testing connection and authentication for ${provider.toUpperCase()} API...`
+          : `⏳ ${provider.toUpperCase()} API への疎通・認証テストを実行中...`;
       }
 
       // Save current inputs first so model/key are up to date
@@ -9546,22 +9703,25 @@ def build_portal_html(data, is_shareable=False):
           fb.style.background = 'rgba(16, 185, 129, 0.15)';
           fb.style.border = '1px solid #10b981';
           fb.style.color = '#34d399';
-          fb.textContent = data.message || `✅ ${provider.toUpperCase()} 接続成功！`;
+          fb.textContent = data.message || (isEn ? `✅ ${provider.toUpperCase()} connected!` : `✅ ${provider.toUpperCase()} 接続成功！`);
         } else {
           fb.style.background = 'rgba(239, 68, 68, 0.15)';
           fb.style.border = '1px solid #ef4444';
           fb.style.color = '#f87171';
-          fb.textContent = `❌ ${provider.toUpperCase()} 接続エラー: ${data.error || '認証失敗'}`;
+          fb.textContent = isEn
+            ? `❌ ${provider.toUpperCase()} connection error: ${data.error || 'Authentication failed'}`
+            : `❌ ${provider.toUpperCase()} 接続エラー: ${data.error || '認証失敗'}`;
         }
       } catch (err) {
         if (fb) {
           fb.style.color = '#f87171';
-          fb.textContent = `❌ 通信エラー: ${err.message}`;
+          fb.textContent = isEn ? `❌ Network error: ${err.message}` : `❌ 通信エラー: ${err.message}`;
         }
       }
     }
 
     async function saveAdminSettings(reanalyzeCurrent, silent) {
+      const isEn = currentLang === 'en';
       const payload = {
         active_provider: document.getElementById('adm-active-provider')?.value || 'auto',
         keys: {
@@ -9598,7 +9758,9 @@ def build_portal_html(data, is_shareable=False):
             fb.style.background = 'rgba(16, 185, 129, 0.15)';
             fb.style.border = '1px solid #10b981';
             fb.style.color = '#34d399';
-            fb.textContent = '✅ AI APIキーおよび脆弱性監査MCP/スキル設定を保存しました！';
+            fb.textContent = isEn
+              ? '✅ Saved AI API keys and vulnerability audit MCP/skill settings!'
+              : '✅ AI APIキーおよび脆弱性監査MCP/スキル設定を保存しました！';
           }
           await openAdminSettingsModal();
         }
@@ -9651,7 +9813,7 @@ def build_portal_html(data, is_shareable=False):
       });
 
       if (filtered.length === 0) {
-        listEl.innerHTML = '<div style="color: #64748b; font-size: 0.78rem; padding: 12px; text-align: center;">該当するリポジトリがありません。上の入力欄から追加してください。</div>';
+        listEl.innerHTML = `<div style="color: #64748b; font-size: 0.78rem; padding: 12px; text-align: center;">${currentLang === 'en' ? 'No matching repositories found. Add one using the input box above.' : '該当するリポジトリがありません。上の入力欄から追加してください。'}</div>`;
         return;
       }
 
@@ -9674,7 +9836,7 @@ def build_portal_html(data, is_shareable=False):
               <span style="font-size: 0.65rem; color: #64748b; white-space: nowrap;">
                 (${escapeHtml(d.perspective || 'overall')})
               </span>
-              ${hasAct ? '<span class="sec-legend-badge sec-legend-red" style="font-size: 0.62rem; padding: 1px 6px;">🔴 要対応</span>' : '<span class="sec-legend-badge sec-legend-green" style="font-size: 0.62rem; padding: 1px 6px;">🟢 正常</span>'}
+              ${hasAct ? `<span class="sec-legend-badge sec-legend-red" style="font-size: 0.62rem; padding: 1px 6px;">${currentLang === 'en' ? '🔴 Action Req' : '🔴 要対応'}</span>` : `<span class="sec-legend-badge sec-legend-green" style="font-size: 0.62rem; padding: 1px 6px;">${currentLang === 'en' ? '🟢 Clean' : '🟢 正常'}</span>`}
             </div>
             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
               <button class="table-view-btn" onclick="selectDiagram(${idx}); closeAnalyzeModal();" title="${escapeHtml(dict.modal_btn_show_repo || 'このリポジトリの構成図を開く')}">
@@ -9807,6 +9969,7 @@ def build_portal_html(data, is_shareable=False):
     }
 
     async function browseOrgRepositories() {
+      const isEn = currentLang === 'en';
       const input = document.getElementById('modal-gh-url-input');
       const rawUrl = (input && input.value.trim()) ? input.value.trim() : (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoCHK-Mac');
       if (input && !input.value.trim()) input.value = rawUrl;
@@ -9818,7 +9981,9 @@ def build_portal_html(data, is_shareable=False):
 
       browserBox.style.display = 'block';
       titleEl.style.color = '#60a5fa';
-      titleEl.textContent = `⏳ "${rawUrl}" 配下のリポジトリ一覧を取得中...`;
+      titleEl.textContent = isEn
+        ? `⏳ Fetching repositories under "${rawUrl}"...`
+        : `⏳ "${rawUrl}" 配下のリポジトリ一覧を取得中...`;
       listEl.innerHTML = '';
 
       try {
@@ -9828,10 +9993,12 @@ def build_portal_html(data, is_shareable=False):
           body: JSON.stringify({ url: rawUrl })
         });
         const data = await resp.json();
-        if (!resp.ok || data.error) throw new Error(data.error || '一覧の取得に失敗しました');
+        if (!resp.ok || data.error) throw new Error(data.error || (isEn ? 'Failed to fetch repository list' : '一覧の取得に失敗しました'));
 
         const repos = data.repos || [];
-        titleEl.textContent = `📂 ${data.owner} 配下のリポジトリ一覧 (${repos.length}件) — クリックで個別追加、右ボタンで全体エコシステム一括追加`;
+        titleEl.textContent = isEn
+          ? `📂 Repositories under ${data.owner} (${repos.length}) — Click to add individually, or use the right button to add all`
+          : `📂 ${data.owner} 配下のリポジトリ一覧 (${repos.length}件) — クリックで個別追加、右ボタンで全体エコシステム一括追加`;
         listEl.innerHTML = repos.map(r => `
           <div onclick="quickFillAndAnalyze('${r.url}')"
             style="background: #111827; border: 1px solid #334155; border-radius: 6px; padding: 8px 10px; cursor: pointer; transition: all 0.15s;"
@@ -9841,13 +10008,13 @@ def build_portal_html(data, is_shareable=False):
             </div>
             <div style="font-size: 0.66rem; color: #38bdf8; margin-top: 2px;">${r.language || 'Code'}</div>
             <div style="font-size: 0.65rem; color: #94a3b8; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-              ${r.description || 'クリックしてこのリポジトリを追加解析'}
+              ${r.description || (isEn ? 'Click to analyze and add this repository' : 'クリックしてこのリポジトリを追加解析')}
             </div>
           </div>
         `).join('');
       } catch (err) {
         titleEl.style.color = '#f87171';
-        titleEl.textContent = `❌ 一覧取得エラー: ${err.message}`;
+        titleEl.textContent = isEn ? `❌ Error fetching list: ${err.message}` : `❌ 一覧取得エラー: ${err.message}`;
       }
     }
 
@@ -10583,6 +10750,17 @@ def build_portal_html(data, is_shareable=False):
       const analyzeModal = document.getElementById('analyze-repo-modal');
       if (analyzeModal && analyzeModal.style.display !== 'none' && typeof renderSavedReposManageList === 'function') {
         renderSavedReposManageList();
+      }
+      const adminModal = document.getElementById('admin-settings-modal');
+      if (adminModal && adminModal.style.display !== 'none' && typeof openAdminSettingsModal === 'function') {
+        openAdminSettingsModal();
+      }
+      const vulnModal = document.getElementById('vuln-modal');
+      if (vulnModal && vulnModal.style.display !== 'none' && currentVulnAdv && typeof openVulnModal === 'function') {
+        openVulnModal(currentVulnAdv);
+      }
+      if (typeof updateAutoSyncChipText === 'function') {
+        updateAutoSyncChipText();
       }
       if (typeof updateAccordionActiveIndicators === 'function') {
         updateAccordionActiveIndicators();
@@ -11557,11 +11735,11 @@ def build_portal_html(data, is_shareable=False):
         <div style="display: flex; align-items: center; gap: 10px;">
           <span style="font-size: 1.4rem;">🚨</span>
           <div>
-            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">要対応アラート詳細・理由と対応方法の提案 (Action Required Hub)</h3>
-            <span style="font-size: 0.72rem; color: #fca5a5;">CodeRabbit AI 監査指摘 & 依存パッケージ脆弱性 (CVE) の発生理由・修正パッチ一覧</span>
+            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;" data-i18n="modal_action_hub_title">要対応アラート詳細・理由と対応方法の提案 (Action Required Hub)</h3>
+            <span style="font-size: 0.72rem; color: #fca5a5;" data-i18n="modal_action_hub_sub">CodeRabbit AI 監査指摘 &amp; 依存パッケージ脆弱性 (CVE) の発生理由・修正パッチ一覧</span>
           </div>
         </div>
-        <button class="modal-close-btn" onclick="closeActionRequiredHubModal()">✕ 閉じる</button>
+        <button class="modal-close-btn" onclick="closeActionRequiredHubModal()" data-i18n="btn_close_x">✕ 閉じる</button>
       </div>
       <div class="action-hub-body" id="action-hub-items-list">
         <!-- Rendered dynamically -->
@@ -11576,11 +11754,11 @@ def build_portal_html(data, is_shareable=False):
         <div style="display: flex; align-items: center; gap: 10px;">
           <span style="font-size: 1.4rem;">🏥</span>
           <div>
-            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">システム死活監視 & 稼働ステータス (Health & Uptime Monitor)</h3>
-            <span style="font-size: 0.72rem; color: #94a3b8;">ローカルHTTPサービス、API、バックグラウンドプロセスの死活状況</span>
+            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;" data-i18n="modal_health_title">システム死活監視 &amp; 稼働ステータス (Health &amp; Uptime Monitor)</h3>
+            <span style="font-size: 0.72rem; color: #94a3b8;" data-i18n="modal_health_sub">ローカルHTTPサービス、API、バックグラウンドプロセスの死活状況</span>
           </div>
         </div>
-        <button class="modal-close-btn" onclick="closeHealthModal()">✕ 閉じる</button>
+        <button class="modal-close-btn" onclick="closeHealthModal()" data-i18n="btn_close_x">✕ 閉じる</button>
       </div>
       <div class="action-hub-body" id="health-services-list">
         <!-- Rendered dynamically -->
@@ -11595,40 +11773,40 @@ def build_portal_html(data, is_shareable=False):
         <div style="display: flex; align-items: center; gap: 10px;">
           <span style="font-size: 1.4rem;">🔍</span>
           <div>
-            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">GitHub リポジトリ追加分析 & 保有リスト管理 (RepoCHK Mac)</h3>
-            <span style="font-size: 0.72rem; color: #93c5fd;">新しい組織URL・リポジトリURLの追加解析と、保有データの確認・不要リポジトリの削除が行えます</span>
+            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;" data-i18n="modal_analyze_title">GitHub リポジトリ追加分析 &amp; 保有リスト管理 (RepoCHK Mac)</h3>
+            <span style="font-size: 0.72rem; color: #93c5fd;" data-i18n="modal_analyze_sub">新しい組織URL・リポジトリURLの追加解析と、保有データの確認・不要リポジトリの削除が行えます</span>
           </div>
         </div>
-        <button class="modal-close-btn" onclick="closeAnalyzeModal()" data-i18n="btn_close">✕ 閉じる</button>
+        <button class="modal-close-btn" onclick="closeAnalyzeModal()" data-i18n="btn_close_x">✕ 閉じる</button>
       </div>
       <div class="action-hub-body" style="padding: 20px; overflow-y: auto; max-height: 78vh;">
         <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #e2e8f0; margin-bottom: 6px;">
+          <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #e2e8f0; margin-bottom: 6px;" data-i18n="modal_analyze_label">
             ➕ 新しく追加・分析したい 組織URL (<code style="color: #34d399;">https://github.com/org</code>) または リポジトリURL (<code style="color: #38bdf8;">owner/repo</code>):
           </label>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/nanonigit または https://github.com/nanonigit/RepoCHK-Mac"
+            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/nanonigit または https://github.com/nanonigit/RepoCHK-Mac" data-i18n-placeholder="modal_analyze_placeholder"
               style="flex: 1; min-width: 260px; background: #090d16; border: 1.5px solid #3b82f6; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 0.88rem; outline: none;"
               onkeydown="if(event.key==='Enter') submitModalAnalyze()" />
             <button id="modal-gh-browse-btn" onclick="browseOrgRepositories()"
               style="background: #1e293b; border: 1px solid #60a5fa; color: #93c5fd; font-size: 0.8rem; font-weight: 800; padding: 10px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;"
-              title="親階層(組織/ユーザー)に含まれるリポジトリ一覧を表示して選択できます">
+              title="親階層(組織/ユーザー)に含まれるリポジトリ一覧を表示して選択できます" data-i18n="modal_btn_browse">
               📂 配下一覧を表示
             </button>
             <button id="modal-gh-submit-btn" onclick="submitModalAnalyze()"
-              style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: 1px solid #60a5fa; color: #fff; font-size: 0.85rem; font-weight: 800; padding: 10px 20px; border-radius: 8px; cursor: pointer; white-space: nowrap;">
+              style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: 1px solid #60a5fa; color: #fff; font-size: 0.85rem; font-weight: 800; padding: 10px 20px; border-radius: 8px; cursor: pointer; white-space: nowrap;" data-i18n="modal_btn_submit">
               🚀 追加して分析
             </button>
           </div>
         </div>
 
         <div style="margin-bottom: 14px;">
-          <div style="font-size: 0.72rem; color: #34d399; font-weight: 700; margin-bottom: 6px;">🏢 上の階層（組織 / ユーザー全体エコシステム）からまとめて追加:</div>
+          <div style="font-size: 0.72rem; color: #34d399; font-weight: 700; margin-bottom: 6px;" data-i18n="modal_org_quick_title">🏢 上の階層（組織 / ユーザー全体エコシステム）からまとめて追加:</div>
           <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-            <button class="table-view-btn" style="border-color: #10b981; color: #6ee7b7;" onclick="quickFillAndAnalyze('https://github.com/nanonigit')">👤 https://github.com/nanonigit (全体を追加)</button>
-            <button class="table-view-btn" onclick="quickBrowseOrg('https://github.com/nanonigit')">📂 nanonigit の配下一覧</button>
+            <button class="table-view-btn" style="border-color: #10b981; color: #6ee7b7;" onclick="quickFillAndAnalyze('https://github.com/nanonigit')" data-i18n="modal_org_quick_all">👤 https://github.com/nanonigit (全体を追加)</button>
+            <button class="table-view-btn" onclick="quickBrowseOrg('https://github.com/nanonigit')" data-i18n="modal_org_quick_browse">📂 nanonigit の配下一覧</button>
           </div>
-          <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 6px;">📦 個別リポジトリをダイレクトに追加:</div>
+          <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 6px;" data-i18n="modal_direct_quick_title">📦 個別リポジトリをダイレクトに追加:</div>
           <div style="display: flex; flex-wrap: wrap; gap: 6px;">
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/AmazonDeliverySync')">📦 nanonigit/AmazonDeliverySync</button>
             <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/VisualBarTimer')">⏱️ nanonigit/VisualBarTimer</button>
@@ -11640,8 +11818,8 @@ def build_portal_html(data, is_shareable=False):
         <!-- Organization / User Repository Browser List -->
         <div id="org-repos-browser-box" style="display: none; background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-            <div id="org-repos-browser-title" style="font-size: 0.8rem; font-weight: 800; color: #60a5fa;">📂 配下リポジトリ一覧</div>
-            <button class="table-view-btn" style="background: #2563eb; color: #fff; border-color: #60a5fa;" onclick="submitModalAnalyze()">
+            <div id="org-repos-browser-title" style="font-size: 0.8rem; font-weight: 800; color: #60a5fa;" data-i18n="modal_org_browser_title">📂 配下リポジトリ一覧</div>
+            <button class="table-view-btn" style="background: #2563eb; color: #fff; border-color: #60a5fa;" onclick="submitModalAnalyze()" data-i18n="modal_org_add_all_btn">
               🏢 この組織の全体エコシステム＋全リポジトリを一括追加
             </button>
           </div>
@@ -11660,7 +11838,7 @@ def build_portal_html(data, is_shareable=False):
           <div style="height: 5px; background: #1e293b; border-radius: 3px; overflow: hidden; margin: 8px 0;">
             <div id="modal-analyze-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.8s ease;"></div>
           </div>
-          <div id="analyze-progress-detail" style="font-size: 0.74rem; color: #94a3b8; line-height: 1.5;">
+          <div id="analyze-progress-detail" style="font-size: 0.74rem; color: #94a3b8; line-height: 1.5;" data-i18n="modal_analyze_persist_note">
             解析結果は保有リストに自動保存され、次回起動時もそのまま保持されます。
           </div>
         </div>
@@ -11669,10 +11847,10 @@ def build_portal_html(data, is_shareable=False):
         <div style="background: #090d16; border: 1px solid #334155; border-radius: 10px; padding: 14px;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
             <div style="font-size: 0.84rem; font-weight: 800; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
-              <span>📋 現在保有しているリポジトリ一覧 (<span id="saved-repos-total-count">0</span>件)</span>
-              <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">※アプリを閉じてもデータは自動保持されます</span>
+              <span><span data-i18n="modal_saved_list_title">📋 現在保有しているリポジトリ一覧</span> (<span id="saved-repos-total-count">0</span>)</span>
+              <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;" data-i18n="modal_saved_list_note">※アプリを閉じてもデータは自動保持されます</span>
             </div>
-            <input id="saved-repos-filter-input" type="text" placeholder="🔍 保有リスト内を検索..."
+            <input id="saved-repos-filter-input" type="text" placeholder="🔍 保有リスト内を検索..." data-i18n-placeholder="modal_saved_filter_placeholder"
               oninput="renderSavedReposManageList()"
               style="background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 5px 10px; color: #f8fafc; font-size: 0.74rem; width: 200px; outline: none;" />
           </div>
@@ -11690,11 +11868,11 @@ def build_portal_html(data, is_shareable=False):
         <div style="display: flex; align-items: center; gap: 10px;">
           <img src="app-icon.png" style="width: 32px; height: 32px; border-radius: 50%;" />
           <div>
-            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;">⚙️ 管理画面：AI APIキー & PHP/Node.js 脆弱性監査 MCP・スキル設定</h3>
-            <span style="font-size: 0.72rem; color: #6ee7b7;">OpenAI / Claude / Gemini / Groq のAPIキー管理と、OSV脆弱性MCP・OWASP SASTスキルの監査設定</span>
+            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;" data-i18n="adm_modal_title">⚙️ 管理画面：AI APIキー &amp; PHP/Node.js 脆弱性監査 MCP・スキル設定</h3>
+            <span style="font-size: 0.72rem; color: #6ee7b7;" data-i18n="adm_modal_sub">OpenAI / Claude / Gemini / Groq のAPIキー管理と、OSV脆弱性MCP・OWASP SASTスキルの監査設定</span>
           </div>
         </div>
-        <button class="modal-close-btn" onclick="closeAdminSettingsModal()" data-i18n="btn_close">✕ 閉じる</button>
+        <button class="modal-close-btn" onclick="closeAdminSettingsModal()" data-i18n="btn_close_x">✕ 閉じる</button>
       </div>
 
       <form class="action-hub-body" onsubmit="event.preventDefault(); return false;" autocomplete="off" style="padding: 20px; overflow-y: auto; max-height: 80vh; margin: 0;">
@@ -11702,11 +11880,11 @@ def build_portal_html(data, is_shareable=False):
         <div style="background: #090d16; border: 1px solid #1e293b; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
           <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
             <div>
-              <div style="font-size: 0.84rem; font-weight: 800; color: #34d399;">🤖 優先使用する AI コード・脆弱性監査エンジン</div>
-              <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 2px;">設定済みのAPIキーを使って、ソースコードと依存パッケージの深層セキュリティ監査を実行します</div>
+              <div style="font-size: 0.84rem; font-weight: 800; color: #34d399;" data-i18n="adm_provider_title">🤖 優先使用する AI コード・脆弱性監査エンジン</div>
+              <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 2px;" data-i18n="adm_provider_sub">設定済みのAPIキーを使って、ソースコードと依存パッケージの深層セキュリティ監査を実行します</div>
             </div>
             <select id="adm-active-provider" aria-label="優先使用する AI コード・脆弱性監査エンジン" style="background: #0f172a; border: 1.5px solid #34d399; color: #fff; padding: 7px 12px; border-radius: 7px; font-size: 0.8rem; font-weight: 700; outline: none;">
-              <option value="auto">⚡ 自動選択 (設定済みキーを上から優先)</option>
+              <option value="auto" data-i18n="adm_opt_auto">⚡ 自動選択 (設定済みキーを上から優先)</option>
               <option value="openai">🟢 OpenAI (GPT-4o / o3-mini)</option>
               <option value="claude">🟠 Anthropic Claude (Claude 3.7 / 3.5 Sonnet)</option>
               <option value="gemini">🔵 Google Gemini (Gemini 2.5 Pro / Flash)</option>
@@ -11716,7 +11894,7 @@ def build_portal_html(data, is_shareable=False):
         </div>
 
         <!-- 4 AI Providers API Key Inputs -->
-        <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;">
+        <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;" data-i18n="adm_keys_header">
           🔑 AI プロバイダー APIキー設定 <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">(ローカルの ~/Library/Application Support/RepoCHK Mac/settings.json に暗号権限 0600 で安全に保存されます)</span>
         </div>
 
@@ -11729,10 +11907,10 @@ def build_portal_html(data, is_shareable=False):
             </div>
             <div style="display: flex; gap: 6px; margin-bottom: 6px;">
               <input id="adm-key-openai" type="password" autocomplete="off" aria-label="OpenAI API Key" placeholder="sk-proj-..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
-              <button type="button" class="table-view-btn" onclick="testProviderKey('openai')" style="white-space: nowrap;">⚡ 接続テスト</button>
+              <button type="button" class="table-view-btn" onclick="testProviderKey('openai')" style="white-space: nowrap;" data-i18n="adm_btn_test">⚡ 接続テスト</button>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8; gap: 6px; flex-wrap: wrap;">
-              <span>監査モデル:</span>
+              <span data-i18n="adm_model_label">監査モデル:</span>
               <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
                 <button type="button" class="hotspot-copy-btn" style="font-size: 0.62rem; padding: 2px 6px;" onclick="document.getElementById('adm-model-openai').value='gpt-6-luna'">gpt-6-luna</button>
                 <button type="button" class="hotspot-copy-btn" style="font-size: 0.62rem; padding: 2px 6px;" onclick="document.getElementById('adm-model-openai').value='gpt-5.6-luna'">gpt-5.6-luna</button>
@@ -11750,10 +11928,10 @@ def build_portal_html(data, is_shareable=False):
             </div>
             <div style="display: flex; gap: 6px; margin-bottom: 6px;">
               <input id="adm-key-claude" type="password" autocomplete="off" aria-label="Anthropic Claude API Key" placeholder="sk-ant-api03-..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
-              <button type="button" class="table-view-btn" onclick="testProviderKey('claude')" style="white-space: nowrap;">⚡ 接続テスト</button>
+              <button type="button" class="table-view-btn" onclick="testProviderKey('claude')" style="white-space: nowrap;" data-i18n="adm_btn_test">⚡ 接続テスト</button>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
-              <span>監査モデル:</span>
+              <span data-i18n="adm_model_label">監査モデル:</span>
               <input id="adm-model-claude" type="text" aria-label="Anthropic Claude 監査モデル" value="claude-3-7-sonnet-latest" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
             </div>
           </div>
@@ -11766,10 +11944,10 @@ def build_portal_html(data, is_shareable=False):
             </div>
             <div style="display: flex; gap: 6px; margin-bottom: 6px;">
               <input id="adm-key-gemini" type="password" autocomplete="off" aria-label="Google Gemini API Key" placeholder="AIzaSy..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
-              <button type="button" class="table-view-btn" onclick="testProviderKey('gemini')" style="white-space: nowrap;">⚡ 接続テスト</button>
+              <button type="button" class="table-view-btn" onclick="testProviderKey('gemini')" style="white-space: nowrap;" data-i18n="adm_btn_test">⚡ 接続テスト</button>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
-              <span>監査モデル:</span>
+              <span data-i18n="adm_model_label">監査モデル:</span>
               <input id="adm-model-gemini" type="text" aria-label="Google Gemini 監査モデル" value="gemini-2.5-flash" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
             </div>
           </div>
@@ -11782,10 +11960,10 @@ def build_portal_html(data, is_shareable=False):
             </div>
             <div style="display: flex; gap: 6px; margin-bottom: 6px;">
               <input id="adm-key-groq" type="password" autocomplete="off" aria-label="Groq Cloud API Key" placeholder="gsk_..." style="flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.76rem; font-family: monospace;" />
-              <button type="button" class="table-view-btn" onclick="testProviderKey('groq')" style="white-space: nowrap;">⚡ 接続テスト</button>
+              <button type="button" class="table-view-btn" onclick="testProviderKey('groq')" style="white-space: nowrap;" data-i18n="adm_btn_test">⚡ 接続テスト</button>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: #94a3b8;">
-              <span>監査モデル:</span>
+              <span data-i18n="adm_model_label">監査モデル:</span>
               <input id="adm-model-groq" type="text" aria-label="Groq Cloud 監査モデル" value="llama-3.3-70b-versatile" style="background: #0f172a; border: 1px solid #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; width: 170px;" />
             </div>
           </div>
@@ -11794,48 +11972,48 @@ def build_portal_html(data, is_shareable=False):
         <div id="adm-test-feedback" style="display: none; margin-bottom: 14px; padding: 10px 14px; border-radius: 8px; font-size: 0.78rem; font-weight: 700;"></div>
 
         <!-- Vulnerability MCP & Security Skills Toggles -->
-        <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;">
-          🛡️ 脆弱性・コード監査 MCP & スキル構成 (PHP / Node.js / Python / Swift / Go 対応)
+        <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;" data-i18n="adm_skills_header">
+          🛡️ 脆弱性・コード監査 MCP &amp; スキル構成 (PHP / Node.js / Python / Swift / Go 対応)
         </div>
         <div style="background: #090d16; border: 1px solid #334155; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;">
           <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
             <input type="checkbox" id="adm-skill-osv" checked style="margin-top: 3px;" />
             <div>
-              <div style="font-size: 0.78rem; font-weight: 800; color: #38bdf8;">🌐 OSV.dev 脆弱性データベース MCP (リアルタイム CVE 照合)</div>
-              <div style="font-size: 0.7rem; color: #94a3b8;">PHP (`composer.json` / Packagist)、Node.js (`package.json` / npm)、Python (`requirements.txt` / PyPI)、Go、Rust の全パッケージバージョンを Google OSV.dev API に照会し、既知の脆弱性 (CVE / GHSA) を自動検出します。</div>
+              <div style="font-size: 0.78rem; font-weight: 800; color: #38bdf8;" data-i18n="adm_skill_osv_title">🌐 OSV.dev 脆弱性データベース MCP (リアルタイム CVE 照合)</div>
+              <div style="font-size: 0.7rem; color: #94a3b8;" data-i18n="adm_skill_osv_desc">PHP (`composer.json` / Packagist)、Node.js (`package.json` / npm)、Python (`requirements.txt` / PyPI)、Go、Rust の全パッケージバージョンを Google OSV.dev API に照会し、既知の脆弱性 (CVE / GHSA) を自動検出します。</div>
             </div>
           </label>
 
           <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
             <input type="checkbox" id="adm-skill-runtime" checked style="margin-top: 3px;" />
             <div>
-              <div style="font-size: 0.78rem; font-weight: 800; color: #34d399;">🐘 PHP / Node.js / ランタイム EOL & バージョン脆弱性監査スキル</div>
-              <div style="font-size: 0.7rem; color: #94a3b8;">PHP 5.x / 7.x / 8.0 等のセキュリティサポート終了 (EOL) ランタイムや、Node.js 旧世代エンジン、Laravel / WordPress / Express / Next.js / Axios 等の危険バージョンを監査します。</div>
+              <div style="font-size: 0.78rem; font-weight: 800; color: #34d399;" data-i18n="adm_skill_rt_title">🐘 PHP / Node.js / ランタイム EOL &amp; バージョン脆弱性監査スキル</div>
+              <div style="font-size: 0.7rem; color: #94a3b8;" data-i18n="adm_skill_rt_desc">PHP 5.x / 7.x / 8.0 等のセキュリティサポート終了 (EOL) ランタイムや、Node.js 旧世代エンジン、Laravel / WordPress / Express / Next.js / Axios 等の危険バージョンを監査します。</div>
             </div>
           </label>
 
           <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
             <input type="checkbox" id="adm-skill-sast" checked style="margin-top: 3px;" />
             <div>
-              <div style="font-size: 0.78rem; font-weight: 800; color: #f472b6;">🔒 OWASP Top 10 & Security-Review SAST スキル (ソースコード脆弱性診断)</div>
-              <div style="font-size: 0.7rem; color: #94a3b8;">PHP の SQLインジェクション (`mysqli_query` 直接結合)、XSS (`echo $_GET`)、RCE (`eval` / `shell_exec` / `unserialize`)、Node.js/TS の SSRF・インジェクション、Python/Swift の危険な例外・強制アンラップを行単位で検出し修正 Diff を提案します。</div>
+              <div style="font-size: 0.78rem; font-weight: 800; color: #f472b6;" data-i18n="adm_skill_sast_title">🔒 OWASP Top 10 &amp; Security-Review SAST スキル (ソースコード脆弱性診断)</div>
+              <div style="font-size: 0.7rem; color: #94a3b8;" data-i18n="adm_skill_sast_desc">PHP の SQLインジェクション (`mysqli_query` 直接結合)、XSS (`echo $_GET`)、RCE (`eval` / `shell_exec` / `unserialize`)、Node.js/TS の SSRF・インジェクション、Python/Swift の危険な例外・強制アンラップを行単位で検出し修正 Diff を提案します。</div>
             </div>
           </label>
 
           <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
             <input type="checkbox" id="adm-skill-llm" checked style="margin-top: 3px;" />
             <div>
-              <div style="font-size: 0.78rem; font-weight: 800; color: #a78bfa;">🧠 マルチLLM ディープ脆弱性・設計監査 (OpenAI / Claude / Gemini / Groq)</div>
-              <div style="font-size: 0.7rem; color: #94a3b8;">上で設定された AI プロバイダーの API キーを使用し、リポジトリのコード構造・フレームワーク固有の脆弱性を AI が深層監査して「要対応アラート」に統合します。</div>
+              <div style="font-size: 0.78rem; font-weight: 800; color: #a78bfa;" data-i18n="adm_skill_llm_title">🧠 マルチLLM ディープ脆弱性・設計監査 (OpenAI / Claude / Gemini / Groq)</div>
+              <div style="font-size: 0.7rem; color: #94a3b8;" data-i18n="adm_skill_llm_desc">上で設定された AI プロバイダーの API キーを使用し、リポジトリのコード構造・フレームワーク固有の脆弱性を AI が深層監査して「要対応アラート」に統合します。</div>
             </div>
           </label>
         </div>
 
         <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap;">
-          <button type="button" class="table-view-btn" onclick="saveAdminSettings(false)" style="padding: 9px 18px; font-size: 0.8rem;">
+          <button type="button" class="table-view-btn" onclick="saveAdminSettings(false)" style="padding: 9px 18px; font-size: 0.8rem;" data-i18n="adm_btn_save">
             💾 設定・APIキーを保存
           </button>
-          <button type="button" onclick="saveAdminSettings(true)" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: 1px solid #6ee7b7; color: #fff; font-size: 0.82rem; font-weight: 800; padding: 9px 20px; border-radius: 8px; cursor: pointer;">
+          <button type="button" onclick="saveAdminSettings(true)" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: 1px solid #6ee7b7; color: #fff; font-size: 0.82rem; font-weight: 800; padding: 9px 20px; border-radius: 8px; cursor: pointer;" data-i18n="adm_btn_save_reaudit">
             🛡️ 保存して現在選択中のリポジトリを今すぐAI・脆弱性再監査
           </button>
         </div>
