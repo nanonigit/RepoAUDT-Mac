@@ -5330,7 +5330,7 @@ def build_portal_html(data, is_shareable=False):
       flex: 1 1 auto !important;
       display: flex !important;
       flex-direction: row !important;
-      height: calc(100vh - 44px) !important;
+      height: calc(100vh - 52px) !important;
       overflow: hidden !important;
       position: relative !important;
       min-height: 0 !important;
@@ -5338,6 +5338,239 @@ def build_portal_html(data, is_shareable=False):
     }
     #sidebar, #main-content, #inspector {
       height: 100% !important;
+    }
+
+    /* ==========================================================================
+       User-Friendly Zero-Cognitive-Load UX Enhancements (v2)
+       Large readable typography, self-explanatory cards, zero clutter
+       ========================================================================== */
+    #app-top-toolbar {
+      height: 52px !important;
+      min-height: 52px !important;
+      max-height: 52px !important;
+      padding: 0 14px !important;
+      background: #0b1120 !important;
+      border-bottom: 1px solid #1e293b !important;
+    }
+    .tb-segmented, .tb-ui-toggle {
+      height: 34px !important;
+      padding: 3px !important;
+      border-radius: 9px !important;
+      background: #060a12 !important;
+      border: 1px solid #1e293b !important;
+    }
+    .tb-seg-item, .tb-ui-item {
+      height: 26px !important;
+      font-size: 0.8rem !important;
+      padding: 0 11px !important;
+      border-radius: 6px !important;
+      font-weight: 600 !important;
+    }
+    .tb-btn, .tb-btn-primary, .tb-lang-btn, .tb-search-pill {
+      height: 34px !important;
+      font-size: 0.8rem !important;
+      border-radius: 8px !important;
+    }
+    .tb-search-pill {
+      max-width: 340px !important;
+      padding: 0 12px !important;
+      background: #111827 !important;
+      border: 1px solid #334155 !important;
+    }
+    .tb-repo-name {
+      font-size: 0.82rem !important;
+    }
+
+    /* Hide technical perspective line and make sidebar repo cards clean & legible */
+    .persp-tag {
+      display: none !important;
+    }
+    .nav-item {
+      padding: 11px 13px !important;
+      border-radius: 10px !important;
+      margin-bottom: 7px !important;
+      border: 1px solid rgba(51, 65, 85, 0.65) !important;
+      background: rgba(15, 23, 42, 0.75) !important;
+      transition: all 0.16s ease !important;
+    }
+    .nav-item:hover {
+      background: rgba(30, 41, 59, 0.95) !important;
+      border-color: #38bdf8 !important;
+      transform: translateY(-1px);
+    }
+    .nav-item.active {
+      background: linear-gradient(135deg, rgba(30, 58, 138, 0.55) 0%, rgba(15, 23, 42, 0.95) 100%) !important;
+      border-color: #38bdf8 !important;
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.18) !important;
+    }
+    .nav-item .repo-name {
+      font-size: 0.9rem !important;
+      font-weight: 700 !important;
+      color: #f8fafc !important;
+      letter-spacing: -0.01em;
+    }
+    .nav-item .date-meta-row {
+      margin-top: 6px !important;
+      font-size: 0.74rem !important;
+    }
+
+    /* In Simple Mode, hide the 9 technical tabs so beginners see a clean self-explanatory summary */
+    body.ui-mode-simple .inspector-tabs {
+      display: none !important;
+    }
+    #inspector-body {
+      font-size: 0.88rem !important;
+      line-height: 1.65 !important;
+    }
+
+    /* Center Repository Summary Hero Bar */
+    .repo-summary-hero {
+      background: linear-gradient(180deg, #0f172a 0%, #0b1120 100%);
+      border-bottom: 1px solid #1e293b;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+      z-index: 15;
+    }
+    .hero-left-info {
+      flex: 1 1 320px;
+      min-width: 0;
+    }
+    .hero-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .hero-repo-title {
+      font-size: 1.12rem;
+      font-weight: 800;
+      color: #f8fafc;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    .hero-repo-desc {
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      margin-top: 4px;
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .hero-right-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .subview-toggle-group {
+      display: inline-flex;
+      background: #060a12;
+      border: 1px solid #334155;
+      border-radius: 9px;
+      padding: 3px;
+      gap: 3px;
+    }
+    .subview-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #94a3b8;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    .subview-btn:hover {
+      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .subview-btn.active {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #60a5fa;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+    }
+
+    /* Visual Cards Grid Overlay (Friendly, High-Contrast Card Explorer) */
+    #visual-cards-overlay {
+      position: absolute;
+      inset: 0;
+      background: #090d16;
+      overflow-y: auto;
+      padding: 20px 22px 80px 22px;
+      z-index: 12;
+      display: none;
+    }
+    .visual-cards-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .visual-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+      gap: 14px;
+    }
+    .visual-node-card {
+      background: linear-gradient(145deg, #111827 0%, #0b1120 100%);
+      border: 1.5px solid #1e293b;
+      border-radius: 12px;
+      padding: 15px 16px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+    .visual-node-card:hover {
+      border-color: #38bdf8;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 22px rgba(56, 189, 248, 0.18);
+    }
+    .visual-node-card.selected {
+      border-color: #38bdf8;
+      background: linear-gradient(145deg, rgba(30, 58, 138, 0.38) 0%, #0f172a 100%);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+    }
+    .visual-node-card.has-alert {
+      border-color: rgba(239, 68, 68, 0.55);
+    }
+    .visual-node-card.has-alert:hover {
+      border-color: #f87171;
+    }
+
+    /* Floating Bottom-Right Canvas Dock for Zoom & Export */
+    .canvas-floating-dock {
+      position: absolute;
+      bottom: 16px;
+      right: 18px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 6px 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(10px);
     }
 </style>
 </head>
@@ -5411,61 +5644,29 @@ def build_portal_html(data, is_shareable=False):
         <span data-i18n="btn_settings">設定</span>
       </button>
 
-      <div class="tb-separator"></div>
-
-      <!-- Unified Auto-Sync & Manual Refresh Status Chip -->
-      <div class="tb-sync-unified" id="header-auto-sync-chip" role="button" tabindex="0" title="自動定期更新中 (クリックで今すぐ手動同期)" data-i18n-title="title_sync_chip" onclick="triggerGitHubSync()">
-        <span class="tb-pulse-dot dot-pulse" id="header-sync-pulse"></span>
-        <span id="header-sync-chip-text"><span class="chip-label">60分毎 </span>(60:00)</span>
-        <span id="sync-btn" style="font-size: 0.74rem; margin-left: 2px;">🔄</span>
-      </div>
-
-      <div class="tb-separator"></div>
-
-      <!-- Export Controls (SVG / PNG) -->
-      <div class="tb-btn-group export-controls-group" title="ダイアグラムを画像として保存" data-i18n-title="title_export_group">
-        <button class="tb-group-btn btn-export" onclick="exportDiagramAsSvg()" title="ベクトル画像 (SVG) として保存" data-i18n-title="title_export_svg">
-          <span>📐</span>
-          <span data-i18n="btn_export_svg">SVG</span>
-        </button>
-        <button class="tb-group-btn btn-export" onclick="exportDiagramAsPng()" title="高解像度画像 (PNG) として保存" data-i18n-title="title_export_png">
-          <span>📷</span>
-          <span data-i18n="btn_export_png">PNG</span>
-        </button>
-      </div>
-
-      <!-- Zoom Controls -->
-      <div class="tb-btn-group zoom-controls-group" title="ダイアグラム表示倍率の操作" data-i18n-title="title_zoom_group">
-        <button class="tb-group-btn zoom-btn" onclick="zoomIn()" title="ズームイン (拡大)" data-i18n-title="title_zoom_in" aria-label="Zoom In">➕</button>
-        <button class="tb-group-btn zoom-btn" onclick="resetZoom()" title="初期サイズにリセット (100%)" data-i18n-title="title_zoom_reset" aria-label="Reset Zoom">↺</button>
-        <button class="tb-group-btn zoom-btn" onclick="zoomOut()" title="ズームアウト (縮小)" data-i18n-title="title_zoom_out" aria-label="Zoom Out">➖</button>
-      </div>
-
-      <div class="tb-separator"></div>
-
       <!-- Language Switcher (JA / EN) -->
       <div class="tb-lang-btn lang-switch-toggle" role="button" tabindex="0" onclick="toggleLanguage()" title="言語切り替え / Switch Language (日本語 ⇄ English)" aria-label="Switch Language">
-        <span style="font-size: 0.74rem;">🌐</span>
+        <span style="font-size: 0.78rem;">🌐</span>
         <span class="tb-lang-opt lang-opt active" id="lang-opt-ja">JA</span>
-        <span style="color: #475569; font-size: 0.65rem;">/</span>
+        <span style="color: #475569; font-size: 0.68rem;">/</span>
         <span class="tb-lang-opt lang-opt" id="lang-opt-en">EN</span>
       </div>
 
       <!-- Shortcuts & Quick Guide -->
       <button class="tb-btn pane-toggle-btn btn-quick-guide" id="btn-toggle-guide" onclick="toggleGuideBar()" title="クイックガイド (使い方バー) を表示 / 非表示" data-i18n-title="title_quick_guide">
-        <span style="font-size: 0.76rem;">🔰</span>
+        <span style="font-size: 0.78rem;">🔰</span>
         <span class="btn-text" data-i18n="btn_guide">ガイド</span>
       </button>
-      <button class="tb-btn" style="padding: 0 7px;" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)" data-i18n-title="title_shortcuts" aria-label="Keyboard Shortcuts">
-        <span style="font-size: 0.78rem;">⌨️</span>
+      <button class="tb-btn" style="padding: 0 8px;" onclick="openShortcutsModal()" title="キーボードショートカット一覧を表示 (?)" data-i18n-title="title_shortcuts" aria-label="Keyboard Shortcuts">
+        <span style="font-size: 0.82rem;">⌨️</span>
       </button>
 
       <div class="tb-separator"></div>
 
       <!-- Inspector Toggle -->
       <button class="tb-btn" id="btn-toggle-inspector" onclick="toggleInspectorPane()" title="右ペインを開閉 (⌘I)" data-i18n-title="title_toggle_inspector">
-        <span style="font-size: 0.78rem;">◨</span>
-        <span style="font-size: 0.70rem;">▶</span>
+        <span style="font-size: 0.82rem;">◨</span>
+        <span style="font-size: 0.72rem;">▶</span>
       </button>
     </div>
   </header>
@@ -5475,24 +5676,28 @@ def build_portal_html(data, is_shareable=False):
 
   <div id="sidebar">
     <div class="brand-header">
-      <div class="brand-title" style="display: flex; align-items: center; gap: 8px;">
-        <img src="app-icon.png" alt="RepoCHK Mac" style="width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
+      <div class="brand-title" style="display: flex; align-items: center; gap: 10px;">
+        <img src="app-icon.png" alt="RepoCHK Mac" style="width: 32px; height: 32px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
         <div>RepoCHK Mac <span>AI Studio</span></div>
       </div>
       <div class="live-status"><div class="live-dot"></div> NATIVE MACOS STUDIO (CodeRabbit + Mermaid)</div>
-      <div style="margin-top: 10px; background: linear-gradient(135deg, rgba(30, 58, 138, 0.45) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid #3b82f6; border-radius: 9px; padding: 9px 10px;">
-        <div style="font-size: 0.72rem; font-weight: 800; color: #93c5fd; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+      <div style="margin-top: 12px; background: linear-gradient(135deg, rgba(30, 58, 138, 0.5) 0%, rgba(15, 23, 42, 0.95) 100%); border: 1.5px solid #3b82f6; border-radius: 10px; padding: 12px;">
+        <div style="font-size: 0.8rem; font-weight: 800; color: #bfdbfe; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
           <span data-i18n="sidebar_gh_title">🔍 GitHub URL からコード分析</span>
-          <span role="button" tabindex="0" style="font-size: 0.64rem; color: #60a5fa; cursor: pointer;" onclick="openAnalyzeModal()" data-i18n="sidebar_gh_manage">📋 保有リスト管理・削除 ↗</span>
         </div>
-        <div style="display: flex; gap: 5px;">
+        <div style="display: flex; flex-direction: column; gap: 7px;">
           <input id="sidebar-gh-url-input" type="text" placeholder="https://github.com/org または owner/repo" data-i18n-placeholder="sidebar_gh_placeholder"
-            style="flex: 1; min-width: 0; background: #090d16; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; color: #f8fafc; font-size: 0.73rem; outline: none;"
+            style="width: 100%; box-sizing: border-box; background: #090d16; border: 1px solid #475569; border-radius: 7px; padding: 8px 10px; color: #f8fafc; font-size: 0.8rem; outline: none;"
             onkeydown="if(event.key==='Enter') triggerSidebarAnalyze()" />
-          <button onclick="triggerSidebarAnalyze()" id="sidebar-gh-analyze-btn" data-i18n="sidebar_gh_analyze_btn"
-            style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: 1px solid #60a5fa; color: #fff; font-size: 0.72rem; font-weight: 800; padding: 6px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; min-width: 68px; text-align: center;">
-            ➕ 分析
-          </button>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <button onclick="triggerSidebarAnalyze()" id="sidebar-gh-analyze-btn" data-i18n="sidebar_gh_analyze_btn"
+              style="flex: 1; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: 1px solid #60a5fa; color: #fff; font-size: 0.8rem; font-weight: 800; padding: 7px 12px; border-radius: 7px; cursor: pointer; text-align: center;">
+              ➕ 分析
+            </button>
+            <button type="button" onclick="openAnalyzeModal()" style="background: rgba(15, 23, 42, 0.8); border: 1px solid #475569; color: #93c5fd; font-size: 0.74rem; font-weight: 700; padding: 7px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap;" data-i18n="sidebar_gh_manage">
+              📋 保有リスト管理・削除 ↗
+            </button>
+          </div>
         </div>
         <!-- Live Countdown & Progress Bar for Sidebar Analysis -->
         <div id="sidebar-analyze-progress-box" style="display: none; margin-top: 7px; padding: 6px 8px; background: rgba(9, 13, 22, 0.95); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.4);">
@@ -5662,9 +5867,41 @@ def build_portal_html(data, is_shareable=False):
       <div class="wt-transition-card" id="wt-transition-card" style="display: none;"></div>
     </div>
 
+    <div class="repo-summary-hero" id="repo-summary-hero"></div>
+
     <div class="canvas-layout">
       <div class="canvas-container" id="canvas-container">
+        <div id="visual-cards-overlay"></div>
         <div id="diagram-wrapper"></div>
+
+        <!-- Floating Bottom-Right Canvas Dock (Zoom, Export, Auto-Sync) -->
+        <div class="canvas-floating-dock" id="canvas-floating-dock">
+          <!-- Unified Auto-Sync & Manual Refresh Status Chip -->
+          <div class="tb-sync-unified" id="header-auto-sync-chip" role="button" tabindex="0" title="自動定期更新中 (クリックで今すぐ手動同期)" data-i18n-title="title_sync_chip" onclick="triggerGitHubSync()">
+            <span class="tb-pulse-dot dot-pulse" id="header-sync-pulse"></span>
+            <span id="header-sync-chip-text"><span class="chip-label">60分毎 </span>(60:00)</span>
+            <span id="sync-btn" style="font-size: 0.74rem; margin-left: 2px;">🔄</span>
+          </div>
+
+          <!-- Export Controls (SVG / PNG) -->
+          <div class="tb-btn-group export-controls-group" title="ダイアグラムを画像として保存" data-i18n-title="title_export_group">
+            <button class="tb-group-btn btn-export" onclick="exportDiagramAsSvg()" title="ベクトル画像 (SVG) として保存" data-i18n-title="title_export_svg">
+              <span>📐</span>
+              <span data-i18n="btn_export_svg">SVG</span>
+            </button>
+            <button class="tb-group-btn btn-export" onclick="exportDiagramAsPng()" title="高解像度画像 (PNG) として保存" data-i18n-title="title_export_png">
+              <span>📷</span>
+              <span data-i18n="btn_export_png">PNG</span>
+            </button>
+          </div>
+
+          <!-- Zoom Controls -->
+          <div class="tb-btn-group zoom-controls-group" title="ダイアグラム表示倍率の操作" data-i18n-title="title_zoom_group">
+            <button class="tb-group-btn zoom-btn" onclick="zoomIn()" title="ズームイン (拡大)" data-i18n-title="title_zoom_in" aria-label="Zoom In">➕</button>
+            <button class="tb-group-btn zoom-btn" onclick="resetZoom()" title="初期サイズにリセット (100%)" data-i18n-title="title_zoom_reset" aria-label="Reset Zoom">↺</button>
+            <button class="tb-group-btn zoom-btn" onclick="zoomOut()" title="ズームアウト (縮小)" data-i18n-title="title_zoom_out" aria-label="Zoom Out">➖</button>
+          </div>
+        </div>
       </div>
       <div id="coderabbit-view" style="display: none;"></div>
     </div>
@@ -7496,6 +7733,276 @@ def build_portal_html(data, is_shareable=False):
       updateAccordionActiveIndicators();
     }
 
+    let currentArchSubView = 'auto'; // 'cards' | 'diagram' | 'auto'
+
+    function getEffectiveArchSubView(item) {
+      if (currentArchSubView === 'cards' || currentArchSubView === 'diagram') {
+        return currentArchSubView;
+      }
+      if (!item) return 'cards';
+      const nodeCount = ((item.diagram || '').match(/\\["/g) || []).length;
+      if (item.is_root || nodeCount > 8) {
+        return 'cards';
+      }
+      return 'cards';
+    }
+
+    function setArchSubView(mode) {
+      currentArchSubView = mode;
+      const overlay = document.getElementById('visual-cards-overlay');
+      const dock = document.getElementById('canvas-floating-dock');
+      const btnCards = document.getElementById('subview-btn-cards');
+      const btnDiag = document.getElementById('subview-btn-diagram');
+      const isCards = mode === 'cards';
+      if (overlay) overlay.style.display = isCards ? 'block' : 'none';
+      if (dock) dock.style.display = isCards ? 'none' : 'flex';
+      if (btnCards) btnCards.classList.toggle('active', isCards);
+      if (btnDiag) btnDiag.classList.toggle('active', !isCards);
+      if (!isCards && currentPanZoom) {
+        setTimeout(() => {
+          safeResizePanZoom();
+          safeFitPanZoom(1.35);
+        }, 40);
+      }
+    }
+
+    function selectRepoRootInspector(item) {
+      if (!item) return;
+      const isEn = currentLang === 'en';
+      selectedNodeData = {
+        name: item.repo,
+        path: item.github_url || item.repo_slug || 'repository',
+        repoItem: item,
+        spec: {
+          title: item.repo,
+          category: item.category || (item.is_root ? 'Ecosystem Overview' : 'Application Repository'),
+          tech: ((item.deps && item.deps.frameworks) || []).map(f => f.name).join(', ') || 'GitHub Repository',
+          desc: item.description || (isEn
+            ? `${item.repo} is a software repository managed in RepoCHK Mac.`
+            : `${item.repo} の全体構成と安全性を管理しています。左のカードや図をクリックすると各部品の詳しい説明が表示されます。`),
+          steps: [
+            isEn ? `GitHub URL: ${item.github_url || '-'}` : `GitHub リポジトリ: ${item.github_url || '-'}`,
+            isEn ? `Latest Commit: ${item.commit_subject || '-'}` : `最新コミット内容: ${item.commit_subject || '-'}`,
+            isEn ? `Author: ${item.commit_author || '-'}` : `最終更新者: ${item.commit_author || '-'}`,
+          ],
+          files: (item.commit_files || []).map(f => f.split('\\t').pop())
+        }
+      };
+      renderInspector();
+    }
+
+    function parseDiagramNodesForCards(item) {
+      if (!item) return [];
+      const isEn = currentLang === 'en';
+      const actionItems = getRepoActionItems(item);
+
+      // If this is an Ecosystem root diagram, build cards from all child repositories of the same owner!
+      if (item.is_root) {
+        const ownerPrefix = (item.repo_slug || item.repo || '').split(' ')[0].toLowerCase();
+        const childRepos = diagrams.filter(d => !d.is_root && (
+          (d.repo || '').toLowerCase().startsWith(ownerPrefix + '/') ||
+          (d.github_url || '').toLowerCase().includes('/' + ownerPrefix + '/')
+        ));
+        if (childRepos.length > 0) {
+          return childRepos.map(cd => {
+            const cActions = getRepoActionItems(cd);
+            const fwList = ((cd.deps && cd.deps.frameworks) || []).map(f => f.name).slice(0, 3).join(' · ');
+            return {
+              title: cd.repo,
+              subtitle: fwList || cd.category || 'Repository',
+              desc: cd.description || (isEn ? 'Click to inspect architecture and safety.' : 'クリックしてしくみと安全性を確認できます。'),
+              alertCount: cActions.length,
+              openRepoIndex: diagrams.indexOf(cd),
+              nodeName: cd.repo,
+              nodePath: cd.github_url || cd.repo,
+            };
+          });
+        }
+      }
+
+      // Otherwise parse nodes from item.diagram
+      const lines = (item.diagram || '').split('\\n');
+      const cards = [];
+      const seen = new Set();
+      const nodeRegex = /([A-Za-z0-9_-]+)\\["([^"]+)"\\]/g;
+      for (const line of lines) {
+        let m;
+        while ((m = nodeRegex.exec(line)) !== null) {
+          const nid = m[1];
+          const rawLabel = m[2].replace(/\\\\n/g, '<br/>');
+          const parts = rawLabel.split(/<br\\s*\\/?>/i).map(s => s.trim()).filter(Boolean);
+          const title = parts[0] || nid;
+          const subtitle = parts.slice(1).join(' · ') || 'Component';
+          if (seen.has(title)) continue;
+          seen.add(title);
+
+          const specKey = Object.keys(techSpecs).find(k =>
+            k.toLowerCase() === nid.toLowerCase() ||
+            k.toLowerCase() === title.toLowerCase() ||
+            title.toLowerCase().includes(k.toLowerCase())
+          );
+          const specObj = specKey ? techSpecs[specKey] : null;
+          const hasAlert = actionItems.some(a =>
+            (a.target_node && title.toLowerCase().includes(a.target_node.toLowerCase())) ||
+            (a.file && subtitle.toLowerCase().includes(a.file.split(':')[0].toLowerCase()))
+          );
+          cards.push({
+            title,
+            subtitle,
+            desc: (specObj && specObj.desc) ? specObj.desc : (isEn
+              ? `Handles ${title} responsibilities within ${item.repo}.`
+              : `${item.repo} の中で「${title}」の役割を担当する部品です。クリックすると右側に詳しい解説が表示されます。`),
+            alertCount: hasAlert ? 1 : 0,
+            openRepoIndex: -1,
+            nodeName: title,
+            nodePath: subtitle,
+            specObj,
+          });
+        }
+      }
+      return cards;
+    }
+
+    function renderRepoSummaryHero(item) {
+      const hero = document.getElementById('repo-summary-hero');
+      if (!hero || !item) return;
+      const isEn = currentLang === 'en';
+      const actionItems = getRepoActionItems(item);
+      const alertCount = actionItems.length;
+      const diagIdx = diagrams.indexOf(item);
+      const isArch = currentViewMode === 'arch';
+      const subView = getEffectiveArchSubView(item);
+
+      const statusBadgeHtml = alertCount === 0
+        ? `<span style="background: rgba(16, 185, 129, 0.16); border: 1.5px solid #10b981; color: #34d399; padding: 5px 12px; border-radius: 9999px; font-size: 0.8rem; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
+             <span>🟢</span>
+             <span>${isEn ? 'Safe (No Urgent Alerts)' : '安全（緊急の問題なし）'}</span>
+           </span>`
+        : `<button type="button" onclick="showActionModalForRepo(event, ${diagIdx})" style="background: rgba(239, 68, 68, 0.18); border: 1.5px solid #ef4444; color: #fecaca; padding: 5px 13px; border-radius: 9999px; font-size: 0.8rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 10px rgba(239, 68, 68, 0.25);">
+             <span>🚨</span>
+             <span>${isEn ? `${alertCount} Action Items (Click to View)` : `要確認 ${alertCount}件（クリックして理由と対策を見る ↗）`}</span>
+           </button>`;
+
+      hero.innerHTML = `
+        <div class="hero-left-info">
+          <div class="hero-title-row">
+            <h2 class="hero-repo-title">📦 ${escapeHtml(item.repo)}</h2>
+            ${statusBadgeHtml}
+            <a href="${item.github_url}" target="_blank" class="gh-link-btn" style="font-size: 0.75rem; padding: 4px 10px;">
+              ${isEn ? 'Open GitHub ↗' : 'GitHubを開く ↗'}
+            </a>
+          </div>
+          <div class="hero-repo-desc">
+            ${escapeHtml(item.description || (isEn ? 'Select any card below to inspect its role and safety.' : '下のカードをクリックすると、それぞれの役割と安全性が右側にわかりやすく表示されます。'))}
+          </div>
+        </div>
+        ${isArch ? `
+          <div class="hero-right-controls">
+            <div class="subview-toggle-group" role="tablist">
+              <button type="button" class="subview-btn ${subView === 'cards' ? 'active' : ''}" id="subview-btn-cards" onclick="setArchSubView('cards')">
+                <span>🗂️</span>
+                <span>${isEn ? 'Card List (Easy Read)' : 'カード一覧で見る（おすすめ）'}</span>
+              </button>
+              <button type="button" class="subview-btn ${subView === 'diagram' ? 'active' : ''}" id="subview-btn-diagram" onclick="setArchSubView('diagram')">
+                <span>🗺️</span>
+                <span>${isEn ? 'Flow Diagram' : 'つながり図で見る（フロー図）'}</span>
+              </button>
+            </div>
+          </div>
+        ` : ''}
+      `;
+    }
+
+    let currentVisualCards = [];
+
+    function renderVisualCardsOverlay(item) {
+      const overlay = document.getElementById('visual-cards-overlay');
+      if (!overlay || !item) return;
+      const isEn = currentLang === 'en';
+      currentVisualCards = parseDiagramNodesForCards(item);
+
+      const headerTitle = item.is_root
+        ? (isEn ? `🏢 Repositories in ${item.repo} (${currentVisualCards.length})` : `🏢 このグループに含まれるアプリ・リポジトリ一覧（${currentVisualCards.length}件）`)
+        : (isEn ? `🧩 Main Building Blocks of ${item.repo} (${currentVisualCards.length})` : `🧩 「${item.repo}」を構成する主な機能パーツ（${currentVisualCards.length}個）`);
+
+      const headerHint = item.is_root
+        ? (isEn ? 'Click any card to view its plain-language summary on the right, or click [Open App] to inspect its internal structure.' : '💡 気になるカードをクリックすると右側に解説が出ます。「📂 このアプリを開く」を押すとそのアプリの内部構成へ移動します。')
+        : (isEn ? 'Click any card below to see what it does and check its security on the right pane.' : '💡 気になるパーツをクリックすると、右側に「何をする部分か」「安全か」がわかりやすく表示されます。');
+
+      overlay.innerHTML = `
+        <div class="visual-cards-header">
+          <div>
+            <div style="font-size: 1rem; font-weight: 800; color: #f8fafc;">${escapeHtml(headerTitle)}</div>
+            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 3px;">${escapeHtml(headerHint)}</div>
+          </div>
+        </div>
+        <div class="visual-cards-grid">
+          ${currentVisualCards.map((c, idx) => `
+            <div class="visual-node-card ${c.alertCount > 0 ? 'has-alert' : ''}" id="visual-card-${idx}" onclick="handleVisualCardClick(${idx})">
+              <div>
+                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+                  <div style="font-size: 0.96rem; font-weight: 800; color: #f8fafc; line-height: 1.35; word-break: break-word;">
+                    ${c.openRepoIndex !== -1 ? '📦 ' : '🧩 '}${escapeHtml(c.title)}
+                  </div>
+                  ${c.alertCount > 0
+                    ? `<span class="sec-legend-badge sec-legend-red" style="flex-shrink: 0; font-size: 0.68rem;">${isEn ? `🔴 ${c.alertCount} Alert` : `🔴 要確認`}</span>`
+                    : `<span class="sec-legend-badge sec-legend-green" style="flex-shrink: 0; font-size: 0.68rem;">${isEn ? '🟢 Safe' : '🟢 安全'}</span>`}
+                </div>
+                <div style="font-size: 0.74rem; color: #38bdf8; font-weight: 700; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace;">
+                  ${escapeHtml(c.subtitle)}
+                </div>
+                <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                  ${escapeHtml(c.desc)}
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid rgba(51, 65, 85, 0.5);">
+                <span style="font-size: 0.75rem; color: #93c5fd; font-weight: 700;">
+                  ${isEn ? '👉 Show explanation on right' : '👉 右側に解説を表示'}
+                </span>
+                ${c.openRepoIndex !== -1 ? `
+                  <button type="button" class="table-view-btn" onclick="event.stopPropagation(); selectDiagram(${c.openRepoIndex});" style="background: #2563eb; color: #fff; border-color: #60a5fa; font-size: 0.74rem; padding: 4px 10px;">
+                    ${isEn ? '📂 Open App ➔' : '📂 このアプリを開く ➔'}
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function handleVisualCardClick(cardIdx) {
+      const c = currentVisualCards[cardIdx];
+      if (!c || !selectedDiagram) return;
+      document.querySelectorAll('.visual-node-card').forEach((el, i) => {
+        el.classList.toggle('selected', i === cardIdx);
+      });
+      if (c.openRepoIndex !== -1 && diagrams[c.openRepoIndex]) {
+        const targetRepo = diagrams[c.openRepoIndex];
+        selectRepoRootInspector(targetRepo);
+        return;
+      }
+      const isEn = currentLang === 'en';
+      selectedNodeData = {
+        name: c.nodeName,
+        path: c.nodePath,
+        repoItem: selectedDiagram,
+        spec: c.specObj || {
+          title: c.nodeName,
+          category: c.subtitle || 'Application Component',
+          tech: c.subtitle || 'Module',
+          desc: c.desc,
+          steps: [
+            isEn ? 'Validates incoming requests and parameters' : '入力データやリクエストの受け取り・チェック',
+            isEn ? 'Executes core feature logic safely' : 'メイン機能の処理とデータ連携の実行',
+            isEn ? 'Returns structured output and handles errors' : '処理結果の返却とエラー時の安全な保護',
+          ],
+          files: [c.nodePath]
+        }
+      };
+      renderInspector();
+    }
+
     async function selectDiagram(index) {
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
       const activeEl = document.getElementById('nav-item-' + index);
@@ -7505,14 +8012,23 @@ def build_portal_html(data, is_shareable=False):
       selectedDiagram = item;
       currentRepoSeqIndex = 0; // Reset seq index for the newly selected repo
       updateHeaderBreadcrumbs();
+      renderRepoSummaryHero(item);
+      renderVisualCardsOverlay(item);
 
       if (currentViewMode === 'seq') {
+        const overlay = document.getElementById('visual-cards-overlay');
+        if (overlay) overlay.style.display = 'none';
         renderCurrentRepoSequence();
         return;
       } else if (currentViewMode === 'coderabbit') {
+        const overlay = document.getElementById('visual-cards-overlay');
+        if (overlay) overlay.style.display = 'none';
         renderCodeRabbitView();
         return;
       }
+
+      setArchSubView(getEffectiveArchSubView(item));
+
       viewTitle.textContent = `${item.repo}`;
       const itemOwner = item.owner || (item.repo && item.repo.includes('/') ? item.repo.split('/')[0] : 'RepoCHK Mac');
       viewBreadcrumb.textContent = `${itemOwner} / ${item.category} / ${item.perspective}`;
@@ -7532,9 +8048,8 @@ def build_portal_html(data, is_shareable=False):
         </div>
       `;
 
-      inspEmpty.style.display = 'flex';
-      inspContent.style.display = 'none';
-      selectedNodeData = null;
+      // Immediately show this repository's plain-language summary in the right pane!
+      selectRepoRootInspector(item);
 
       safeDestroyPanZoom();
 
@@ -8311,12 +8826,12 @@ def build_portal_html(data, is_shareable=False):
 
           if (isSimple) {
             tabBody = `
-              ${simpleBannerHtml}
               ${execScoreCardHtml}
-              ${execReportBtnHtml}
-              ${repoContextHtml}
-              ${inspCardResp}
               ${actionAlertHtml}
+              ${inspCardResp}
+              ${repoContextHtml}
+              ${execReportBtnHtml}
+              ${simpleBannerHtml}
             `;
           } else {
             tabBody = `
@@ -9067,18 +9582,26 @@ def build_portal_html(data, is_shareable=False):
         renderDiagram(selectedDiagram);
       } else if (mode === 'seq') {
         if (btnSeq) btnSeq.classList.add('active');
+        const overlay = document.getElementById('visual-cards-overlay');
+        if (overlay) overlay.style.display = 'none';
+        const dock = document.getElementById('canvas-floating-dock');
+        if (dock) dock.style.display = 'flex';
         if (seqBar) seqBar.style.display = 'none';
         if (wtPanel) wtPanel.style.display = 'flex';
         if (canvasContainer) canvasContainer.style.display = 'block';
         if (crView) crView.style.display = 'none';
+        if (selectedDiagram) renderRepoSummaryHero(selectedDiagram);
         renderCurrentRepoSequence();
       } else if (mode === 'coderabbit') {
         if (btnCr) btnCr.classList.add('active');
         safeDestroyPanZoom();
+        const overlay = document.getElementById('visual-cards-overlay');
+        if (overlay) overlay.style.display = 'none';
         if (seqBar) seqBar.style.display = 'none';
         if (wtPanel) wtPanel.style.display = 'none';
         if (canvasContainer) canvasContainer.style.display = 'none';
         if (crView) crView.style.display = 'block';
+        if (selectedDiagram) renderRepoSummaryHero(selectedDiagram);
         renderCodeRabbitView();
       }
       updateHeaderBreadcrumbs();
@@ -9414,9 +9937,6 @@ def build_portal_html(data, is_shareable=False):
       const actionItems = getRepoActionItems(repoItem);
 
       if (actionItems.length === 0) {
-        if (candidateNodes.length > 0) {
-          setTimeout(() => candidateNodes[0].dispatchEvent(new MouseEvent('click', { bubbles: true })), 80);
-        }
         return;
       }
 
@@ -9470,26 +9990,20 @@ def build_portal_html(data, is_shareable=False):
           if (bbox && bbox.width > 10 && !node.querySelector('.svg-action-pill')) {
             const badgeG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             badgeG.setAttribute('class', 'svg-action-pill');
-            const pillW = 126;
-            const pillH = 22;
-            const pillX = bbox.x + (bbox.width / 2) - (pillW / 2);
-            const pillY = bbox.y - pillH - 6;
+            const pillW = 28;
+            const pillH = 18;
+            const pillX = bbox.x + bbox.width - (pillW / 2) - 4;
+            const pillY = bbox.y - (pillH / 2);
             badgeG.innerHTML = `
-              <rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="11" fill="#ef4444" stroke="#ffffff" stroke-width="1.5"></rect>
-              <text x="${bbox.x + (bbox.width / 2)}" y="${pillY + 15}" fill="#ffffff" font-size="11" font-weight="800" text-anchor="middle" style="font-family: sans-serif; pointer-events: none;">
-                🚨 要対応 (Click!)
+              <rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="9" fill="#ef4444" stroke="#ffffff" stroke-width="1.2"></rect>
+              <text x="${pillX + (pillW / 2)}" y="${pillY + 13}" fill="#ffffff" font-size="10" font-weight="800" text-anchor="middle" style="font-family: sans-serif; pointer-events: none;">
+                🚨
               </text>
             `;
             node.appendChild(badgeG);
           }
         } catch (e) {}
       });
-
-      if (matchedNodes.length > 0) {
-        setTimeout(() => {
-          matchedNodes[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        }, 100);
-      }
     }
 
     function triggerClickOnFirstActionNode() {
@@ -10548,9 +11062,11 @@ def build_portal_html(data, is_shareable=False):
 
     function initUiMode() {
       try {
-        const saved = localStorage.getItem('repochex_ui_mode');
+        const saved = localStorage.getItem('repochex_ui_mode_v2');
         if (saved === 'dev' || saved === 'simple') {
           currentUiMode = saved;
+        } else {
+          currentUiMode = 'simple';
         }
       } catch (_) {}
       applyUiMode(currentUiMode, false);
@@ -10560,6 +11076,7 @@ def build_portal_html(data, is_shareable=False):
       if (mode !== 'simple' && mode !== 'dev') return;
       currentUiMode = mode;
       try {
+        localStorage.setItem('repochex_ui_mode_v2', mode);
         localStorage.setItem('repochex_ui_mode', mode);
       } catch (_) {}
       applyUiMode(mode, true);
@@ -10830,6 +11347,10 @@ def build_portal_html(data, is_shareable=False):
       // Re-render currently selected inspector node if open
       if (typeof selectedNodeData !== 'undefined' && selectedNodeData) {
         renderInspector();
+      }
+      if (typeof selectedDiagram !== 'undefined' && selectedDiagram) {
+        if (typeof renderRepoSummaryHero === 'function') renderRepoSummaryHero(selectedDiagram);
+        if (typeof renderVisualCardsOverlay === 'function') renderVisualCardsOverlay(selectedDiagram);
       }
       updateHeaderBreadcrumbs();
 
