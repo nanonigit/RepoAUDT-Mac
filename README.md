@@ -1,37 +1,73 @@
-# RepoAUDT Mac — GitHub Architecture & CodeRabbit AI Studio for macOS
+# RepoAUDT Mac
 
-`AUDT` stands for **Audit**.
+**English** | [日本語](README.ja.md)
 
-GitHubのURL（`https://github.com/owner/repo` または `owner/repo`）を入力するだけで、あらゆるリポジトリのソースコード構造を自動解析し、インタラクティブな構成図・シーケンス図・CodeRabbit風AIコード監査・要対応（脆弱性・バグ・改善提案）の可視化を行うネイティブ macOS アプリケーションです。
+RepoAUDT Mac is a native macOS app for inspecting GitHub repositories, visualizing their architecture, and reviewing security and code-quality findings. **AUDT** stands for **Audit**.
 
-## 主な機能
+Enter a GitHub repository URL or `owner/repo`, analyze the code, and inspect findings alongside architecture and sequence diagrams. Private repositories require access through your local GitHub / Git credentials. Findings and suggested fixes require review; zero findings do not establish that a repository is safe.
 
-1. **任意の GitHub URL からワンクリック自動解析**
-   - Public / Private リポジトリ対応（ローカルの `gh` / `git` 認証と自動連携）
-   - ディレクトリ構造・エントリポイント・モジュール依存関係から **Mermaid 構成図 (`flowchart LR`)** と **シーケンス図 (`sequenceDiagram`)** を自動生成
-2. **CodeRabbit スタイル AI コード監査 & 要対応 (`🔴 要対応`) ハイライト**
-   - 依存パッケージの既知脆弱性 (CVE)・バージョン遅延の自動検出
-   - ソースコードの静的解析（例外処理漏れ、タイムアウト未設定、リソース解放漏れ、ハードコードされた設定、肥大化モジュール等）
-   - **図上の対象コンポーネントを赤枠＋`🚨 要対応 (Click!)` バッジで自動ハイライト**
-   - クリックすると右ペイン（および専用モーダル）に **「⚠️ 要対応の理由」** と **「🛠️ 対応方法の提案（Diffパッチ＆コピー可能な修正コマンド）」** を即座に表示
-3. **兄弟アプリと共通の操作体系**
-   - 標準サイドバー、検索、ツールバー、必要時に開く詳細、日英切替
-   - 保存済みリポジトリのダッシュボード、監査結果、構成図、実行フロー
-   - ライト／ダーク対応。青は操作、赤は重大、橙は注意、緑は確認済み成功という意味を共有
-4. **AI 接続**
-   - OpenAI / Claude / Gemini / Groq の既存監査連携とネイティブ設定画面
-   - ローカルの OpenAI 互換 API に対応。接続先 URL とモデル名を設定して接続テスト
-5. **MCP サーバーとクライアント**
-   - 既存の7ツールを stdio / ローカル HTTP で提供
-   - 外部サーバーへ stdio / HTTP で接続し、ツール一覧・引数・実行結果を確認
-   - ツールの実行は明示操作。接続設定変更時は取得済みツールをリセット
+## Features
 
-配色の根拠と検証範囲は [色の設計](docs/ui-redesign/colors.md)、実装・実機確認の記録は [検証記録](docs/ui-redesign/verification.md) を参照してください。
+- **Repository workspace:** saved-repository dashboard, search, audit results, architecture diagrams, and execution flows.
+- **Code audits:** static-analysis findings, dependency vulnerability checks, evidence, affected components, and remediation suggestions where available. Copy fix prompts and save reports for review.
+- **Native navigation:** a macOS sidebar and toolbar, optional detail inspector, and Japanese / English switching, aligned with NetworkPNTR Mac and NetworkISPR Mac.
+- **Consistent colors:** light and dark appearances share semantic roles. Blue identifies actions and selection, red marks serious findings or failures, amber indicates caution, and green denotes confirmed success. Labels and symbols accompany severity colors.
+- **Cloud AI:** settings and connection tests for OpenAI, Claude, Gemini, and Groq, using the existing audit integrations.
+- **Local LLM:** connect to a loopback OpenAI-compatible API using its base URL and model identifier. An API key is optional.
+- **MCP server:** seven tools for repository listings, architecture, security reports, repository analysis, snippet scanning, CycloneDX SBOM export, and SARIF export, available over stdio or local HTTP.
+- **MCP client:** connect to stdio or HTTP servers, inspect tool schemas, enter JSON arguments, and explicitly run tools.
 
-## ビルドとインストール
+## Requirements
+
+- Apple Silicon Mac running macOS 14 or later; the build script currently targets `arm64`.
+- Xcode Command Line Tools with `swiftc`.
+- Python 3, installed at `/opt/homebrew/bin/python3`, `/usr/local/bin/python3`, or `/usr/bin/python3`.
+- Git and appropriate GitHub credentials for repositories you want to analyze. The analyzer can use local `gh` / Git authentication.
+- Internet access for GitHub, vulnerability lookups, and cloud AI when those features are used. Local inference requires a separately running compatible model server.
+
+## Build and install
 
 ```bash
 ./build.sh --install
 ```
 
-ビルド完了後、`/Applications/RepoAUDT Mac.app` にインストールされます。
+The app is installed at `/Applications/RepoAUDT Mac.app`.
+
+To build a bundle in the repository without installing it:
+
+```bash
+./build.sh --no-install
+```
+
+## Getting started
+
+1. Open RepoAUDT Mac and choose **Add Repository**.
+2. Enter a GitHub URL or `owner/repo`, then start analysis.
+3. Select a repository and open audit results, architecture, or execution flows from the sidebar. Open details when needed.
+4. Configure a provider in **AI Connections** to use AI analysis. For local inference, enter the base URL and the exact model identifier exposed by your server, then save and test.
+5. Open **MCP** to copy the app's server configuration or configure an external server as a client. Review tool arguments before running a tool.
+
+Saved analysis belongs to the recorded commit and can become outdated. Run analysis again to inspect newer code.
+
+## Verification and current scope
+
+```bash
+python3 tests/e2e/run_all_tests.py
+python3 -m unittest discover -s tests/connections -v
+python3 -m unittest discover -s tests/ui -v
+```
+
+The documented verification run passed 197 existing tests, 8 connection tests, and 3 palette tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
+
+Local LLM requests were verified with a mock HTTP server; a live Ollama / LM Studio model was not tested. MCP tool discovery and snippet scanning were also checked in the installed app. The complete PR submission, progress tracking, and fix-verification workflow remains outside this delivery's completed scope.
+
+## Design and implementation notes
+
+The following implementation documents are currently in Japanese:
+
+- [UI requirements](docs/ui-redesign/requirements.md)
+- [UI design](docs/ui-redesign/design.md)
+- [Color roles, references, and contrast checks](docs/ui-redesign/colors.md)
+- [Verification record](docs/ui-redesign/verification.md)
+
+When features, setup instructions, or verification scope change, update both this English README and [the Japanese README](README.ja.md) together.

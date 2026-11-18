@@ -71,3 +71,7 @@ When tasked with features, improvements, or refactorings in a Remote Agent cloud
 2. Always preserve the bilingual support (`I18N` dictionaries in `portal_builder.py`).
 3. When modifying the UI or backend analysis logic, regenerate the portal HTML and ensure no syntax or execution errors occur.
 4. Keep commit messages clear, descriptive, and pushed directly to `main` or a feature branch for user review.
+
+## README maintenance
+
+Update `README.md` (English) and `README.ja.md` (Japanese) together whenever features, setup instructions, or verification scope change. Keep their content aligned and retain reciprocal language links.
