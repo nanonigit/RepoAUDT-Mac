@@ -17,6 +17,7 @@ import shutil
 import sys
 import urllib.error
 import urllib.request
+from connection_utils import validate_endpoint, open_endpoint
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,7 +32,7 @@ def get_app_support_dir() -> Path:
         xdg = os.environ.get("XDG_CONFIG_HOME")
         base = Path(xdg) if xdg else Path.home() / ".config"
         legacy_bases = [base / "RepoChex", base / "RepoChecker"]
-    app_dir = base / "RepoCHK Mac"
+    app_dir = base / "RepoAUDT Mac"
     if not app_dir.exists():
         for old_dir in legacy_bases:
             if old_dir.exists():
@@ -39,7 +40,7 @@ def get_app_support_dir() -> Path:
                     shutil.copytree(old_dir, app_dir)
                     break
                 except Exception as e:
-                    print(f"Migration from {old_dir.name} to RepoCHK Mac notice: {e}", file=sys.stderr)
+                    print(f"Migration from {old_dir.name} to RepoAUDT Mac notice: {e}", file=sys.stderr)
     return app_dir
 
 
@@ -48,14 +49,17 @@ SETTINGS_FILE = APP_SUPPORT_DIR / "settings.json"
 
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
-    "active_provider": "auto",  # auto | openai | claude | gemini | groq
+    "local_base_url": "http://127.0.0.1:11434/v1",
+    "active_provider": "auto",  # auto | openai | claude | gemini | groq | local
     "keys": {
+        "local": "",
         "openai": "",
         "claude": "",
         "gemini": "",
         "groq": "",
     },
     "models": {
+        "local": "",
         "openai": "gpt-4o",
         "claude": "claude-3-7-sonnet-latest",
         "gemini": "gemini-2.5-flash",
@@ -75,7 +79,7 @@ def get_candidate_env_files() -> List[Path]:
     return [
         APP_SUPPORT_DIR / ".env",
         Path.cwd() / ".env",
-        Path.home() / ".config" / "RepoCHK Mac" / ".env",
+        Path.home() / ".config" / "RepoAUDT Mac" / ".env",
         Path.home() / ".config" / "RepoChex" / ".env",
     ]
 
@@ -88,6 +92,7 @@ def load_settings() -> Dict[str, Any]:
             saved = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
             if isinstance(saved, dict):
                 settings["active_provider"] = saved.get("active_provider", "auto")
+                settings["local_base_url"] = saved.get("local_base_url", DEFAULT_SETTINGS["local_base_url"])
                 if isinstance(saved.get("keys"), dict):
                     settings["keys"].update(saved["keys"])
                 if isinstance(saved.get("models"), dict):
@@ -131,10 +136,12 @@ def save_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
     current = load_settings()
     if "active_provider" in payload:
         prov_val = str(payload["active_provider"]).strip()
-        if prov_val in ("auto", "openai", "claude", "gemini", "groq"):
+        if prov_val in ("auto", "openai", "claude", "gemini", "groq", "local"):
             current["active_provider"] = prov_val
+    if "local_base_url" in payload:
+        current["local_base_url"] = validate_endpoint(payload["local_base_url"], local_only=True)
     if isinstance(payload.get("keys"), dict):
-        for k in ("openai", "claude", "gemini", "groq"):
+        for k in ("openai", "claude", "gemini", "groq", "local"):
             if k in payload["keys"]:
                 val = str(payload["keys"][k]).strip()
                 # Keep existing key if input was left blank or still contains masked ellipsis
@@ -170,12 +177,15 @@ def get_masked_settings(settings: Optional[Dict[str, Any]] = None) -> Dict[str, 
     s = settings or load_settings()
     masked_keys = {}
     configured_status = {}
-    for k in ("openai", "claude", "gemini", "groq"):
+    for k in ("openai", "claude", "gemini", "groq", "local"):
         raw = s["keys"].get(k, "")
         masked_keys[k] = mask_key(raw)
         configured_status[k] = bool(raw and len(raw) >= 8)
 
+    configured_status["local"] = bool(s.get("models", {}).get("local"))
+
     return {
+        "local_base_url": s.get("local_base_url", DEFAULT_SETTINGS["local_base_url"]),
         "active_provider": s.get("active_provider", "auto"),
         "keys_masked": masked_keys,
         "configured": configured_status,
@@ -214,7 +224,7 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
         req = urllib.request.Request(
             "https://api.osv.dev/v1/querybatch",
             data=req_body,
-            headers={"Content-Type": "application/json", "User-Agent": "RepoCHK-SecuritySkill"},
+            headers={"Content-Type": "application/json", "User-Agent": "RepoAUDT-SecuritySkill"},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
@@ -233,7 +243,7 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                             try:
                                 vreq = urllib.request.Request(
                                     f"https://api.osv.dev/v1/vulns/{vid}",
-                                    headers={"User-Agent": "RepoCHK-SecuritySkill"},
+                                    headers={"User-Agent": "RepoAUDT-SecuritySkill"},
                                 )
                                 with urllib.request.urlopen(vreq, timeout=4) as vresp:
                                     if getattr(vresp, "status", 200) == 200:
@@ -293,7 +303,7 @@ def enrich_advisories_with_epss(advisories: List[Dict[str, Any]]) -> List[Dict[s
     try:
         cve_param = ",".join(sorted(cve_to_indices.keys())[:30])
         url = f"https://api.first.org/data/v1/epss?cve={cve_param}"
-        req = urllib.request.Request(url, headers={"User-Agent": "RepoCHK-Mac-EPSS/1.2"})
+        req = urllib.request.Request(url, headers={"User-Agent": "RepoAUDT-Mac-EPSS/1.2"})
         with urllib.request.urlopen(req, timeout=5) as resp:
             if getattr(resp, "status", 200) == 200:
                 payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
@@ -1014,7 +1024,7 @@ def generate_cyclonedx_sbom(diagram_item: Dict[str, Any]) -> Dict[str, Any]:
         "version": 1,
         "metadata": {
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "tools": [{"vendor": "RepoCHK Mac", "name": "RepoCHK Mac Security & Architecture Studio", "version": "1.2.0"}],
+            "tools": [{"vendor": "RepoAUDT Mac", "name": "RepoAUDT Mac Security & Architecture Studio", "version": "1.2.0"}],
             "component": {
                 "type": "application",
                 "name": repo_name,
@@ -1045,7 +1055,7 @@ def generate_sarif_report(diagram_item: Dict[str, Any]) -> Dict[str, Any]:
     for idx, item in enumerate(action_items, start=1):
         if not isinstance(item, dict):
             continue
-        rule_id = str(item.get("cve") or f"REPOCHK-SAST-{idx:03d}")
+        rule_id = str(item.get("cve") or f"REPOAUDT-SAST-{idx:03d}")
         sev = str(item.get("severity") or "high").lower()
         sarif_level = "error" if sev in ("critical", "high") else ("warning" if sev == "medium" else "note")
         sec_score = "9.0" if sev == "critical" else ("7.5" if sev == "high" else "5.0")
@@ -1089,7 +1099,7 @@ def generate_sarif_report(diagram_item: Dict[str, Any]) -> Dict[str, Any]:
     for idx, adv in enumerate(advisories, start=1):
         if not isinstance(adv, dict):
             continue
-        rule_id = str(adv.get("cve") or f"REPOCHK-CVE-{idx:03d}")
+        rule_id = str(adv.get("cve") or f"REPOAUDT-CVE-{idx:03d}")
         if rule_id in seen_rules:
             continue
         seen_rules.add(rule_id)
@@ -1122,9 +1132,9 @@ def generate_sarif_report(diagram_item: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "tool": {
                     "driver": {
-                        "name": "RepoCHK Mac Security & SAST Engine",
+                        "name": "RepoAUDT Mac Security & SAST Engine",
                         "version": "1.2.0",
-                        "informationUri": "https://github.com/nanonigit/RepoCHK-Mac",
+                        "informationUri": "https://github.com/nanonigit/RepoAUDT-Mac",
                         "rules": rules,
                     }
                 },
@@ -1144,6 +1154,10 @@ def choose_active_llm(settings: Dict[str, Any]) -> Optional[Tuple[str, str, str]
     pref = settings.get("active_provider", "auto")
     keys = settings.get("keys", {})
     models = settings.get("models", DEFAULT_SETTINGS["models"])
+
+    if pref == "local":
+        model = str(models.get("local", "")).strip()
+        return ("local", keys.get("local", ""), model) if model else None
 
     order = [pref] if pref in ("openai", "claude", "gemini", "groq") else ["openai", "claude", "gemini", "groq"]
     for prov in order:
@@ -1168,6 +1182,25 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
     Supports next-gen / reasoning models (`gpt-6-luna`, `gpt-5.6-luna`, `gpt-6.1-sol`, `o3-mini`, etc.)
     which reject non-default `temperature` and require `max_completion_tokens` or `/v1/responses`.
     """
+    if provider == "local":
+        settings = load_settings()
+        base = validate_endpoint(settings.get("local_base_url", DEFAULT_SETTINGS["local_base_url"]), local_only=True)
+        if not model.strip():
+            raise ValueError("Enter the local model identifier first")
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = "Bearer " + api_key
+        request = urllib.request.Request(base + "/chat/completions", data=json.dumps({
+            "model": model, "stream": False,
+            "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+        }).encode(), headers=headers, method="POST")
+        with open_endpoint(request, timeout=120) as response:
+            result = json.loads(response.read(2 * 1024 * 1024))
+        text = result["choices"][0]["message"]["content"]
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("Local LLM returned an empty completion")
+        return text
+
     if provider in ("openai", "groq"):
         url = (
             "https://api.openai.com/v1/chat/completions"
@@ -1194,7 +1227,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
-                "User-Agent": "RepoCHK-Mac/1.0",
+                "User-Agent": "RepoAUDT-Mac/1.0",
             },
             method="POST",
         )
@@ -1218,7 +1251,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
                     headers={
                         "Content-Type": "application/json",
                         "Authorization": f"Bearer {api_key}",
-                        "User-Agent": "RepoCHK-Mac/1.0",
+                        "User-Agent": "RepoAUDT-Mac/1.0",
                     },
                     method="POST",
                 )
@@ -1242,7 +1275,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
                 "Content-Type": "application/json",
                 "x-api-key": api_key,
                 "anthropic-version": "2023-06-01",
-                "User-Agent": "RepoCHK-Mac/1.0",
+                "User-Agent": "RepoAUDT-Mac/1.0",
             },
             method="POST",
         )
@@ -1266,7 +1299,7 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
             headers={
                 "Content-Type": "application/json",
                 "x-goog-api-key": api_key,
-                "User-Agent": "RepoCHK-Mac/1.0",
+                "User-Agent": "RepoAUDT-Mac/1.0",
             },
             method="POST",
         )
@@ -1290,7 +1323,7 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
         idx = api_key.rfind("sk-")
         if idx > 0:
             api_key = api_key[idx:]
-    if not api_key:
+    if not api_key and provider != "local":
         return {"ok": False, "provider": provider, "error": f"{provider.upper()} の APIキーが未入力です。"}
 
     model = settings["models"].get(provider, DEFAULT_SETTINGS["models"].get(provider, ""))
@@ -1331,7 +1364,7 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
                     try:
                         mreq2 = urllib.request.Request(
                             "https://api.openai.com/v1/models",
-                            headers={"Authorization": f"Bearer {fallback_key}", "User-Agent": "RepoCHK-Mac/1.0"},
+                            headers={"Authorization": f"Bearer {fallback_key}", "User-Agent": "RepoAUDT-Mac/1.0"},
                         )
                         with urllib.request.urlopen(mreq2, timeout=12) as mresp2:
                             if mresp2.status == 200:

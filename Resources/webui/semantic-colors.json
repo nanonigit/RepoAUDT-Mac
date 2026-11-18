@@ -1,0 +1,20 @@
+{
+  "dark": {
+    "background": "#303030", "surface": "#262626", "raised": "#353535",
+    "border": "#808087", "text": "#f2f2f2", "muted": "#b8b8bd",
+    "action": "#0a61d8", "onAction": "#ffffff", "actionText": "#78b8ff", "selection": "#193b64",
+    "dangerText": "#ff9494", "dangerSurface": "#43272b",
+    "warningText": "#ffca80", "warningSurface": "#44351e",
+    "successText": "#83dba3", "successSurface": "#203d2c",
+    "infoText": "#91c4ff", "infoSurface": "#243a52"
+  },
+  "light": {
+    "background": "#f5f5f5", "surface": "#ffffff", "raised": "#ededed",
+    "border": "#76767d", "text": "#242424", "muted": "#606066",
+    "action": "#005cc8", "onAction": "#ffffff", "actionText": "#005cc8", "selection": "#e4efff",
+    "dangerText": "#a51d2d", "dangerSurface": "#fff0f1",
+    "warningText": "#8a4b00", "warningSurface": "#fff3df",
+    "successText": "#19723b", "successSurface": "#eafaee",
+    "infoText": "#005cc8", "infoSurface": "#eaf3ff"
+  }
+}

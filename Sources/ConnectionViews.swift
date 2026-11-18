@@ -1,0 +1,304 @@
+import AppKit
+import Foundation
+import SwiftUI
+
+@MainActor
+final class ConnectionStore: ObservableObject {
+    @Published var provider = "openai"
+    @Published var model = ""
+    @Published var key = ""
+    @Published var keyStatus = ""
+    @Published var localURL = "http://127.0.0.1:11434/v1"
+    @Published var transport = "stdio"
+    @Published var command = "/usr/bin/python3"
+    @Published var arguments = "[]"
+    @Published var endpoint = "http://127.0.0.1:18765/api/mcp"
+    @Published var tokenEnvironment = ""
+    @Published var tools: [MCPTool] = []
+    @Published var toolName = ""
+    @Published var toolArguments = "{}"
+    @Published var serverConfig = ""
+    @Published var feedback = ""
+    @Published var output = ""
+    @Published var busy = false
+    @Published var failed = false
+    private var settings: [String: Any] = [:]
+    var port = 18765
+
+    struct MCPTool: Identifiable {
+        let name: String
+        let description: String
+        let schema: String
+        var id: String { name }
+    }
+
+    func request(_ path: String, body: [String: Any]? = nil) async throws -> [String: Any] {
+        guard let url = URL(string: "http://127.0.0.1:\(port)\(path)") else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 150
+        if let body {
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NSError(domain: "RepoAUDT", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid response from local engine"])
+        }
+        if (response as? HTTPURLResponse)?.statusCode != 200 || json["ok"] as? Bool == false {
+            throw NSError(domain: "RepoAUDT", code: 2, userInfo: [NSLocalizedDescriptionKey: json["error"] as? String ?? "Connection request failed"])
+        }
+        return json
+    }
+
+    func run(_ work: @escaping () async throws -> Void) {
+        guard !busy else { return }
+        busy = true
+        feedback = ""
+        failed = false
+        Task {
+            defer { busy = false }
+            do { try await work() }
+            catch { failed = true; feedback = error.localizedDescription }
+        }
+    }
+
+    func selectProvider() {
+        let models = settings["models"] as? [String: String] ?? [:]
+        model = models[provider] ?? ""
+        let configured = settings["configured"] as? [String: Bool] ?? [:]
+        keyStatus = configured[provider] == true ? ((settings["keys_masked"] as? [String: String])?[provider] ?? "") : ""
+        key = ""
+        feedback = ""
+    }
+
+    func loadAI() {
+        run {
+            self.settings = try await self.request("/api/settings")
+            let active = self.settings["active_provider"] as? String ?? "auto"
+            self.provider = active == "auto" ? "openai" : active
+            self.localURL = self.settings["local_base_url"] as? String ?? self.localURL
+            self.selectProvider()
+        }
+    }
+
+    func saveAI(test: Bool, english: Bool) {
+        run {
+            let body: [String: Any] = ["active_provider": self.provider,
+                                       "models": [self.provider: self.model],
+                                       "keys": [self.provider: self.key],
+                                       "local_base_url": self.localURL]
+            let saved = try await self.request("/api/settings", body: body)
+            self.settings = saved["settings"] as? [String: Any] ?? self.settings
+            self.selectProvider()
+            if test {
+                let result = try await self.request("/api/test-llm", body: ["provider": self.provider])
+                self.feedback = english ? "Inference test succeeded using \(result["model"] as? String ?? self.model)." :
+                    "\(result["model"] as? String ?? self.model) の推論テストが成功しました。"
+            } else {
+                self.feedback = english ? "Saved. Future AI audits use this provider." : "保存しました。次の AI 監査からこの接続先を使用します。"
+            }
+        }
+    }
+
+    func mcpConfig() throws -> [String: Any] {
+        guard let data = arguments.data(using: .utf8),
+              let args = try JSONSerialization.jsonObject(with: data) as? [String] else {
+            throw NSError(domain: "RepoAUDT", code: 3, userInfo: [NSLocalizedDescriptionKey: "Arguments must be a JSON array of strings"])
+        }
+        return ["transport": transport, "command": command, "args": args, "url": endpoint, "token_env": tokenEnvironment]
+    }
+
+    static func jsonText(_ value: Any) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys])
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func loadMCP() {
+        run {
+            let config = try await self.request("/api/connections/mcp")
+            self.transport = config["transport"] as? String ?? "stdio"
+            self.command = config["command"] as? String ?? self.command
+            self.arguments = try Self.jsonText(config["args"] ?? [])
+            self.endpoint = config["url"] as? String ?? self.endpoint
+            self.tokenEnvironment = config["token_env"] as? String ?? ""
+            let server = try await self.request("/api/mcp")
+            self.serverConfig = try Self.jsonText(server["client_config"] ?? [:])
+        }
+    }
+
+    func saveMCP(english: Bool) {
+        run {
+            _ = try await self.request("/api/connections/mcp", body: self.mcpConfig())
+            self.feedback = english ? "Connection settings saved." : "接続設定を保存しました。"
+        }
+    }
+
+    func testMCP(english: Bool) {
+        tools = []
+        output = ""
+        run {
+            let result = try await self.request("/api/connections/mcp/test", body: ["config": self.mcpConfig()])
+            let data = result["data"] as? [String: Any] ?? [:]
+            let list = (data["result"] as? [String: Any])?["tools"] as? [[String: Any]] ?? []
+            self.tools = try list.map { tool in
+                MCPTool(name: tool["name"] as? String ?? "", description: tool["description"] as? String ?? "",
+                        schema: try Self.jsonText(tool["inputSchema"] ?? [:]))
+            }
+            self.toolName = self.tools.first?.name ?? ""
+            let name = (data["serverInfo"] as? [String: Any])?["name"] as? String ?? "MCP"
+            self.feedback = english ? "Connected to \(name). \(self.tools.count) tools available." :
+                "\(name) に接続しました。\(self.tools.count)個のツールが利用できます。"
+        }
+    }
+
+    func callTool() {
+        run {
+            guard let data = self.toolArguments.data(using: .utf8),
+                  let args = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw NSError(domain: "RepoAUDT", code: 4, userInfo: [NSLocalizedDescriptionKey: "Tool arguments must be a JSON object"])
+            }
+            let result = try await self.request("/api/connections/mcp/call", body: [
+                "config": self.mcpConfig(), "params": ["name": self.toolName, "arguments": args]])
+            self.output = try Self.jsonText(result["data"] ?? [:])
+        }
+    }
+}
+
+struct AIConnectionView: View {
+    @StateObject private var store = ConnectionStore()
+    let english: Bool
+    let port: Int
+
+    var body: some View {
+        Form {
+            Section {
+                Text(english ? "Choose the AI used for repository audits." : "リポジトリ監査に使用する AI を選びます。")
+                    .foregroundStyle(.secondary)
+                Picker(english ? "Provider" : "接続先", selection: $store.provider) {
+                    Text("OpenAI").tag("openai")
+                    Text("Claude").tag("claude")
+                    Text("Gemini").tag("gemini")
+                    Text("Groq").tag("groq")
+                    Text(english ? "Local LLM" : "ローカル LLM").tag("local")
+                }
+                if store.provider == "local" {
+                    TextField(english ? "API base URL" : "API ベース URL", text: $store.localURL)
+                    Text(english ? "Ollama or LM Studio · OpenAI-compatible endpoint on this Mac." :
+                            "Ollama / LM Studio の OpenAI 互換エンドポイントを指定します。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                TextField(english ? "Model ID" : "モデル ID", text: $store.model)
+                SecureField(store.provider == "local" ? (english ? "Token (optional)" : "トークン（任意）") : "API Key", text: $store.key,
+                            prompt: Text(store.keyStatus.isEmpty ? "" : store.keyStatus))
+                Text(english ? "Leave the key blank to keep the saved value." : "キーを空欄にすると、保存済みの値を使用します。")
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text(english ? "AI connection" : "AI 接続")
+            }
+            Section {
+                HStack {
+                    Button(english ? "Save" : "保存") { store.saveAI(test: false, english: english) }
+                    Button(english ? "Save and test" : "保存して接続テスト") { store.saveAI(test: true, english: english) }
+                        .buttonStyle(.borderedProminent)
+                }
+                ConnectionFeedback(store: store)
+            }
+        }
+        .formStyle(.grouped)
+        .disabled(store.busy)
+        .onChange(of: store.provider) { _, _ in store.selectProvider() }
+        .task { store.port = port; store.loadAI() }
+    }
+}
+
+struct ConnectionFeedback: View {
+    @ObservedObject var store: ConnectionStore
+    var body: some View {
+        if store.busy { ProgressView().controlSize(.small) }
+        if !store.feedback.isEmpty {
+            Label(store.feedback, systemImage: store.failed ? "exclamationmark.octagon" : "checkmark.circle")
+                .foregroundStyle(SemanticColors.role(store.failed ? "dangerText" : "successText"))
+                .font(.callout).textSelection(.enabled)
+        }
+    }
+}
+
+struct MCPConnectionView: View {
+    @StateObject private var store = ConnectionStore()
+    @State private var tab = "server"
+    let english: Bool
+    let port: Int
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("MCP", selection: $tab) {
+                Text(english ? "Server" : "サーバー").tag("server")
+                Text(english ? "Client" : "クライアント").tag("client")
+            }.pickerStyle(.segmented).padding(24)
+            Form {
+                if tab == "server" {
+                    Section(english ? "Use RepoAUDT Mac from another app" : "他のアプリから RepoAUDT Mac を使う") {
+                        Text(english ? "Copy this stdio configuration into your MCP client." : "この stdio 設定を MCP クライアントに登録します。")
+                            .foregroundStyle(.secondary)
+                        Text(store.serverConfig.isEmpty ? "—" : store.serverConfig)
+                            .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                        Button(english ? "Copy configuration" : "設定をコピー") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(store.serverConfig, forType: .string)
+                        }.disabled(store.serverConfig.isEmpty)
+                        Text("HTTP JSON-RPC · http://127.0.0.1:\(String(port))/api/mcp")
+                            .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
+                } else {
+                    Section(english ? "Connect to an MCP server" : "外部 MCP サーバーへの接続") {
+                        Picker(english ? "Transport" : "接続方法", selection: $store.transport) {
+                            Text("stdio").tag("stdio")
+                            Text("Streamable HTTP").tag("http")
+                        }
+                        if store.transport == "stdio" {
+                            TextField(english ? "Executable" : "実行ファイル", text: $store.command)
+                            TextField(english ? "Arguments (JSON array)" : "引数（JSON 配列）", text: $store.arguments, axis: .vertical)
+                                .font(.system(.body, design: .monospaced))
+                        } else {
+                            TextField("URL", text: $store.endpoint)
+                            TextField(english ? "Token environment variable" : "トークンの環境変数名", text: $store.tokenEnvironment)
+                        }
+                        HStack {
+                            Button(english ? "Save" : "保存") { store.saveMCP(english: english) }
+                            Button(english ? "Connect and list tools" : "接続してツールを取得") { store.testMCP(english: english) }
+                                .buttonStyle(.borderedProminent)
+                        }
+                    }
+                    if !store.tools.isEmpty {
+                        Section(english ? "Tool execution" : "ツール実行") {
+                            Picker(english ? "Tool" : "ツール", selection: $store.toolName) {
+                                ForEach(store.tools) { Text($0.name).tag($0.name) }
+                            }
+                            if let tool = store.tools.first(where: { $0.name == store.toolName }) {
+                                Text(tool.description).font(.caption).foregroundStyle(.secondary)
+                                DisclosureGroup(english ? "Input schema" : "入力スキーマ") {
+                                    Text(tool.schema).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                                }
+                            }
+                            TextField(english ? "Arguments (JSON object)" : "引数（JSON オブジェクト）", text: $store.toolArguments, axis: .vertical)
+                                .font(.system(.body, design: .monospaced))
+                            Button(english ? "Run tool" : "ツールを実行") { store.callTool() }
+                            if !store.output.isEmpty {
+                                Text(store.output).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                            }
+                        }
+                    }
+                }
+                Section { ConnectionFeedback(store: store) }
+            }.formStyle(.grouped)
+        }
+        .disabled(store.busy)
+        .onChange(of: store.transport) { _, _ in store.tools = []; store.output = "" }
+        .onChange(of: store.command) { _, _ in store.tools = [] }
+        .onChange(of: store.arguments) { _, _ in store.tools = [] }
+        .onChange(of: store.endpoint) { _, _ in store.tools = [] }
+        .onChange(of: store.tokenEnvironment) { _, _ in store.tools = [] }
+        .task { store.port = port; store.loadMCP() }
+    }
+}

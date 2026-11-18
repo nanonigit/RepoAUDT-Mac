@@ -40,7 +40,7 @@ final class BackendServerManager: ObservableObject {
         let chosenPython = pythonCandidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/python3"
 
         proc.executableURL = URL(fileURLWithPath: chosenPython)
-        proc.arguments = [scriptPath]
+        proc.arguments = ["-B", scriptPath]
 
         var env = ProcessInfo.processInfo.environment
         let extraPaths = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
@@ -49,7 +49,7 @@ final class BackendServerManager: ObservableObject {
         } else {
             env["PATH"] = extraPaths
         }
-        env["REPOCHK_PORT"] = String(port)
+        env["REPOAUDT_PORT"] = String(port)
         env["REPOCHEX_PORT"] = String(port)
         env["REPOCHECKER_PORT"] = String(port)
         env["PYTHONUNBUFFERED"] = "1"
@@ -74,7 +74,7 @@ final class BackendServerManager: ObservableObject {
             try proc.run()
             self.serverProcess = proc
         } catch {
-            NSLog("Failed to start RepoCHK Mac backend server: \(error)")
+            NSLog("Failed to start RepoAUDT Mac backend server: \(error)")
         }
 
         Task {
@@ -118,7 +118,75 @@ final class BackendServerManager: ObservableObject {
 }
 
 @MainActor
-final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+final class WebViewCoordinator: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    @Published var page: WorkspacePage = .dashboard
+    @Published private(set) var repositories: [WorkspaceRepository] = []
+    @Published private(set) var ready = false
+    @Published private(set) var loadError: String?
+    var language = "ja"
+    private var pageLoaded = false
+
+    func send(_ command: String, value: String = "") {
+        guard pageLoaded else { return }
+        let script = """
+        const previous = window.nativeWorkspaceQueue || Promise.resolve();
+        const task = previous.catch(() => {}).then(() => nativeWorkspaceCommand(command, value));
+        window.nativeWorkspaceQueue = task;
+        await task;
+        return null;
+        """
+        self.webView?.callAsyncJavaScript(script, arguments: ["command": command, "value": value],
+                                    in: nil, in: .page) { [weak self] result in
+            if case .failure(let error) = result {
+                self?.loadError = (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription
+                self?.ready = false
+            }
+        }
+    }
+
+    func reload() {
+        loadError = nil
+        ready = false
+        pageLoaded = false
+        webView?.reload()
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "workspace", message.frameInfo.isMainFrame,
+              message.frameInfo.request.url?.host == "127.0.0.1",
+              let data = try? JSONSerialization.data(withJSONObject: message.body),
+              let snapshot = try? JSONDecoder().decode(WorkspaceSnapshot.self, from: data) else { return }
+        // Keep a single sidebar row for each saved repository.
+        var seen = Set<String>()
+        repositories = snapshot.repositories.filter { seen.insert($0.id).inserted }
+        if ![WorkspacePage.dashboard, .ai, .mcp].contains(page), let mode = snapshot.page {
+            switch mode {
+            case "arch": page = .architecture
+            case "seq": page = .sequence
+            case "coderabbit": page = .audit
+            default: break
+            }
+        }
+        ready = true
+        loadError = nil
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        pageLoaded = true
+        send("language", value: language)
+        send("page", value: page.command)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        ready = false
+        loadError = error.localizedDescription
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        ready = false
+        loadError = error.localizedDescription
+    }
+
     weak var webView: WKWebView?
 
     func webView(
@@ -158,7 +226,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         completionHandler: @escaping () -> Void
     ) {
         let alert = NSAlert()
-        alert.messageText = "RepoCHK Mac"
+        alert.messageText = "RepoAUDT Mac"
         alert.informativeText = message
         alert.addButton(withTitle: "OK")
         alert.runModal()
@@ -172,7 +240,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         completionHandler: @escaping (Bool) -> Void
     ) {
         let alert = NSAlert()
-        alert.messageText = "RepoCHK Mac"
+        alert.messageText = "RepoAUDT Mac"
         alert.informativeText = message
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "キャンセル")
@@ -188,6 +256,10 @@ struct PortalWebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        config.userContentController.add(coordinator, name: "workspace")
+        config.userContentController.addUserScript(WKUserScript(
+            source: "document.documentElement.classList.add('native-host')",
+            injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         let wv = WKWebView(frame: .zero, configuration: config)
         wv.navigationDelegate = coordinator
@@ -201,37 +273,11 @@ struct PortalWebView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 
-struct MainContentView: View {
-    @ObservedObject var backend = BackendServerManager.shared
-    let coordinator: WebViewCoordinator
-
-    var body: some View {
-        ZStack {
-            Color(red: 0.04, green: 0.06, blue: 0.11).ignoresSafeArea()
-            if backend.isReady, let url = URL(string: "http://127.0.0.1:\(backend.port)/index.html") {
-                PortalWebView(url: url, coordinator: coordinator)
-            } else {
-                VStack(spacing: 14) {
-                    ProgressView()
-                        .controlSize(.large)
-                    Text("RepoCHK Mac エンジンを起動中...")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.white)
-                    Text("ローカルCodeRabbit・脆弱性監査 (MCP/Skills) & Mermaid構成図エンジンを初期化しています")
-                        .font(.system(size: 12))
-                        .foregroundColor(.gray)
-                }
-            }
-        }
-    }
-}
-
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let coordinator = WebViewCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.appearance = NSAppearance(named: .darkAqua)
         NSApp.setActivationPolicy(.regular)
         if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
            let iconImg = NSImage(contentsOfFile: iconPath) {
@@ -251,35 +297,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct RepoCHKMacApp: App {
+struct RepoAUDTMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup("RepoCHK Mac — Architecture & Vulnerability AI Studio") {
+        WindowGroup("RepoAUDT Mac") {
             MainContentView(coordinator: appDelegate.coordinator)
-                .frame(minWidth: 1080, minHeight: 700)
-                .preferredColorScheme(.dark)
+                .frame(minWidth: 900, minHeight: 620)
         }
-        .defaultSize(width: 1480, height: 920)
+        .defaultSize(width: 1180, height: 800)
         .commands {
             TextEditingCommands()
             CommandGroup(replacing: .newItem) {
                 Button("GitHub URLを追加分析 / リスト管理...") {
-                    appDelegate.coordinator.webView?.evaluateJavaScript("openAnalyzeModal()", completionHandler: nil)
+                    appDelegate.coordinator.page = .audit
+                    appDelegate.coordinator.send("analyze")
                 }
                 .keyboardShortcut("n", modifiers: [.command])
 
                 Button("AI APIキー & 脆弱性監査設定 (管理画面)...") {
-                    appDelegate.coordinator.webView?.evaluateJavaScript("openAdminSettingsModal()", completionHandler: nil)
+                    appDelegate.coordinator.page = .audit
+                    appDelegate.coordinator.send("settings")
                 }
                 .keyboardShortcut(",", modifiers: [.command])
 
                 Button("要対応アラート一覧を表示") {
+                    appDelegate.coordinator.page = .audit
                     appDelegate.coordinator.webView?.evaluateJavaScript("openActionRequiredHubModal()", completionHandler: nil)
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
 
                 Button("死活監視モニターを開く") {
+                    appDelegate.coordinator.page = .audit
                     appDelegate.coordinator.webView?.evaluateJavaScript("openHealthModal()", completionHandler: nil)
                 }
                 .keyboardShortcut("h", modifiers: [.command, .shift])

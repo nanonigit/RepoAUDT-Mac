@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>ja_JP</string>
     <key>CFBundleExecutable</key>
-    <string>RepoCHK Mac</string>
+    <string>RepoAUDT Mac</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.naoki.RepoCHK-Mac</string>
+    <string>com.naoki.RepoAUDT-Mac</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>RepoCHK Mac</string>
+    <string>RepoAUDT Mac</string>
     <key>CFBundleDisplayName</key>
-    <string>RepoCHK Mac - Architecture &amp; Vulnerability AI Studio</string>
+    <string>RepoAUDT Mac</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

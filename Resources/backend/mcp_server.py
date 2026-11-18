@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Model Context Protocol (MCP) Server for RepoCHK Mac.
+Model Context Protocol (MCP) Server for RepoAUDT Mac.
 Supports both stdio JSON-RPC 2.0 (for Claude Code, Claude Desktop, Cursor, Antigravity)
 and HTTP JSON-RPC 2.0 via /api/mcp in Resources/backend/server.py.
 """
@@ -12,6 +12,9 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Keep the signed app bundle immutable when launched by an external MCP client.
+sys.dont_write_bytecode = True
+
 BACKEND_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -19,7 +22,7 @@ if str(BACKEND_DIR) not in sys.path:
 import analyzer  # noqa: E402
 import security_audit_engine  # noqa: E402
 
-MCP_SERVER_NAME = "repochk-mac-mcp"
+MCP_SERVER_NAME = "repoaudt-mac-mcp"
 MCP_SERVER_VERSION = "1.2.0"
 DEFAULT_PROTOCOL_VERSION = "2024-11-05"
 
@@ -31,12 +34,12 @@ JSONRPC_INTERNAL_ERROR = -32603
 
 
 def get_mcp_tools() -> List[Dict[str, Any]]:
-    """Return the MCP tool definitions exposed by RepoCHK Mac."""
+    """Return the MCP tool definitions exposed by RepoAUDT Mac."""
     return [
         {
             "name": "list_analyzed_repositories",
             "description": (
-                "List all GitHub repositories and ecosystems analyzed in RepoCHK Mac, "
+                "List all GitHub repositories and ecosystems analyzed in RepoAUDT Mac, "
                 "including category, latest commit, CodeRabbit quality score, and CVE/SAST alert counts."
             ),
             "inputSchema": {
@@ -64,7 +67,7 @@ def get_mcp_tools() -> List[Dict[str, Any]]:
                 "properties": {
                     "repo": {
                         "type": "string",
-                        "description": "Repository name, slug, or diagram ID (e.g. 'RepoCHK-Mac', 'nanonigit/RepoCHK-Mac').",
+                        "description": "Repository name, slug, or diagram ID (e.g. 'RepoAUDT-Mac', 'nanonigit/RepoAUDT-Mac').",
                     }
                 },
                 "required": ["repo"],
@@ -107,7 +110,7 @@ def get_mcp_tools() -> List[Dict[str, Any]]:
         {
             "name": "scan_code_snippet_security",
             "description": (
-                "Run RepoCHK Mac's OWASP Top 10 SAST and Python AST security analyzer on a source code snippet "
+                "Run RepoAUDT Mac's OWASP Top 10 SAST and Python AST security analyzer on a source code snippet "
                 "and return detected vulnerabilities with line numbers and remediation diffs."
             ),
             "inputSchema": {
@@ -136,7 +139,7 @@ def get_mcp_tools() -> List[Dict[str, Any]]:
                 "properties": {
                     "repo": {
                         "type": "string",
-                        "description": "Repository name or ID (e.g. 'RepoCHK-Mac').",
+                        "description": "Repository name or ID (e.g. 'RepoAUDT-Mac').",
                     }
                 },
                 "required": ["repo"],
@@ -153,7 +156,7 @@ def get_mcp_tools() -> List[Dict[str, Any]]:
                 "properties": {
                     "repo": {
                         "type": "string",
-                        "description": "Repository name or ID (e.g. 'RepoCHK-Mac').",
+                        "description": "Repository name or ID (e.g. 'RepoAUDT-Mac').",
                     }
                 },
                 "required": ["repo"],
@@ -163,16 +166,16 @@ def get_mcp_tools() -> List[Dict[str, Any]]:
 
 
 def get_mcp_resources() -> List[Dict[str, Any]]:
-    """Return the MCP resource definitions exposed by RepoCHK Mac."""
+    """Return the MCP resource definitions exposed by RepoAUDT Mac."""
     return [
         {
-            "uri": "repochk://repositories/summary",
+            "uri": "repoaudt://repositories/summary",
             "name": "Analyzed Repositories Summary",
-            "description": "JSON summary of all repositories managed by RepoCHK Mac with scores and alert counts.",
+            "description": "JSON summary of all repositories managed by RepoAUDT Mac with scores and alert counts.",
             "mimeType": "application/json",
         },
         {
-            "uri": "repochk://security/action-items",
+            "uri": "repoaudt://security/action-items",
             "name": "Urgent Security & Code Quality Action Items",
             "description": "Consolidated list of all CVE advisories and SAST/CodeRabbit action items across repositories.",
             "mimeType": "application/json",
@@ -181,7 +184,7 @@ def get_mcp_resources() -> List[Dict[str, Any]]:
 
 
 def get_mcp_prompts() -> List[Dict[str, Any]]:
-    """Return the MCP prompt templates exposed by RepoCHK Mac."""
+    """Return the MCP prompt templates exposed by RepoAUDT Mac."""
     return [
         {
             "name": "remediate_repository_vulnerabilities",
@@ -199,13 +202,13 @@ def get_mcp_prompts() -> List[Dict[str, Any]]:
 
 def get_client_mcp_config() -> Dict[str, Any]:
     """Return the copy-ready mcpServers configuration JSON for Claude Code / Cursor / Antigravity."""
-    installed_script = Path("/Applications/RepoCHK Mac.app/Contents/Resources/backend/mcp_server.py")
+    installed_script = Path("/Applications/RepoAUDT Mac.app/Contents/Resources/backend/mcp_server.py")
     script_path = str(installed_script if installed_script.exists() else Path(__file__).resolve())
     return {
         "mcpServers": {
-            "repochk-mac": {
+            "repoaudt-mac": {
                 "command": "python3",
-                "args": [script_path],
+                "args": ["-B", script_path],
             }
         }
     }
@@ -268,7 +271,7 @@ def _summarize_diagram_item(d: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def execute_mcp_tool(name: str, arguments: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Execute one of RepoCHK Mac's MCP tools and return an MCP CallToolResult dict."""
+    """Execute one of RepoAUDT Mac's MCP tools and return an MCP CallToolResult dict."""
     args = arguments or {}
     state = analyzer.load_saved_analyses()
     diagrams: List[Dict[str, Any]] = state.get("diagrams", [])
@@ -385,7 +388,7 @@ def execute_mcp_tool(name: str, arguments: Optional[Dict[str, Any]] = None) -> D
         code = str(args.get("code") or "")
         filename = str(args.get("filename") or "snippet.py").strip() or "snippet.py"
         safe_name = Path(filename).name or "snippet.py"
-        with tempfile.TemporaryDirectory(prefix="repochk_mcp_scan_") as tmp_dir:
+        with tempfile.TemporaryDirectory(prefix="repoaudt_mcp_scan_") as tmp_dir:
             tmp_path = Path(tmp_dir)
             target_file = tmp_path / safe_name
             target_file.write_text(code, encoding="utf-8")
@@ -446,7 +449,7 @@ def read_mcp_resource(uri: str) -> Dict[str, Any]:
     state = analyzer.load_saved_analyses()
     diagrams: List[Dict[str, Any]] = state.get("diagrams", [])
 
-    if uri == "repochk://repositories/summary":
+    if uri == "repoaudt://repositories/summary":
         data = {
             "total": len(diagrams),
             "repositories": [_summarize_diagram_item(d) for d in diagrams],
@@ -461,7 +464,7 @@ def read_mcp_resource(uri: str) -> Dict[str, Any]:
             ]
         }
 
-    if uri == "repochk://security/action-items":
+    if uri == "repoaudt://security/action-items":
         items = []
         for d in diagrams:
             repo_name = d.get("repo")

@@ -1,4 +1,4 @@
-# RepoCHK Mac — 4-Tier Opaque-Box E2E Test Suite (TEST_READY)
+# RepoAUDT Mac — 4-Tier Opaque-Box E2E Test Suite (TEST_READY)
 
 - **Date**: 2026-11-08T12:18:30Z
 - **Author**: E2E Testing Track Test Writer (`teamwork_preview_test_writer`)
@@ -72,7 +72,7 @@ The 20 Tier 1 test failures precisely match the architectural gaps identified du
 9. **F9**: `test_f09_02`: Return immediate non-blocking job ID on `POST /api/sync` and track status via `GET /api/sync/status?job_id=...`.
 10. **F10**: `test_f10_05`: Replace simulated timer in `index.html` with real periodic `fetch('/api/health')`.
 11. **F11**: `test_f11_01`: Parse `resources.core.remaining` in `check_live_health` to report `RATE_LIMITED` / `DEGRADED` when 0.
-12. **F12**: `test_f12_01`: Attach `terminationHandler` to `Process` in `Sources/RepoCHKMacApp.swift` for auto-restart.
+12. **F12**: `test_f12_01`: Attach `terminationHandler` to `Process` in `Sources/RepoAUDTMacApp.swift` for auto-restart.
 13. **F13**: `test_f13_02`: Maintain `.bak` snapshot before atomic rename in `analyzer.py` and recover from `.bak` if primary is corrupted.
 
 ### Milestone 3 Worker (`M3: Deep Security Auditing & Autonomous Remediation`)

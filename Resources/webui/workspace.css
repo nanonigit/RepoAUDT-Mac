@@ -1,0 +1,213 @@
+/* Sibling-app work surface. Navigation and window chrome belong to SwiftUI. */
+:root {
+  --workspace-bg: var(--workspace-background);
+  --workspace-accent: var(--workspace-action-text);
+}
+.native-host {
+  color-scheme: light dark;
+  --bg: var(--workspace-bg);
+  --card-bg: var(--workspace-surface);
+  --inspector-bg: var(--workspace-surface);
+  --border: var(--workspace-border);
+  --border-subtle: var(--workspace-border);
+  --text: var(--workspace-text);
+  --text-muted: var(--workspace-muted);
+  --text-dim: var(--workspace-muted);
+  --accent: var(--workspace-action-text);
+  --accent-dim: var(--workspace-selection);
+}
+.native-host body {
+  font: 13px/1.6 -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--workspace-bg) !important;
+  color: var(--workspace-text);
+}
+.native-host body #app-top-toolbar,
+.native-host body #sidebar,
+.native-host body #sidebar-resizer,
+.native-host body #beginner-guide-bar { display: none !important; }
+.native-host body #app-workspace { height: 100vh !important; width: 100% !important; }
+.native-host body #main-content { background: var(--workspace-bg); min-width: 0; }
+.native-host body .canvas-layout { height: auto; min-height: 0; flex: 1; }
+.native-host body .canvas-container { background-color: var(--workspace-bg); }
+.native-host body #coderabbit-view { background: var(--workspace-bg); padding: 28px 32px 48px; overflow: auto; width: 100%; }
+.native-host body #inspector { min-width: 300px; width: 360px; background: var(--workspace-surface); border: 0; }
+.native-host body #resizer { width: 1px; background: var(--workspace-border); box-shadow: none; }
+.native-host body #resizer:hover { width: 5px; background: var(--workspace-accent); }
+.native-host body .inspector-header { padding: 16px 20px; background: var(--workspace-surface); border-color: var(--workspace-border); }
+.native-host body .inspector-header h3 { color: var(--workspace-text); font-size: 14px; }
+.native-host body #inspector-body { padding: 18px; font: 13px/1.65 -apple-system, sans-serif !important; }
+.native-host body .inspector-tabs { background: var(--workspace-surface); flex-wrap: wrap; border-color: var(--workspace-border); }
+.native-host body .insp-tab { padding: 8px 10px; font-size: 12px; color: var(--workspace-muted); }
+.native-host body.ui-mode-simple .inspector-tabs { display: flex !important; }
+.native-host body.ui-mode-simple .insp-tab { display: flex !important; }
+.native-host body .insp-tab.active { color: var(--workspace-accent); border-color: var(--workspace-accent); }
+.native-host body .repo-summary-hero {
+  padding: 22px 32px; background: var(--workspace-bg); border-color: var(--workspace-border); gap: 14px;
+}
+.native-host body .hero-title-row { gap: 10px; }
+.native-host body .hero-repo-title { font-size: 20px; color: var(--workspace-text); font-weight: 650; }
+.native-host body .hero-repo-desc { color: var(--workspace-muted); font-size: 13px; line-height: 1.6; margin-top: 6px; }
+.native-host body .hero-left-info { flex-basis: 250px; }
+.native-host body .hero-right-controls { margin-top: 4px; }
+.native-host body .subview-toggle-group { background: var(--workspace-raised); border: 1px solid var(--workspace-border); padding: 2px; }
+.native-host body .subview-btn { font-size: 12px; font-weight: 500; color: var(--workspace-muted); }
+.native-host body .subview-btn.active { background: var(--workspace-surface); border-color: var(--workspace-border); color: var(--workspace-text); box-shadow: 0 1px 2px #0002; }
+.native-host body #visual-cards-overlay { background: var(--workspace-bg); padding: 24px 32px 80px; }
+.native-host body .visual-cards-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.native-host body .visual-node-card {
+  background: var(--workspace-surface); border: 1px solid var(--workspace-border); border-radius: 10px; padding: 18px; box-shadow: none;
+}
+.native-host body .visual-node-card:hover,
+.native-host body .visual-node-card.selected { transform: none; border-color: var(--workspace-accent); box-shadow: none; }
+.native-host body .canvas-floating-dock { background: var(--workspace-surface); border-color: var(--workspace-border); box-shadow: 0 2px 8px #0002; }
+.native-host body :is(button, input, select, textarea) { font-family: -apple-system, sans-serif; }
+.native-host body :is(button, a)[style*="background"],
+.native-host body .table-view-btn, .native-host body .gh-link-btn,
+.native-host body .hotspot-copy-btn {
+  background: var(--workspace-raised) !important; color: var(--workspace-action-text) !important;
+  border: 1px solid var(--workspace-border) !important; border-radius: 6px; box-shadow: none !important;
+  font-weight: 500 !important; min-height: 28px; max-width: 100%; white-space: normal; cursor: pointer;
+}
+.native-host body :is(button, a):focus-visible { outline: 2px solid var(--workspace-accent); outline-offset: 3px; }
+.native-host body button:hover { outline: 1px solid var(--workspace-action-text); outline-offset: 1px; }
+.native-host body input, .native-host body select, .native-host body textarea {
+  background: var(--workspace-surface) !important; color: var(--workspace-text) !important;
+  border-color: var(--workspace-border) !important;
+}
+.native-host body [style*="background:"]:not(button):not(a):not(svg):not([id$="progress-bar"]) {
+  background-color: var(--workspace-surface) !important;
+  background-image: none !important; box-shadow: none !important;
+}
+.native-host body :is(div, span, strong, label, p)[style*="color:"] { color: var(--workspace-text) !important; }
+.native-host body a { color: var(--workspace-accent); }
+.native-host body pre { color: var(--workspace-text) !important; background: var(--workspace-raised) !important; }
+.native-host body :is(.modal-content, .modal-container, .action-modal-content, .health-modal-content) {
+  background: var(--workspace-surface); border-color: var(--workspace-border); box-shadow: 0 12px 50px #0004;
+}
+.native-host body [class*="modal"] :is(h2, h3, h4) { color: var(--workspace-text); }
+.native-host body [class*="modal"] { max-width: 100%; }
+.native-host body .sequence-walkthrough-panel { background: var(--workspace-surface); border-color: var(--workspace-border); padding: 12px 20px; }
+.native-host body .sec-legend-badge { border-radius: 5px; box-shadow: none; }
+.native-host body .dot-pulse { animation: none; box-shadow: none; }
+.workspace-audit { max-width: 1000px; margin: 0 auto; }
+.workspace-audit-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+.workspace-audit h2 { font-size: 18px; font-weight: 650; }
+.workspace-audit .audit-note { color: var(--workspace-muted); margin: 8px 0 22px; font-size: 13px; }
+.workspace-audit .audit-list { border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); overflow: hidden; }
+.workspace-audit .audit-issue + .audit-issue { border-top: 1px solid var(--workspace-border); }
+.workspace-audit summary { padding: 18px; cursor: pointer; list-style: none; display: flex; align-items: flex-start; gap: 12px; }
+.workspace-audit summary::-webkit-details-marker { display: none; }
+.workspace-audit summary::after { content: '›'; margin-left: auto; color: var(--workspace-muted); font-size: 20px; }
+.workspace-audit details[open] > summary::after { transform: rotate(90deg); }
+.workspace-audit summary:hover { background: var(--workspace-raised); }
+.workspace-audit .issue-heading { flex: 1; min-width: 0; }
+.workspace-audit .issue-title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.workspace-audit .issue-path { color: var(--workspace-muted); font: 12px/1.6 ui-monospace, monospace; overflow-wrap: anywhere; margin-top: 4px; }
+.workspace-audit .issue-severity { font-size: 11px; padding: 2px 7px; border-radius: 4px; white-space: nowrap; background: var(--workspace-raised); color: var(--workspace-muted); }
+.workspace-audit .issue-severity.danger { color: var(--workspace-danger-text); background: var(--workspace-danger-surface); }
+.workspace-audit .issue-severity.warning { color: var(--workspace-warning-text); background: var(--workspace-warning-surface); }
+.workspace-audit .issue-severity.info { color: var(--workspace-info-text); background: var(--workspace-info-surface); }
+.audit-color-key { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 18px; }
+.workspace-audit .issue-body { padding: 0 20px 22px 20px; overflow-wrap: anywhere; }
+.workspace-audit .issue-body h3 { font-size: 12px; margin: 18px 0 6px; color: var(--workspace-muted); font-weight: 600; }
+.workspace-audit .issue-body p { font-size: 13px; line-height: 1.75; white-space: pre-wrap; }
+.workspace-audit .issue-body pre { padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 6px; font: 12px/1.65 ui-monospace, monospace; }
+.workspace-audit .issue-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.workspace-audit .issue-actions button { padding: 5px 12px; }
+.workspace-audit .audit-empty { padding: 32px; color: var(--workspace-muted); text-align: center; }
+@media (max-width: 800px) {
+  .native-host body #coderabbit-view { padding: 20px; }
+  .native-host body .repo-summary-hero { padding: 18px 20px; }
+  .native-host body #inspector { position: absolute; right: 0; z-index: 50; width: min(400px, 90vw) !important; border-left: 1px solid var(--workspace-border); }
+  .native-host body #resizer { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .native-host *, .native-host *::before, .native-host *::after { animation: none !important; transition: none !important; }
+}
+.native-host body .component-heading { font-size: 16px; font-weight: 600; color: var(--workspace-text); }
+.native-host body .component-heading span { color: var(--workspace-muted); font-size: 13px; margin-left: 6px; }
+.native-host body .component-hint { font-size: 13px; color: var(--workspace-muted); margin-top: 6px; }
+.native-host body .component-list { border: 1px solid var(--workspace-border); border-radius: 10px; overflow: hidden; }
+.native-host body .component-row.visual-node-card {
+  width: 100%; display: flex; flex-direction: row; align-items: center; gap: 18px; padding: 20px;
+  text-align: left; color: var(--workspace-text); border: 0; border-radius: 0; background: var(--workspace-surface);
+}
+.native-host body .component-row + .component-row { border-top: 1px solid var(--workspace-border); }
+.native-host body .component-row:hover { background: var(--workspace-raised); }
+.native-host body .component-row.selected { background: var(--accent-dim); box-shadow: inset 3px 0 var(--workspace-accent); }
+.component-main { flex: 1; min-width: 0; }
+.component-main strong { font-size: 14px; display: block; }
+.component-main code { font: 12px/1.6 ui-monospace, monospace; color: var(--workspace-muted); display: block; overflow-wrap: anywhere; margin: 4px 0; }
+.component-main p { font-size: 13px; font-weight: 400; color: var(--workspace-muted); line-height: 1.7; }
+.component-count { font-size: 12px; white-space: nowrap; color: var(--workspace-muted); }
+.workspace-commit { font-size: 12px; color: var(--workspace-muted); margin-top: 8px; }
+.workspace-commit code { margin-left: 8px; font: 12px ui-monospace, monospace; }
+.workspace-findings { font-size: 12px; color: var(--workspace-muted); }
+.native-host body .hero-right-controls .table-view-btn,
+.native-host body .hero-right-controls .gh-link-btn { padding: 4px 10px; font-size: 12px; }
+.native-host body .action-hub-dialog { background: var(--workspace-surface); border: 1px solid var(--workspace-border) !important; box-shadow: 0 12px 48px #0004; }
+.native-host body .action-hub-body,
+.native-host body .action-hub-header,
+.native-host body .saved-repo-row { background: var(--workspace-surface); color: var(--workspace-text); border-color: var(--workspace-border); }
+.native-host body .action-hub-dialog.workspace-dialog { max-width: 640px; }
+.native-host body .workspace-dialog .action-hub-header { padding: 20px 24px; }
+.native-host body .workspace-dialog .action-hub-header h3 { font-size: 17px; font-weight: 600; }
+.native-host body .workspace-dialog .action-hub-body { padding: 24px; }
+.workspace-dialog label { font-size: 13px; font-weight: 600; }
+.workspace-dialog-hint { color: var(--workspace-muted); margin: 6px 0 12px; font-size: 13px; }
+.workspace-dialog input { width: 100%; padding: 9px 12px; border-radius: 6px; border: 1px solid var(--workspace-border); font-size: 13px; }
+.workspace-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin: 16px 0 24px; }
+.workspace-dialog-actions button { padding: 6px 12px; }
+.native-host body button.workspace-primary { background: var(--workspace-action) !important; color: var(--workspace-on-action) !important; }
+.workspace-saved-management { border-top: 1px solid var(--workspace-border); padding-top: 18px; margin-top: 20px; }
+.workspace-saved-management > summary { cursor: pointer; color: var(--workspace-muted); font-size: 12px; }
+.workspace-saved-management input { margin: 14px 0; }
+#org-repos-browser-list, #saved-repos-manage-list { max-height: 250px; overflow: auto; }
+.workspace-progress-track { height: 4px; border-radius: 4px; overflow: hidden; background: var(--workspace-raised); margin: 10px 0; }
+#modal-analyze-progress-bar { height: 100%; width: 0; background: var(--workspace-accent); }
+.native-host body .saved-repo-row { flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--workspace-border); }
+.native-host body .inspector-tabs .insp-tab[data-tab-name] { display: flex !important; }
+.workspace-inspector h2 { font-size: 17px; line-height: 1.4; font-weight: 600; margin: 0 0 8px; }
+.workspace-inspector h3 { font-size: 12px; font-weight: 600; color: var(--workspace-muted); margin: 24px 0 8px; }
+.workspace-inspector code { font: 12px/1.5 ui-monospace, monospace; overflow-wrap: anywhere; color: var(--workspace-muted); }
+.workspace-inspector p, .workspace-inspector li { font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; }
+.workspace-inspector ul { padding-left: 18px; margin-bottom: 16px; }
+.workspace-inspector li + li { margin-top: 8px; }
+.workspace-inspector .table-view-btn { padding: 5px 12px; }
+
+/* Retained advanced views consume the same semantic roles. */
+.native-host body .sec-legend-red { color: var(--workspace-danger-text) !important; background: var(--workspace-danger-surface) !important; border-color: var(--workspace-danger-text) !important; }
+.native-host body .sec-legend-yellow { color: var(--workspace-warning-text) !important; background: var(--workspace-warning-surface) !important; border-color: var(--workspace-warning-text) !important; }
+.native-host body .sec-legend-green { color: var(--workspace-muted) !important; background: var(--workspace-raised) !important; border-color: var(--workspace-border) !important; }
+.native-host body .hotspot-fix-box { border-color: var(--workspace-border); background: var(--workspace-raised); }
+.native-host body .cr-diff-del { color: var(--workspace-danger-text); background: var(--workspace-danger-surface); }
+.native-host body .cr-diff-add { color: var(--workspace-text); background: var(--workspace-raised); }
+@media (prefers-contrast: more) {
+  .native-host body button, .native-host body input, .native-host body select { border-width: 2px !important; }
+  .workspace-audit .issue-severity { border: 1px solid currentColor; font-weight: 650; }
+  .workspace-audit summary:focus-visible { outline: 3px solid var(--workspace-action-text); outline-offset: -3px; }
+}
+/* Diagrams use neutral structure. Severity and selection supply the colored emphasis. */
+.native-host body #diagram-wrapper svg :is(.node, .actor) :is(rect, polygon, circle, path) {
+  fill: var(--workspace-raised) !important; stroke: var(--workspace-border) !important; filter: none !important;
+}
+.native-host body #diagram-wrapper svg .node .label,
+.native-host body #diagram-wrapper svg :is(text, .nodeLabel, .nodeLabel p, .messageText, .loopText, .labelText) {
+  fill: var(--workspace-text) !important; color: var(--workspace-text) !important;
+}
+.native-host body #diagram-wrapper svg :is(.edgePath path, .flowchart-link, .actor-line, .messageLine0, .messageLine1) {
+  stroke: var(--workspace-muted) !important;
+}
+.native-host body #diagram-wrapper svg .arrowheadPath { fill: var(--workspace-muted) !important; }
+.native-host body #diagram-wrapper svg [data-severity="danger"] :is(rect, polygon, circle, path) {
+  fill: var(--workspace-danger-surface) !important; stroke: var(--workspace-danger-text) !important; animation: none !important;
+}
+.native-host body #diagram-wrapper svg [data-severity="warning"] :is(rect, polygon, circle, path) {
+  fill: var(--workspace-warning-surface) !important; stroke: var(--workspace-warning-text) !important; animation: none !important;
+}
+.native-host body #diagram-wrapper svg [data-severity="info"] :is(rect, polygon, circle, path) {
+  fill: var(--workspace-info-surface) !important; stroke: var(--workspace-info-text) !important; animation: none !important;
+}
+.native-host body #diagram-wrapper svg .selected :is(rect, polygon, circle, path) {
+  fill: var(--workspace-selection) !important; stroke: var(--workspace-action-text) !important;
+}

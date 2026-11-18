@@ -2,7 +2,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="RepoCHK Mac"
+APP_NAME="RepoAUDT Mac"
 BUNDLE_DIR="$DIR/$APP_NAME.app"
 MODE="${1:---install}"
 
@@ -60,7 +60,7 @@ if [[ "$MODE" == "--install" ]]; then
     rm -rf "/Applications/$APP_NAME.app"
     ditto "$APP" "/Applications/$APP_NAME.app"
     touch "/Applications/$APP_NAME.app"
-    # Ensure repository root is cleaned so Spotlight and Raycast ONLY show /Applications/RepoCHK Mac.app
+    # Ensure repository root is cleaned so Spotlight and Raycast ONLY show /Applications/RepoAUDT Mac.app
     rm -rf "$DIR/$APP_NAME.app"
     echo "✅ Cleaned up old apps and installed: /Applications/$APP_NAME.app"
     echo "✨ (Repository root cleaned so only /Applications/$APP_NAME.app appears in Spotlight/Raycast)"

@@ -1,5 +1,5 @@
 """
-RepoCHK Mac — Tier 2: Boundary Value Analysis & Edge Case E2E Tests (85 Tests)
+RepoAUDT Mac — Tier 2: Boundary Value Analysis & Edge Case E2E Tests (85 Tests)
 Covers all 17 features (F1 through F17) with >=5 boundary/edge tests per feature.
 Specification authoritative sources: ORIGINAL_REQUEST.md, AGENTS.md, PROJECT.md, TEST_INFRA.md.
 """
@@ -303,8 +303,8 @@ class TestF07SyncDaemonBoundaries(unittest.TestCase):
 
     def test_f07_boundary_05_daemon_thread_name_unique(self):
         """Daemon thread name format conforms to standard convention."""
-        t_name = "RepoCHK-SyncDaemon"
-        self.assertTrue(t_name.startswith("RepoCHK"))
+        t_name = "RepoAUDT-SyncDaemon"
+        self.assertTrue(t_name.startswith("RepoAUDT"))
 
 
 class TestF08MultiRepoSyncBoundaries(unittest.TestCase):
@@ -686,7 +686,7 @@ class TestF17RemediationBoundaries(unittest.TestCase):
     def test_f17_boundary_01_empty_issue_id(self):
         """Empty issue_id returns 400 Bad Request."""
         status, headers, body = simulate_http_request("POST", "/api/remediate/auto-fix", {
-            "repo_name": "RepoCHK-Mac",
+            "repo_name": "RepoAUDT-Mac",
             "issue_id": ""
         })
         self.assertIn(status, [400, 404])

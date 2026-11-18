@@ -1176,13 +1176,12 @@ def build_portal_html(data, is_shareable=False):
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RepoCHK Mac — Architecture &amp; Vulnerability AI Studio</title>
+  <title>RepoAUDT Mac</title>
   <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;text y='.9em' font-size='90'&gt;🛡️&lt;/text&gt;&lt;/svg&gt;">
   <script src="vendor/mermaid.min.js"></script>
   <script>if (typeof mermaid === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"><\\/script>')</script>
   <script src="vendor/svg-pan-zoom.min.js"></script>
   <script>if (typeof svgPanZoom === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"><\\/script>')</script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #0b0f19;
@@ -5573,6 +5572,7 @@ def build_portal_html(data, is_shareable=False):
       backdrop-filter: blur(10px);
     }
 </style>
+<style>__WORKSPACE_STYLES__</style>
 </head>
 <body>
   <!-- =========================================================================
@@ -5623,7 +5623,7 @@ def build_portal_html(data, is_shareable=False):
     <div class="tb-center-zone">
       <div class="tb-search-pill current-repo-badge" id="current-repo-badge" role="button" tabindex="0" onclick="openCommandPalette()" title="クイックコマンドパレットを開く (⌘K)" data-i18n-title="title_cmd_palette">
         <span style="font-size: 0.76rem; flex-shrink: 0;">📁</span>
-        <span class="tb-repo-name" id="badge-repo-name">RepoCHK Mac</span>
+        <span class="tb-repo-name" id="badge-repo-name">RepoAUDT Mac</span>
         <span style="color: #475569; font-size: 0.68rem; flex-shrink: 0;">/</span>
         <span class="tb-mode-name" id="badge-mode-name">構成図</span>
         <kbd class="tb-kbd">⌘K</kbd>
@@ -5677,8 +5677,8 @@ def build_portal_html(data, is_shareable=False):
   <div id="sidebar">
     <div class="brand-header">
       <div class="brand-title" style="display: flex; align-items: center; gap: 10px;">
-        <img src="app-icon.png" alt="RepoCHK Mac" style="width: 32px; height: 32px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
-        <div>RepoCHK Mac <span>AI Studio</span></div>
+        <img src="app-icon.png" alt="RepoAUDT Mac" style="width: 32px; height: 32px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.6); flex-shrink: 0;" />
+        <div>RepoAUDT Mac <span>AI Studio</span></div>
       </div>
       <div class="live-status"><div class="live-dot"></div> NATIVE MACOS STUDIO (CodeRabbit + Mermaid)</div>
       <div style="margin-top: 12px; background: linear-gradient(135deg, rgba(30, 58, 138, 0.5) 0%, rgba(15, 23, 42, 0.95) 100%); border: 1.5px solid #3b82f6; border-radius: 10px; padding: 12px;">
@@ -5939,7 +5939,7 @@ def build_portal_html(data, is_shareable=False):
               <span class="terminal-dot terminal-dot-red"></span>
               <span class="terminal-dot terminal-dot-yellow"></span>
               <span class="terminal-dot terminal-dot-green"></span>
-              <span style="margin-left: 4px; font-weight: 700;">RepoCHK Shell</span>
+              <span style="margin-left: 4px; font-weight: 700;">RepoAUDT Shell</span>
               <span class="terminal-cwd-badge" id="terminal-cwd-display">~/Git</span>
             </div>
             <div style="display: flex; gap: 6px;">
@@ -5959,7 +5959,7 @@ def build_portal_html(data, is_shareable=False):
 
           <!-- Terminal Output Area -->
           <div class="terminal-output-scroll" id="terminal-output-area">
-            <div style="color: #64748b; margin-bottom: 6px;">=== RepoCHK Mac Embedded Terminal (bash) ===</div>
+            <div style="color: #64748b; margin-bottom: 6px;">=== RepoAUDT Mac Embedded Terminal (bash) ===</div>
             <div style="color: #38bdf8; margin-bottom: 8px;" data-i18n="term_hint">💡 上のクイックボタンを押すか、下の入力欄にコマンドを入力して [実行] できます。</div>
           </div>
 
@@ -6241,6 +6241,14 @@ def build_portal_html(data, is_shareable=False):
 
     const I18N = {
       ja: {
+        workspace_add_title: "リポジトリを追加",
+        workspace_close: "閉じる",
+        workspace_url_label: "GitHub URL",
+        workspace_url_hint: "リポジトリまたは組織の URL を入力してください。",
+        workspace_browse: "組織の一覧を取得",
+        workspace_browse_title: "組織のリポジトリ",
+        workspace_analyze: "解析を開始",
+        workspace_manage: "保存済みリポジトリの管理",
         mode_arch: "構成図",
         mode_seq: "シーケンス",
         mode_cr: "AI監査",
@@ -6473,10 +6481,10 @@ def build_portal_html(data, is_shareable=False):
         modal_action_hub_sub: "CodeRabbit AI 監査指摘 &amp; 依存パッケージ脆弱性 (CVE) の発生理由・修正パッチ一覧",
         modal_health_title: "システム死活監視 &amp; 稼働ステータス (Health &amp; Uptime Monitor)",
         modal_health_sub: "ローカルHTTPサービス、API、バックグラウンドプロセスの死活状況",
-        modal_analyze_title: "GitHub リポジトリ追加分析 &amp; 保有リスト管理 (RepoCHK Mac)",
+        modal_analyze_title: "GitHub リポジトリ追加分析 &amp; 保有リスト管理 (RepoAUDT Mac)",
         modal_analyze_sub: "新しい組織URL・リポジトリURLの追加解析と、保有データの確認・不要リポジトリの削除が行えます",
         modal_analyze_label: "➕ 新しく追加・分析したい 組織URL (<code style='color: #34d399;'>https://github.com/org</code>) または リポジトリURL (<code style='color: #38bdf8;'>owner/repo</code>):",
-        modal_analyze_placeholder: "例: https://github.com/nanonigit または https://github.com/nanonigit/RepoCHK-Mac",
+        modal_analyze_placeholder: "例: https://github.com/nanonigit または https://github.com/nanonigit/RepoAUDT-Mac",
         modal_btn_browse: "📂 配下一覧を表示",
         modal_btn_submit: "🚀 追加して分析",
         modal_org_quick_title: "🏢 上の階層（組織 / ユーザー全体エコシステム）からまとめて追加:",
@@ -6494,7 +6502,7 @@ def build_portal_html(data, is_shareable=False):
         adm_provider_title: "🤖 優先使用する AI コード・脆弱性監査エンジン",
         adm_provider_sub: "設定済みのAPIキーを使って、ソースコードと依存パッケージの深層セキュリティ監査を実行します",
         adm_opt_auto: "⚡ 自動選択 (設定済みキーを上から優先)",
-        adm_keys_header: "🔑 AI プロバイダー APIキー設定 <span style='font-size: 0.68rem; color: #94a3b8; font-weight: 500;'>(ローカルの ~/Library/Application Support/RepoCHK Mac/settings.json に暗号権限 0600 で安全に保存されます)</span>",
+        adm_keys_header: "🔑 AI プロバイダー APIキー設定 <span style='font-size: 0.68rem; color: #94a3b8; font-weight: 500;'>(ローカルの ~/Library/Application Support/RepoAUDT Mac/settings.json に暗号権限 0600 で安全に保存されます)</span>",
         adm_btn_test: "⚡ 接続テスト",
         adm_model_label: "監査モデル:",
         adm_skills_header: "🛡️ 脆弱性・コード監査 MCP &amp; スキル構成 (PHP / Node.js / Python / Swift / Go 対応)",
@@ -6508,12 +6516,20 @@ def build_portal_html(data, is_shareable=False):
         adm_skill_llm_desc: "上で設定された AI プロバイダーの API キーを使用し、リポジトリのコード構造・フレームワーク固有の脆弱性を AI が深層監査して「要対応アラート」に統合します。",
         adm_btn_save: "💾 設定・APIキーを保存",
         adm_btn_save_reaudit: "🛡️ 保存して現在選択中のリポジトリを今すぐAI・脆弱性再監査",
-        adm_mcp_server_header: "🔌 RepoCHK Mac 公式 MCP サーバー連携 (Claude Code / Cursor / Antigravity 用)",
-        adm_mcp_server_desc: "外部AIエージェントから RepoCHK Mac の構成図・シーケンス図・CVE/SAST監査レポートを直接呼び出せる標準 JSON-RPC 2.0 MCP サーバー (`mcp_server.py` / `/api/mcp`) が内蔵されています。",
+        adm_mcp_server_header: "🔌 RepoAUDT Mac 公式 MCP サーバー連携 (Claude Code / Cursor / Antigravity 用)",
+        adm_mcp_server_desc: "外部AIエージェントから RepoAUDT Mac の構成図・シーケンス図・CVE/SAST監査レポートを直接呼び出せる標準 JSON-RPC 2.0 MCP サーバー (`mcp_server.py` / `/api/mcp`) が内蔵されています。",
         adm_mcp_btn_copy_cfg: "📋 MCP設定JSONをコピー",
         adm_mcp_btn_test: "⚡ MCPサーバー疎通＆ツール実行テスト",
       },
       en: {
+        workspace_add_title: "Add repository",
+        workspace_close: "Close",
+        workspace_url_label: "GitHub URL",
+        workspace_url_hint: "Enter the URL of a repository or organization.",
+        workspace_browse: "Browse organization",
+        workspace_browse_title: "Organization repositories",
+        workspace_analyze: "Start analysis",
+        workspace_manage: "Manage saved repositories",
         mode_arch: "Architecture",
         mode_seq: "Sequence",
         mode_cr: "AI Review",
@@ -6749,7 +6765,7 @@ def build_portal_html(data, is_shareable=False):
         modal_analyze_title: "Analyze GitHub Repository &amp; Manage Saved List",
         modal_analyze_sub: "Analyze new GitHub Organization or Repository URLs and manage your saved repositories",
         modal_analyze_label: "➕ Enter GitHub Organization URL (<code style='color: #34d399;'>https://github.com/org</code>) or Repository URL (<code style='color: #38bdf8;'>owner/repo</code>):",
-        modal_analyze_placeholder: "e.g. https://github.com/nanonigit or https://github.com/nanonigit/RepoCHK-Mac",
+        modal_analyze_placeholder: "e.g. https://github.com/nanonigit or https://github.com/nanonigit/RepoAUDT-Mac",
         modal_btn_browse: "📂 Browse Repos",
         modal_btn_submit: "🚀 Add &amp; Analyze",
         modal_org_quick_title: "🏢 Add Organization / User Ecosystem:",
@@ -6767,7 +6783,7 @@ def build_portal_html(data, is_shareable=False):
         adm_provider_title: "🤖 Preferred AI Code &amp; Security Audit Provider",
         adm_provider_sub: "Runs deep source code and dependency vulnerability auditing using your configured API key",
         adm_opt_auto: "⚡ Auto Select (Prioritize configured keys in order)",
-        adm_keys_header: "🔑 AI Provider API Keys <span style='font-size: 0.68rem; color: #94a3b8; font-weight: 500;'>(Saved locally with 0600 permissions in ~/Library/Application Support/RepoCHK Mac/settings.json)</span>",
+        adm_keys_header: "🔑 AI Provider API Keys <span style='font-size: 0.68rem; color: #94a3b8; font-weight: 500;'>(Saved locally with 0600 permissions in ~/Library/Application Support/RepoAUDT Mac/settings.json)</span>",
         adm_btn_test: "⚡ Test Key",
         adm_model_label: "Model:",
         adm_skills_header: "🛡️ Vulnerability &amp; Code Audit MCP / Skills (PHP / Node.js / Python / Swift / Go)",
@@ -6781,7 +6797,7 @@ def build_portal_html(data, is_shareable=False):
         adm_skill_llm_desc: "Uses your configured AI provider key to perform deep architectural and framework-specific security auditing and surface Action Required alerts.",
         adm_btn_save: "💾 Save Settings &amp; API Keys",
         adm_btn_save_reaudit: "🛡️ Save &amp; Re-audit Selected Repository Now",
-        adm_mcp_server_header: "🔌 RepoCHK Mac Built-in MCP Server (For Claude Code / Cursor / Antigravity)",
+        adm_mcp_server_header: "🔌 RepoAUDT Mac Built-in MCP Server (For Claude Code / Cursor / Antigravity)",
         adm_mcp_server_desc: "Exposes a standards-compliant JSON-RPC 2.0 Model Context Protocol server (`mcp_server.py` / `/api/mcp`) so external AI agents can query architecture diagrams, sequence flows, and CVE/SAST security reports.",
         adm_mcp_btn_copy_cfg: "📋 Copy MCP Config JSON",
         adm_mcp_btn_test: "⚡ Test MCP Server &amp; Tools",
@@ -6849,6 +6865,7 @@ def build_portal_html(data, is_shareable=False):
         if (zoomFactor) currentPanZoom.zoomBy(zoomFactor);
       } catch (_) {}
     }
+    let selectedDiagram = null;
     let selectedNodeData = null;
     let currentInspTab = 'overview';
     let currentFreshnessFilter = 'all';
@@ -7079,7 +7096,7 @@ def build_portal_html(data, is_shareable=False):
       const sideVal = localStorage.getItem(PANE_STORAGE_KEY_SIDEBAR) ?? localStorage.getItem('repochecker_sidebar_collapsed');
       const inspVal = localStorage.getItem(PANE_STORAGE_KEY_INSPECTOR) ?? localStorage.getItem('repochecker_inspector_collapsed');
       document.body.classList.toggle('sidebar-collapsed', sideVal === '1');
-      document.body.classList.toggle('inspector-collapsed', inspVal === '1');
+      document.body.classList.toggle('inspector-collapsed', document.documentElement.classList.contains('native-host') || inspVal === '1');
       updatePaneToggleButtons();
       restoreAccordionStates();
     }
@@ -7606,6 +7623,7 @@ def build_portal_html(data, is_shareable=False):
 
     // Render Navigation
     function renderNav(filter = '') {
+      if (typeof publishNativeWorkspace === 'function') publishNativeWorkspace();
       navContainer.innerHTML = '';
       const categories = {};
       let countAll = 0, countAmber = 0, countGreen = 0, countGray = 0, countActionReq = 0;
@@ -7782,7 +7800,7 @@ def build_portal_html(data, is_shareable=False):
           category: item.category || (item.is_root ? 'Ecosystem Overview' : 'Application Repository'),
           tech: ((item.deps && item.deps.frameworks) || []).map(f => f.name).join(', ') || 'GitHub Repository',
           desc: item.description || (isEn
-            ? `${item.repo} is a software repository managed in RepoCHK Mac.`
+            ? `${item.repo} is a software repository managed in RepoAUDT Mac.`
             : `${item.repo} の全体構成と安全性を管理しています。左のカードや図をクリックすると各部品の詳しい説明が表示されます。`),
           steps: [
             isEn ? `GitHub URL: ${item.github_url || '-'}` : `GitHub リポジトリ: ${item.github_url || '-'}`,
@@ -7888,55 +7906,27 @@ def build_portal_html(data, is_shareable=False):
     function renderRepoSummaryHero(item) {
       const hero = document.getElementById('repo-summary-hero');
       if (!hero || !item) return;
-      const isEn = currentLang === 'en';
-      const actionItems = getRepoActionItems(item);
-      const alertCount = actionItems.length;
-      const diagIdx = diagrams.indexOf(item);
-      const isArch = currentViewMode === 'arch';
+      const en = currentLang === 'en';
+      const count = getRepoActionItems(item).length;
+      const source = String(item.github_url || '');
+      const githubLink = /^https:\/\/github\.com\//.test(source)
+        ? `<a href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer" class="gh-link-btn">GitHub ↗</a>` : '';
       const subView = getEffectiveArchSubView(item);
-      const safeHeroUrl = encodeURIComponent(item.github_url || item.repo || '');
-
-      const statusBadgeHtml = alertCount === 0
-        ? `<span style="background: rgba(16, 185, 129, 0.16); border: 1.5px solid #10b981; color: #34d399; padding: 5px 12px; border-radius: 9999px; font-size: 0.8rem; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
-             <span>🟢</span>
-             <span>${isEn ? 'Safe (No Urgent Alerts)' : '安全（緊急の問題なし）'}</span>
-           </span>`
-        : `<button type="button" onclick="showActionModalForRepo(event, ${diagIdx})" style="background: rgba(239, 68, 68, 0.18); border: 1.5px solid #ef4444; color: #fecaca; padding: 5px 13px; border-radius: 9999px; font-size: 0.8rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 10px rgba(239, 68, 68, 0.25);">
-             <span>🚨</span>
-             <span>${isEn ? `${alertCount} Action Items (Click to View)` : `要確認 ${alertCount}件（クリックして理由と対策を見る ↗）`}</span>
-           </button>`;
-
       hero.innerHTML = `
         <div class="hero-left-info">
-          <div class="hero-title-row">
-            <h2 class="hero-repo-title">📦 ${escapeHtml(item.repo)}</h2>
-            ${statusBadgeHtml}
-            <button type="button" id="hero-rescan-btn" onclick="rescanRepositoryDirect(event, '${safeHeroUrl}', this)" class="table-view-btn" style="background: rgba(56, 189, 248, 0.14); border: 1.5px solid #38bdf8; color: #e0f2fe; font-size: 0.78rem; font-weight: 800; padding: 5px 12px; border-radius: 8px; cursor: pointer;">
-              ${isEn ? '🔄 Re-scan This Repo' : '🔄 このリポジトリを再スキャン'}
-            </button>
-            <a href="${item.github_url}" target="_blank" class="gh-link-btn" style="font-size: 0.75rem; padding: 4px 10px;">
-              ${isEn ? 'Open GitHub ↗' : 'GitHubを開く ↗'}
-            </a>
-          </div>
-          <div class="hero-repo-desc">
-            ${escapeHtml(item.description || (isEn ? 'Select any card below to inspect its role and safety.' : '下のカードをクリックすると、それぞれの役割と安全性が右側にわかりやすく表示されます。'))}
-          </div>
+          <h2 class="hero-repo-title">${escapeHtml(item.repo)}</h2>
+          <div class="hero-repo-desc">${escapeHtml(item.description || '')}</div>
+          <div class="workspace-commit">${en ? 'Saved commit' : '解析対象コミット'} <code>${escapeHtml(item.commit_hash || (en ? 'Not recorded' : '未記録'))}</code></div>
         </div>
-        ${isArch ? `
-          <div class="hero-right-controls">
-            <div class="subview-toggle-group" role="tablist">
-              <button type="button" class="subview-btn ${subView === 'cards' ? 'active' : ''}" id="subview-btn-cards" onclick="setArchSubView('cards')">
-                <span>🗂️</span>
-                <span>${isEn ? 'Card List (Easy Read)' : 'カード一覧で見る（おすすめ）'}</span>
-              </button>
-              <button type="button" class="subview-btn ${subView === 'diagram' ? 'active' : ''}" id="subview-btn-diagram" onclick="setArchSubView('diagram')">
-                <span>🗺️</span>
-                <span>${isEn ? 'Flow Diagram' : 'つながり図で見る（フロー図）'}</span>
-              </button>
-            </div>
-          </div>
-        ` : ''}
-      `;
+        <div class="hero-right-controls">
+          <span class="workspace-findings">${en ? `${count} findings` : `指摘 ${count}件`}</span>
+          <button type="button" id="hero-rescan-btn" onclick="rescanRepositoryDirect(event, '${encodeURIComponent(source).replace(/'/g, '%27')}', this)" class="table-view-btn">${en ? 'Re-scan' : '再スキャン'}</button>
+          ${githubLink}
+          ${currentViewMode === 'arch' ? `<div class="subview-toggle-group" role="tablist" aria-label="${en ? 'Architecture view' : '構成の表示方法'}">
+            <button type="button" role="tab" aria-selected="${subView === 'cards'}" class="subview-btn ${subView === 'cards' ? 'active' : ''}" id="subview-btn-cards" onclick="setArchSubView('cards')">${en ? 'Components' : 'コンポーネント'}</button>
+            <button type="button" role="tab" aria-selected="${subView === 'diagram'}" class="subview-btn ${subView === 'diagram' ? 'active' : ''}" id="subview-btn-diagram" onclick="setArchSubView('diagram')">${en ? 'Diagram' : '構成図'}</button>
+          </div>` : ''}
+        </div>`;
     }
 
     let currentVisualCards = [];
@@ -7947,64 +7937,32 @@ def build_portal_html(data, is_shareable=False):
       const isEn = currentLang === 'en';
       currentVisualCards = parseDiagramNodesForCards(item);
 
-      const headerTitle = item.is_root
-        ? (isEn ? `🏢 Repositories in ${item.repo} (${currentVisualCards.length})` : `🏢 このグループに含まれるアプリ・リポジトリ一覧（${currentVisualCards.length}件）`)
-        : (isEn ? `🧩 Main Building Blocks of ${item.repo} (${currentVisualCards.length})` : `🧩 「${item.repo}」を構成する主な機能パーツ（${currentVisualCards.length}個）`);
-
-      const headerHint = item.is_root
-        ? (isEn ? 'Click any card to view its plain-language summary on the right, or click [Open App] to inspect its internal structure.' : '💡 気になるカードをクリックすると右側に解説が出ます。「📂 このアプリを開く」を押すとそのアプリの内部構成へ移動します。')
-        : (isEn ? 'Click any card below to see what it does and check its security on the right pane.' : '💡 気になるパーツをクリックすると、右側に「何をする部分か」「安全か」がわかりやすく表示されます。');
-
       overlay.innerHTML = `
         <div class="visual-cards-header">
           <div>
-            <div style="font-size: 1rem; font-weight: 800; color: #f8fafc;">${escapeHtml(headerTitle)}</div>
-            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 3px;">${escapeHtml(headerHint)}</div>
+            <h2 class="component-heading">${isEn ? 'Components' : 'コンポーネント'} <span>${currentVisualCards.length}</span></h2>
+            <p class="component-hint">${isEn ? 'Select a component to inspect its role, files and saved findings.' : 'コンポーネントを選ぶと、役割・関連ファイル・保存済みの指摘を確認できます。'}</p>
           </div>
         </div>
-        <div class="visual-cards-grid">
+        <div class="component-list">
           ${currentVisualCards.map((c, idx) => `
-            <div class="visual-node-card ${c.alertCount > 0 ? 'has-alert' : ''}" id="visual-card-${idx}" onclick="handleVisualCardClick(${idx})">
-              <div>
-                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
-                  <div style="font-size: 0.96rem; font-weight: 800; color: #f8fafc; line-height: 1.35; word-break: break-word;">
-                    ${c.openRepoIndex !== -1 ? '📦 ' : '🧩 '}${escapeHtml(c.title)}
-                  </div>
-                  ${c.alertCount > 0
-                    ? `<span class="sec-legend-badge sec-legend-red" style="flex-shrink: 0; font-size: 0.68rem;">${isEn ? `🔴 ${c.alertCount} Alert` : `🔴 要確認`}</span>`
-                    : `<span class="sec-legend-badge sec-legend-green" style="flex-shrink: 0; font-size: 0.68rem;">${isEn ? '🟢 Safe' : '🟢 安全'}</span>`}
-                </div>
-                <div style="font-size: 0.74rem; color: #38bdf8; font-weight: 700; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace;">
-                  ${escapeHtml(c.subtitle)}
-                </div>
-                <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
-                  ${escapeHtml(c.desc)}
-                </div>
+            <button type="button" class="visual-node-card component-row" id="visual-card-${idx}" onclick="handleVisualCardClick(${idx})">
+              <div class="component-main">
+                <strong>${escapeHtml(c.title)}</strong>
+                <code>${escapeHtml(c.subtitle || '')}</code>
+                <p>${escapeHtml(c.desc || '')}</p>
               </div>
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid rgba(51, 65, 85, 0.5); flex-wrap: wrap;">
-                <span style="font-size: 0.75rem; color: #93c5fd; font-weight: 700;">
-                  ${isEn ? '👉 Show explanation on right' : '👉 右側に解説を表示'}
-                </span>
-                ${c.openRepoIndex !== -1 ? `
-                  <div style="display: flex; align-items: center; gap: 6px;">
-                    <button type="button" class="table-view-btn" onclick="rescanRepositoryDirect(event, '${encodeURIComponent(c.nodePath || c.title || '')}', this)" style="border-color: #38bdf8; color: #38bdf8; font-size: 0.72rem; padding: 4px 8px;">
-                      ${isEn ? '🔄 Re-scan' : '🔄 再スキャン'}
-                    </button>
-                    <button type="button" class="table-view-btn" onclick="event.stopPropagation(); selectDiagram(${c.openRepoIndex});" style="background: #2563eb; color: #fff; border-color: #60a5fa; font-size: 0.74rem; padding: 4px 10px;">
-                      ${isEn ? '📂 Open App ➔' : '📂 このアプリを開く ➔'}
-                    </button>
-                  </div>
-                ` : ''}
-              </div>
-            </div>
+              <span class="component-count">${isEn ? `${c.alertCount} findings` : `指摘 ${c.alertCount}件`}</span>
+              <span aria-hidden="true">›</span>
+            </button>
           `).join('')}
-        </div>
-      `;
+        </div>`;
     }
 
     function handleVisualCardClick(cardIdx) {
       const c = currentVisualCards[cardIdx];
       if (!c || !selectedDiagram) return;
+      if (document.documentElement.classList.contains('native-host')) setInspectorCollapsed(false);
       document.querySelectorAll('.visual-node-card').forEach((el, i) => {
         el.classList.toggle('selected', i === cardIdx);
       });
@@ -8041,6 +7999,7 @@ def build_portal_html(data, is_shareable=False):
 
       const item = diagrams[index];
       selectedDiagram = item;
+      if (typeof publishNativeWorkspace === 'function') publishNativeWorkspace();
       currentRepoSeqIndex = 0; // Reset seq index for the newly selected repo
       updateHeaderBreadcrumbs();
       renderRepoSummaryHero(item);
@@ -8061,7 +8020,7 @@ def build_portal_html(data, is_shareable=False):
       setArchSubView(getEffectiveArchSubView(item));
 
       viewTitle.textContent = `${item.repo}`;
-      const itemOwner = item.owner || (item.repo && item.repo.includes('/') ? item.repo.split('/')[0] : 'RepoCHK Mac');
+      const itemOwner = item.owner || (item.repo && item.repo.includes('/') ? item.repo.split('/')[0] : 'RepoAUDT Mac');
       viewBreadcrumb.textContent = `${itemOwner} / ${item.category} / ${item.perspective}`;
 
       const fresh = calculateDaysAgo(item.pushedAt || item.updatedAt);
@@ -8139,6 +8098,7 @@ def build_portal_html(data, is_shareable=False):
 
         nodeEl.addEventListener('click', (e) => {
           e.stopPropagation();
+          if (document.documentElement.classList.contains('native-host')) setInspectorCollapsed(false);
 
           gNodes.forEach(n => n.classList.remove('selected'));
           nodeEl.classList.add('selected');
@@ -8348,14 +8308,14 @@ def build_portal_html(data, is_shareable=False):
     function updateTerminalCwd() {
       const cwdEl = document.getElementById('terminal-cwd-display');
       if (!cwdEl) return;
-      const rName = selectedDiagram?.repo || 'RepoCHK-Mac';
+      const rName = selectedDiagram?.repo || 'RepoAUDT-Mac';
       cwdEl.textContent = `~/Git/${rName}`;
     }
 
     function clearTerminalOutput() {
       const area = document.getElementById('terminal-output-area');
       if (area) {
-        area.innerHTML = '<div style="color: #64748b;">=== RepoCHK Mac Terminal (Cleared) ===</div>';
+        area.innerHTML = '<div style="color: #64748b;">=== RepoAUDT Mac Terminal (Cleared) ===</div>';
       }
     }
 
@@ -8427,6 +8387,10 @@ def build_portal_html(data, is_shareable=False):
       if (!selectedNodeData) {
         inspEmpty.style.display = 'flex';
         inspContent.style.display = 'none';
+        return;
+      }
+      if (document.documentElement.classList.contains('native-host') && currentInspTab === 'overview') {
+        renderNativeInspector();
         return;
       }
       inspEmpty.style.display = 'none';
@@ -8907,7 +8871,7 @@ def build_portal_html(data, is_shareable=False):
           <div class="sec-legend-card">
             <div class="sec-legend-title">${isEn ? '🛡️ Security Status Criteria' : '🛡️ セキュリティ状態のステータス基準'}</div>
             <div class="sec-legend-row">
-              <span class="sec-legend-badge sec-legend-green">${isEn ? '🟢 Safe' : '🟢 安全'}</span>
+              <span class="sec-legend-badge sec-legend-green">${isEn ? 'No saved alerts' : '保存済み指摘なし'}</span>
               <span style="color: #cbd5e1;">${isEn ? 'No known critical unpatched CVEs. Meets official LTS & stability standards.' : '既知の重大な未パッチ脆弱性（CVE）なし。公式LTS・安定基準に適合'}</span>
             </div>
             <div class="sec-legend-row">
@@ -9309,7 +9273,7 @@ def build_portal_html(data, is_shareable=False):
       const repoNameEl = document.getElementById('badge-repo-name');
       const modeNameEl = document.getElementById('badge-mode-name');
       if (repoNameEl && selectedDiagram) {
-        repoNameEl.textContent = selectedDiagram.repo || 'RepoCHK Mac';
+        repoNameEl.textContent = selectedDiagram.repo || 'RepoAUDT Mac';
       }
       if (modeNameEl) {
         const dict = I18N[currentLang] || I18N.ja;
@@ -9534,7 +9498,7 @@ def build_portal_html(data, is_shareable=False):
 
       const repoSlug = (selectedDiagram?.repo || 'diagram').replace(/[^a-zA-Z0-9_\\-]/g, '_');
       const modeSuffix = currentViewMode === 'seq' ? 'sequence' : 'architecture';
-      const fileName = `RepoCHK_${repoSlug}_${modeSuffix}.svg`;
+      const fileName = `RepoAUDT_${repoSlug}_${modeSuffix}.svg`;
 
       const serializer = new XMLSerializer();
       const svgString = '<?xml version="1.0" encoding="UTF-8"?>\\n' + serializer.serializeToString(info.svgElement);
@@ -9550,7 +9514,7 @@ def build_portal_html(data, is_shareable=False):
 
       const repoSlug = (selectedDiagram?.repo || 'diagram').replace(/[^a-zA-Z0-9_\\-]/g, '_');
       const modeSuffix = currentViewMode === 'seq' ? 'sequence' : 'architecture';
-      const fileName = `RepoCHK_${repoSlug}_${modeSuffix}.png`;
+      const fileName = `RepoAUDT_${repoSlug}_${modeSuffix}.png`;
 
       const serializer = new XMLSerializer();
       const svgString = serializer.serializeToString(info.svgElement);
@@ -9646,210 +9610,90 @@ def build_portal_html(data, is_shareable=False):
         renderCodeRabbitView();
       }
       updateHeaderBreadcrumbs();
+      if (typeof publishNativeWorkspace === 'function') publishNativeWorkspace(mode);
     }
 
 
     /* ==========================================================================
        CodeRabbit View Rendering & Action Required Hub Handlers
        ========================================================================== */
+    function getWorkspaceIssues(repo) {
+      const actions = getRepoActionItems(repo);
+      const findings = (repo.coderabbit?.findings || []).filter(finding =>
+        !actions.some(action => action.title === finding.title && action.file === (finding.file || finding.path)));
+      return [...actions, ...findings];
+    }
+
+    function workspaceSeverity(severity) {
+      const value = String(severity || '').toLowerCase();
+      if (['critical', 'high'].includes(value)) return 'danger';
+      if (['medium', 'warning'].includes(value)) return 'warning';
+      if (['info', 'low', 'suggestion'].includes(value)) return 'info';
+      return 'neutral';
+    }
+
     function renderCodeRabbitView() {
-      const crView = document.getElementById('coderabbit-view');
-      if (!crView || !selectedDiagram) return;
-
+      const view = document.getElementById('coderabbit-view');
+      if (!view) return;
+      const en = currentLang === 'en';
+      if (!selectedDiagram) {
+        view.innerHTML = `<div class="audit-empty">${en ? 'Add a repository to view audit results.' : 'リポジトリを追加すると監査結果が表示されます。'}</div>`;
+        return;
+      }
       const repo = selectedDiagram;
-      const cr = repo.coderabbit || {
-        score: 90,
-        status: "PASSED",
-        summary: `${repo.repo} の最新コード品質・セキュリティレビュー。`,
-        stats: { critical: 0, warning: 1, info: 2 },
-        walkthrough: [],
-        action_items: [],
-        findings: []
-      };
-
-      const dict = (typeof I18N !== 'undefined' && I18N[currentLang]) ? I18N[currentLang] : (typeof I18N !== 'undefined' ? I18N.ja : {});
-      const actionList = cr.action_items || [];
-      const findingList = cr.findings || [];
-      const stObj = cr.stats || {};
-      const critCount = stObj.critical !== undefined ? stObj.critical : actionList.filter(a => ['critical', 'high'].includes(String(a.severity || '').toLowerCase())).length;
-      const warnCount = stObj.warning !== undefined ? stObj.warning : actionList.filter(a => ['warning', 'medium'].includes(String(a.severity || '').toLowerCase())).length;
-      const infoCount = stObj.info !== undefined ? stObj.info : Math.max(1, actionList.filter(a => ['info', 'low'].includes(String(a.severity || '').toLowerCase())).length);
-
-      const hasAction = cr.status === 'NEEDS_ATTENTION' || cr.status === 'ACTION_REQUIRED' || actionList.length > 0;
-      const scoreClass = cr.score >= 90 ? 'score-high' : (cr.score >= 80 ? 'score-med' : 'score-low');
-      const statusLabel = hasAction
-        ? (dict.cr_status_action || '🔴 要対応 (Action Required)')
-        : (cr.status === 'PASSED_WITH_WARNINGS' ? (dict.cr_status_warn || '🟡 要確認 (Warnings)') : (dict.cr_status_pass || '🟢 合格 (Passed)'));
-
-      const repoOwner = repo.owner || (repo.repo && repo.repo.includes('/') ? repo.repo.split('/')[0] : 'RepoCHK Mac');
-      viewBreadcrumb.textContent = `${repoOwner} / ${repo.repo} / coderabbit-ai-review`;
-
-      const actionTitle = (dict.cr_action_items_title || '要対応アクションアイテム ({n}件) - 即時パッチ・修正が必要').replace('{n}', cr.action_items.length);
-      const findingsTitle = (dict.cr_findings_title || '検出されたコードレビュー指摘 & 修正提案 ({n}件)').replace('{n}', cr.findings ? cr.findings.length : 0);
-
-      crView.innerHTML = `
-        <div class="cr-dashboard-grid">
-          <!-- Executive Banner -->
-          <div class="cr-header-banner">
-            <div class="cr-header-left">
-              <div class="cr-logo-badge">🐰</div>
-              <div class="cr-header-titles">
-                <h2>
-                  <span>${dict.cr_title || 'CodeRabbit AI コード品質 & セキュリティ監査レポート'}</span>
-                  <span style="font-size: 0.72rem; padding: 3px 8px; border-radius: 4px; background: ${hasAction ? 'rgba(239, 68, 68, 0.2)' : 'rgba(99, 102, 241, 0.2)'}; border: 1px solid ${hasAction ? '#ef4444' : 'rgba(99, 102, 241, 0.4)'}; color: ${hasAction ? '#fca5a5' : '#c7d2fe'};">
-                    ${statusLabel}
-                  </span>
-                </h2>
-                <p>${dict.cr_target_repo || '対象リポジトリ:'} <strong>${repo.repo}</strong> ｜ ${dict.cr_latest_commit || '最新コミット:'} <code>${repo.commit_hash}</code> (${repo.commit_date}) ｜ ${dict.cr_author || '作成者:'} <strong>${repo.commit_author}</strong></p>
-                <p style="margin-top: 6px; color: #cbd5e1;">${cr.summary}</p>
-              </div>
-            </div>
-
-            <div class="cr-stats-row">
-              <div class="cr-score-card">
-                <div class="cr-score-val ${scoreClass}">${cr.score}</div>
-                <div class="cr-score-label">${dict.cr_score_label || '品質スコア / 100'}</div>
-              </div>
-
-              <div class="cr-counts-pill-group">
-                <div class="cr-count-item crit">
-                  <span>${dict.cr_crit_label || '🚨 重大リスク (Critical)'}</span>
-                  <strong>${critCount}件</strong>
-                </div>
-                <div class="cr-count-item warn">
-                  <span>${dict.cr_warn_label || '⚠️ 警告 (Warning)'}</span>
-                  <strong>${warnCount}件</strong>
-                </div>
-                <div class="cr-count-item info">
-                  <span>${dict.cr_info_label || '💡 改善提案 (Suggestion)'}</span>
-                  <strong>${infoCount}件</strong>
-                </div>
-              </div>
-            </div>
+      const issues = getWorkspaceIssues(repo);
+      view.innerHTML = `
+        <section class="workspace-audit">
+          <div class="workspace-audit-heading">
+            <h2>${en ? 'Saved findings' : '保存済みの指摘'}</h2>
+            <span>${en ? `${issues.length} findings` : `${issues.length}件`}</span>
           </div>
-
-          <!-- Section 1: Action Required Hotspots (If any) -->
-          ${cr.action_items && cr.action_items.length > 0 ? `
-            <div class="cr-section-card" style="border-color: rgba(239, 68, 68, 0.4);">
-              <div class="cr-section-title" style="color: #fca5a5;">
-                <span>🚨</span>
-                <span>${actionTitle}</span>
-              </div>
-              <div>
-                ${cr.action_items.map(act => `
-                  <div class="action-hotspot-item">
-                    <div class="hotspot-top-row">
-                      <span class="hotspot-title">🔴 ${act.title}</span>
-                      <span style="font-size: 0.7rem; color: #94a3b8; font-family: monospace;">📁 ${act.file}</span>
-                    </div>
-                    <div style="font-size: 0.8rem; color: #f1f5f9; line-height: 1.5; margin-bottom: 6px;">
-                      ${act.desc}
-                    </div>
-                    <div style="margin: 6px 0 8px 0; background: rgba(120, 53, 15, 0.28); border: 1px solid rgba(251, 191, 36, 0.35); border-left: 3px solid #fbbf24; padding: 8px 11px; border-radius: 6px;">
-                      <div style="font-size: 0.73rem; font-weight: 800; color: #fde047; margin-bottom: 3px;">💥 ${currentLang === 'en' ? 'What Could Happen / Potential Risk:' : 'どんなことがされちゃうのか・起こりうる被害:'}</div>
-                      <div style="font-size: 0.78rem; color: #fef3c7; line-height: 1.52;">${escapeHtml(explainWhatCouldHappen(act, currentLang === 'en'))}</div>
-                    </div>
-                    ${act.official_source ? `
-                      <div style="margin-bottom: 6px;">
-                        <a href="${act.official_source}" target="_blank" style="color: #38bdf8; font-size: 0.72rem; text-decoration: none;">
-                          ${dict.cr_official_source_link || '🏛️ 公式セキュリティアドバイザリ (NVD / GitHub) で詳細を確認 ↗'}
-                        </a>
-                      </div>
-                    ` : ''}
-                    ${act.fix_cmd ? `
-                      <div class="hotspot-fix-box">
-                        <span class="hotspot-cmd">$ ${escapeHtml(act.fix_cmd)}</span>
-                        <button class="hotspot-copy-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(act.fix_cmd)}">${dict.cr_copy_cmd || '📋 コマンドをコピー'}</button>
-                      </div>
-                    ` : ''}
-                    ${renderAiAgentPromptWidget(repo.repo, act)}
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          ` : `
-            <div class="cr-section-card" style="border-left: 4px solid #10b981; padding: 14px 20px;">
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 1.2rem;">🟢</span>
-                <div>
-                  <strong style="color: #34d399; font-size: 0.88rem;">${dict.cr_no_critical || '緊急の要対応事項（CRITICAL）はありません'}</strong>
-                  <div style="color: #94a3b8; font-size: 0.75rem;">${dict.cr_no_critical_sub || '既知の重大な未パッチ脆弱性（CVE）およびセキュリティアンチパターンは検知されていません。'}</div>
-                </div>
-              </div>
-            </div>
-          `}
-
-          <!-- Section 2: AI Walkthrough & Summary -->
-          <div class="cr-section-card">
-            <div class="cr-section-title">
-              <span>📋</span>
-              <span>${dict.cr_walkthrough_title || 'コミット変更ウォークスルー (High-level Walkthrough)'}</span>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
-              ${cr.walkthrough && cr.walkthrough.length > 0 ? cr.walkthrough.map((w, idx) => `
-                <div style="background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 12px 14px;">
-                  <div style="font-size: 0.82rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px;">
-                    ${idx + 1}. ${w.title || w.path || 'Module'}
-                  </div>
-                  <div style="font-size: 0.75rem; color: #94a3b8; line-height: 1.45;">
-                    ${w.desc || w.summary || ''}
-                  </div>
-                </div>
-              `).join('') : `<div style="color: #64748b; font-size: 0.8rem;">${dict.cr_no_walkthrough || 'ウォークスルー情報がありません。'}</div>`}
-            </div>
+          <p class="audit-note">${en ? 'Open a finding to inspect the evidence, impact and suggested fix. Results reflect the saved analysis.' : '指摘を開くと、根拠・影響・修正案を確認できます。保存された解析時点の結果です。'}</p>
+          <div class="audit-color-key" aria-label="${en ? 'Severity legend' : '重要度の凡例'}">
+            <span class="issue-severity danger">⛔ ${en ? 'Critical / High' : '重大・高リスク'}</span>
+            <span class="issue-severity warning">△ ${en ? 'Medium / Warning' : '中リスク・警告'}</span>
+            <span class="issue-severity info">ⓘ ${en ? 'Low / Suggestion' : '低リスク・改善'}</span>
           </div>
-
-          <!-- Section 3: Review Findings & Diff Previews -->
-          <div class="cr-section-card">
-            <div class="cr-section-title">
-              <span>🔬</span>
-              <span>${findingsTitle}</span>
-            </div>
-            ${cr.findings && cr.findings.length > 0 ? cr.findings.map(f => `
-              <div class="cr-finding-card">
-                <div class="cr-finding-header">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="sec-legend-badge ${String(f.severity || '').toUpperCase() === 'CRITICAL' || String(f.severity || '').toUpperCase() === 'HIGH' ? 'sec-legend-red' : (String(f.severity || '').toUpperCase() === 'WARNING' || String(f.severity || '').toUpperCase() === 'MEDIUM' ? 'pill-yellow' : 'sec-legend-green')}">
-                      ${String(f.severity || 'INFO').toUpperCase()}
-                    </span>
-                    <span style="font-size: 0.78rem; font-weight: 700; color: #fff;">${f.title}</span>
+          <div class="audit-list">
+            ${issues.length ? issues.map(issue => {
+              const severity = String(issue.severity || 'info').toLowerCase();
+              const tone = workspaceSeverity(severity);
+              const file = issue.file || issue.path || '';
+              const report = encodeDataArg(issue);
+              const name = encodeURIComponent(repo.repo || '').replace(/'/g, '%27');
+              const prompt = encodeURIComponent(buildAiAgentFixPrompt(repo.repo, issue)).replace(/'/g, '%27');
+              let sourceLink = '';
+              try {
+                const source = new URL(issue.official_source);
+                if (source.protocol === 'https:' || source.protocol === 'http:') {
+                  sourceLink = `<a href="${escapeHtml(source.href)}" target="_blank" rel="noopener noreferrer">${en ? 'View source' : '出典を確認'} ↗</a>`;
+                }
+              } catch (_) { /* A finding can legitimately have no external advisory. */ }
+              return `<details class="audit-issue">
+                <summary>
+                  <span class="issue-severity ${tone}"><span aria-hidden="true">${tone === 'danger' ? '⛔' : tone === 'warning' ? '△' : tone === 'info' ? 'ⓘ' : '—'}</span> ${escapeHtml(severity.toUpperCase())}</span>
+                  <div class="issue-heading">
+                    <div class="issue-title">${escapeHtml(issue.title || (en ? 'Review finding' : '確認事項'))}</div>
+                    <div class="issue-path">${escapeHtml(file || (en ? 'Location not recorded' : '場所未記録'))}</div>
                   </div>
-                  <span class="cr-finding-path">📁 ${f.file}</span>
-                </div>
-                <div class="cr-finding-body">
-                  <div class="cr-finding-comment">
-                    ${f.comment || f.desc || ''}
+                </summary>
+                <div class="issue-body">
+                  <h3>${en ? 'Evidence and reason' : '根拠と理由'}</h3>
+                  <p>${escapeHtml(issue.desc || issue.comment || issue.summary || (en ? 'No additional evidence recorded.' : '追加の根拠は記録されていません。'))}</p>
+                  <h3>${en ? 'Potential impact' : '想定される影響'}</h3>
+                  <p>${escapeHtml(explainWhatCouldHappen(issue, en))}</p>
+                  ${issue.diff ? `<h3>${en ? 'Suggested change' : '修正案'}</h3><pre>${escapeHtml(issue.diff)}</pre>` : ''}
+                  ${issue.fix_cmd ? `<h3>${en ? 'Suggested command' : '修正コマンド案'}</h3><pre>${escapeHtml(issue.fix_cmd)}</pre>` : ''}
+                  <div class="issue-actions">
+                    <button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${prompt}">${en ? 'Copy fix prompt' : '修正プロンプトをコピー'}</button>
+                    <button type="button" class="table-view-btn" onclick="downloadSingleActionReport('${report}', '${name}')">${en ? 'Save report' : 'レポートを保存'}</button>
+                    ${sourceLink}
                   </div>
-                  ${f.diff ? `
-                    <div style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 4px; font-weight: 700;">
-                      ${dict.cr_diff_preview_title || '💡 CodeRabbit 推奨コード修正 (Diff Preview):'}
-                    </div>
-                    <pre class="cr-diff-container">${f.diff.split(String.fromCharCode(10)).map(line => {
-                      if (line.startsWith('+')) return `<span class="cr-diff-add">${line}</span>`;
-                      if (line.startsWith('-')) return `<span class="cr-diff-del">${line}</span>`;
-                      return `<span>${line}</span>`;
-                    }).join('<br/>')}</pre>
-                  ` : ''}
-                  ${renderAiAgentPromptWidget(repo.repo, f)}
                 </div>
-              </div>
-            `).join('') : `<div style="color: #64748b; font-size: 0.8rem;">${dict.cr_no_findings || '指摘事項はありません。'}</div>`}
+              </details>`;
+            }).join('') : `<div class="audit-empty">${en ? 'No findings recorded in this analysis. Review the scan scope before drawing conclusions.' : 'この解析に保存された指摘はありません。確認範囲は解析の詳細から確認してください。'}</div>`}
           </div>
-
-          <!-- Section 4: Configuration Status -->
-          <div class="cr-section-card" style="background: rgba(15, 23, 42, 0.5);">
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-              <div>
-                <strong style="color: #e2e8f0; font-size: 0.82rem;">${dict.cr_config_title || '⚙️ CodeRabbit 監視設定 (.coderabbit.yaml)'}</strong>
-                <div style="font-size: 0.72rem; color: #94a3b8;">${dict.cr_config_detail || 'レビュー言語: 日本語 (ja-JP) ｜ プロファイル: Assertive (高精度監査) ｜ シーケンス図自動生成: 有効'}</div>
-              </div>
-              <a href="${repo.github_url}" target="_blank" class="gh-link-btn" style="font-size: 0.72rem;">
-                ${dict.cr_view_repo || 'GitHubでこのリポジトリを確認 ↗'}
-              </a>
-            </div>
-          </div>
-        </div>
-      `;
+        </section>`;
     }
 
     /* ==========================================================================
@@ -10079,13 +9923,14 @@ def build_portal_html(data, is_shareable=False):
         }
       });
 
-      if (matchedNodes.length === 0 && candidateNodes.length > 0) {
-        matchedNodes.push(candidateNodes[Math.min(1, candidateNodes.length - 1)]);
-      }
-
       matchedNodes.forEach(node => {
         node.classList.add('action-required-node-highlight');
-        node._actionItems = actionItems;
+        const label = (node.textContent || '').toLowerCase();
+        const related = actionItems.filter(issue =>
+          issue.target_node && label.includes(String(issue.target_node).toLowerCase()));
+        const ranked = (related.length ? related : actionItems).map(issue => workspaceSeverity(issue.severity));
+        node.dataset.severity = ranked.includes('danger') ? 'danger' : ranked.includes('warning') ? 'warning' : ranked.includes('info') ? 'info' : 'neutral';
+        node._actionItems = related.length ? related : actionItems;
         currentHighlightedNodes.push(node);
 
         const shapes = node.querySelectorAll('rect, polygon, path, circle');
@@ -10242,8 +10087,8 @@ def build_portal_html(data, is_shareable=False):
       "online_count": 3,
       "services": [
         {
-          "id": "repochk_engine",
-          "name": "RepoCHK Mac Analysis Engine (Port 18765)",
+          "id": "repoaudt_engine",
+          "name": "RepoAUDT Mac Analysis Engine (Port 18765)",
           "type": "Local Backend",
           "status": "ONLINE",
           "latency_ms": 1,
@@ -10708,7 +10553,7 @@ def build_portal_html(data, is_shareable=False):
     async function browseOrgRepositories() {
       const isEn = currentLang === 'en';
       const input = document.getElementById('modal-gh-url-input');
-      const rawUrl = (input && input.value.trim()) ? input.value.trim() : (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoCHK-Mac');
+      const rawUrl = (input && input.value.trim()) ? input.value.trim() : (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoAUDT-Mac');
       if (input && !input.value.trim()) input.value = rawUrl;
 
       const browserBox = document.getElementById('org-repos-browser-box');
@@ -10943,7 +10788,7 @@ def build_portal_html(data, is_shareable=False):
         await syncSavedAnalysesFromServer();
         const params = new URLSearchParams(window.location.search);
         if (params.get('openModal') === 'analyze') {
-          openAnalyzeModal(params.get('url') || (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoCHK-Mac'));
+          openAnalyzeModal(params.get('url') || (diagrams[0]?.github_url || 'https://github.com/nanonigit/RepoAUDT-Mac'));
         } else if (params.get('openModal') === 'admin') {
           openAdminSettingsModal();
         }
@@ -11290,14 +11135,14 @@ def build_portal_html(data, is_shareable=False):
       const isEn = (typeof currentLang !== 'undefined' && currentLang === 'en');
       const nowStr = new Date().toLocaleString(isEn ? 'en-US' : 'ja-JP');
       const repoName = repoItem.repo || 'Repository';
-      const fileName = `RepoCHK_Executive_Report_${repoName.replace(/[^a-zA-Z0-9_\\-]/g, '_')}.md`;
+      const fileName = `RepoAUDT_Executive_Report_${repoName.replace(/[^a-zA-Z0-9_\\-]/g, '_')}.md`;
       const repoActions = (typeof getRepoActionItems === 'function') ? getRepoActionItems(repoItem) : [];
 
-      let md = `# 🛡️ RepoCHK Mac — ${isEn ? 'Executive Architecture & Security Summary' : 'エグゼクティブ・システム概要＆安全性サマリーレポート'}\\n\\n`;
+      let md = `# 🛡️ RepoAUDT Mac — ${isEn ? 'Executive Architecture & Security Summary' : 'エグゼクティブ・システム概要＆安全性サマリーレポート'}\\n\\n`;
       md += `- **${isEn ? 'Target Repository' : '対象リポジトリ'}**: \\`${repoName}\\` (${repoItem.category || 'Module'})\\n`;
       md += `- **GitHub URL**: ${repoItem.github_url || 'N/A'}\\n`;
       md += `- **${isEn ? 'Generated At' : 'レポート出力日時'}**: ${nowStr}\\n`;
-      md += `- **${isEn ? 'Audit Engine' : '監査エンジン'}**: RepoCHK Mac Architecture & Security Studio\\n\\n`;
+      md += `- **${isEn ? 'Audit Engine' : '監査エンジン'}**: RepoAUDT Mac Architecture & Security Studio\\n\\n`;
       md += `---\\n\\n`;
 
       md += `## 1. ${isEn ? 'System Responsibility & Business Role' : 'システムの役割・提供機能 (役割と責務)'}\\n\\n`;
@@ -11324,7 +11169,7 @@ def build_portal_html(data, is_shareable=False):
           md += `\\n`;
         });
       }
-      md += `---\\n*Generated by RepoCHK Mac — Intuitive Repository & Security Intelligence*\\n`;
+      md += `---\\n*Generated by RepoAUDT Mac — Intuitive Repository & Security Intelligence*\\n`;
 
       saveFileToUser(fileName, md, false, 'text/markdown;charset=utf-8');
     }
@@ -11788,16 +11633,16 @@ def build_portal_html(data, is_shareable=False):
       const nowStr = isEn ? new Date().toUTCString() : new Date().toLocaleString('ja-JP');
       const safeTitle = (act.title || 'issue').replace(/[^\\w\\d\\-\\u3000-\\u303f\\u3040-\\u309f\\u30a0-\\u30ff\\uff00-\\uff9f\\u4e00-\\u9faf]/g, '_').substring(0, 50);
       const fileName = isEn
-        ? `RepoCHK_Mac_Remediation_Report_${safeTitle}.md`
-        : `RepoCHK_Mac_改善レポート_${safeTitle}.md`;
+        ? `RepoAUDT_Mac_Remediation_Report_${safeTitle}.md`
+        : `RepoAUDT_Mac_改善レポート_${safeTitle}.md`;
 
       let md = isEn
-        ? `# 🛡️ RepoCHK Mac Security & Remediation Report\\n\\n`
-        : `# 🛡️ RepoCHK Mac 改善・セキュリティ監査レポート\\n\\n`;
+        ? `# 🛡️ RepoAUDT Mac Security & Remediation Report\\n\\n`
+        : `# 🛡️ RepoAUDT Mac 改善・セキュリティ監査レポート\\n\\n`;
 
       md += isEn
-        ? `- **Repository**: ${repoName || 'All Ecosystem'}\\n- **Action Item**: ${act.title || 'Action Required'}\\n- **Target File / Path**: \\`${act.file || 'N/A'}\\`\\n- **Severity**: ${act.severity || 'CRITICAL'}\\n- **Generated At**: ${nowStr}\\n- **Audit Engine**: RepoCHK Mac Architecture & Vulnerability AI Studio\\n\\n---\\n\\n## ⚠️ Reason for Action (Risk Analysis)\\n\\n${act.desc || 'No detailed risk description available.'}\\n\\n---\\n\\n## 🛠️ Proposed Solution & Remediation\\n\\n`
-        : `- **リポジトリ名**: ${repoName || '全体エコシステム'}\\n- **改善項目**: ${act.title || '要対応事項'}\\n- **対象ファイル / 箇所**: \\`${act.file || 'N/A'}\\`\\n- **重要度**: ${act.severity || 'CRITICAL (要対応)'}\\n- **出力日時**: ${nowStr}\\n- **監査エンジン**: RepoCHK Mac Architecture & Vulnerability AI Studio\\n\\n---\\n\\n## ⚠️ 要対応の理由 (なぜ必要か / リスク分析)\\n\\n${act.desc || '詳細なリスク情報はありません。'}\\n\\n---\\n\\n## 🛠️ 対応方法の提案 (具体的な対策)\\n\\n`;
+        ? `- **Repository**: ${repoName || 'All Ecosystem'}\\n- **Action Item**: ${act.title || 'Action Required'}\\n- **Target File / Path**: \\`${act.file || 'N/A'}\\`\\n- **Severity**: ${act.severity || 'CRITICAL'}\\n- **Generated At**: ${nowStr}\\n- **Audit Engine**: RepoAUDT Mac Architecture & Vulnerability AI Studio\\n\\n---\\n\\n## ⚠️ Reason for Action (Risk Analysis)\\n\\n${act.desc || 'No detailed risk description available.'}\\n\\n---\\n\\n## 🛠️ Proposed Solution & Remediation\\n\\n`
+        : `- **リポジトリ名**: ${repoName || '全体エコシステム'}\\n- **改善項目**: ${act.title || '要対応事項'}\\n- **対象ファイル / 箇所**: \\`${act.file || 'N/A'}\\`\\n- **重要度**: ${act.severity || 'CRITICAL (要対応)'}\\n- **出力日時**: ${nowStr}\\n- **監査エンジン**: RepoAUDT Mac Architecture & Vulnerability AI Studio\\n\\n---\\n\\n## ⚠️ 要対応の理由 (なぜ必要か / リスク分析)\\n\\n${act.desc || '詳細なリスク情報はありません。'}\\n\\n---\\n\\n## 🛠️ 対応方法の提案 (具体的な対策)\\n\\n`;
 
       if (act.diff) {
         md += isEn ? `### Recommended Code Diff:\\n\\`\\`\\`diff\\n${act.diff}\\n\\`\\`\\`\\n\\n` : `### 推奨コード変更 (Diff):\\n\\`\\`\\`diff\\n${act.diff}\\n\\`\\`\\`\\n\\n`;
@@ -11812,7 +11657,7 @@ def build_portal_html(data, is_shareable=False):
         ? `## 🤖 AI Agent Remediation Prompt (for Claude Code / Cursor / Codex / Antigravity)\\n\\n`
         : `## 🤖 AIエージェント修正指示プロンプト (Claude Code / Cursor / Codex / Antigravity 用)\\n\\n`;
       md += `\\`\\`\\`text\\n${aiPrompt}\\n\\`\\`\\`\\n\\n`;
-      md += `---\\n*Generated by RepoCHK Mac — Architecture & Vulnerability AI Studio*\\n`;
+      md += `---\\n*Generated by RepoAUDT Mac — Architecture & Vulnerability AI Studio*\\n`;
 
       saveFileToUser(fileName, md, false, 'text/markdown;charset=utf-8');
     }
@@ -12200,7 +12045,7 @@ def build_portal_html(data, is_shareable=False):
         seqBar.innerHTML = '';
       }
 
-      const diagOwner = selectedDiagram.owner || (selectedDiagram.repo && selectedDiagram.repo.includes('/') ? selectedDiagram.repo.split('/')[0] : 'RepoCHK Mac');
+      const diagOwner = selectedDiagram.owner || (selectedDiagram.repo && selectedDiagram.repo.includes('/') ? selectedDiagram.repo.split('/')[0] : 'RepoAUDT Mac');
       viewBreadcrumb.textContent = `${diagOwner} / ${selectedDiagram.repo} / sequence / ${activeSeqId}`;
       viewTitle.textContent = `${selectedDiagram.repo} - ${cleanSeqTitle(activeSeq.short_title || activeSeq.title)}`;
 
@@ -12512,98 +12357,37 @@ def build_portal_html(data, is_shareable=False):
 
   <!-- Analyze Any GitHub Repository Modal -->
   <div id="analyze-repo-modal" style="display: none;" onclick="closeAnalyzeModal()">
-    <div class="action-hub-dialog" onclick="event.stopPropagation()" style="border-color: #3b82f6; max-width: 820px;">
-      <div class="action-hub-header" style="background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 1.4rem;">🔍</span>
-          <div>
-            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; font-weight: 800;" data-i18n="modal_analyze_title">GitHub リポジトリ追加分析 &amp; 保有リスト管理 (RepoCHK Mac)</h3>
-            <span style="font-size: 0.72rem; color: #93c5fd;" data-i18n="modal_analyze_sub">新しい組織URL・リポジトリURLの追加解析と、保有データの確認・不要リポジトリの削除が行えます</span>
-          </div>
-        </div>
-        <button class="modal-close-btn" onclick="closeAnalyzeModal()" data-i18n="btn_close_x">✕ 閉じる</button>
+    <div class="action-hub-dialog workspace-dialog" role="dialog" aria-modal="true" aria-labelledby="workspace-add-title" onclick="event.stopPropagation()">
+      <div class="action-hub-header">
+        <h3 id="workspace-add-title" data-i18n="workspace_add_title">リポジトリを追加</h3>
+        <button type="button" class="modal-close-btn" onclick="closeAnalyzeModal()" data-i18n="workspace_close">閉じる</button>
       </div>
-      <div class="action-hub-body" style="padding: 20px; overflow-y: auto; max-height: 78vh;">
-        <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #e2e8f0; margin-bottom: 6px;" data-i18n="modal_analyze_label">
-            ➕ 新しく追加・分析したい 組織URL (<code style="color: #34d399;">https://github.com/org</code>) または リポジトリURL (<code style="color: #38bdf8;">owner/repo</code>):
-          </label>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <input id="modal-gh-url-input" type="text" placeholder="例: https://github.com/nanonigit または https://github.com/nanonigit/RepoCHK-Mac" data-i18n-placeholder="modal_analyze_placeholder"
-              style="flex: 1; min-width: 260px; background: #090d16; border: 1.5px solid #3b82f6; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 0.88rem; outline: none;"
-              onkeydown="if(event.key==='Enter') submitModalAnalyze()" />
-            <button id="modal-gh-browse-btn" onclick="browseOrgRepositories()"
-              style="background: #1e293b; border: 1px solid #60a5fa; color: #93c5fd; font-size: 0.8rem; font-weight: 800; padding: 10px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;"
-              title="親階層(組織/ユーザー)に含まれるリポジトリ一覧を表示して選択できます" data-i18n="modal_btn_browse">
-              📂 配下一覧を表示
-            </button>
-            <button id="modal-gh-submit-btn" onclick="submitModalAnalyze()"
-              style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: 1px solid #60a5fa; color: #fff; font-size: 0.85rem; font-weight: 800; padding: 10px 20px; border-radius: 8px; cursor: pointer; white-space: nowrap;" data-i18n="modal_btn_submit">
-              🚀 追加して分析
-            </button>
-          </div>
+      <div class="action-hub-body">
+        <label for="modal-gh-url-input" data-i18n="workspace_url_label">GitHub URL</label>
+        <p class="workspace-dialog-hint" data-i18n="workspace_url_hint">リポジトリまたは組織の URL を入力してください。</p>
+        <input id="modal-gh-url-input" type="text" placeholder="https://github.com/owner/repo" onkeydown="if(event.key==='Enter') submitModalAnalyze()" />
+        <div class="workspace-dialog-actions">
+          <button type="button" id="modal-gh-browse-btn" class="table-view-btn" onclick="browseOrgRepositories()" data-i18n="workspace_browse">組織の一覧を取得</button>
+          <button type="button" id="modal-gh-submit-btn" class="table-view-btn workspace-primary" onclick="submitModalAnalyze()" data-i18n="workspace_analyze">解析を開始</button>
         </div>
-
-        <div style="margin-bottom: 14px;">
-          <div style="font-size: 0.72rem; color: #34d399; font-weight: 700; margin-bottom: 6px;" data-i18n="modal_org_quick_title">🏢 上の階層（組織 / ユーザー全体エコシステム）からまとめて追加:</div>
-          <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-            <button class="table-view-btn" style="border-color: #10b981; color: #6ee7b7;" onclick="quickFillAndAnalyze('https://github.com/nanonigit')" data-i18n="modal_org_quick_all">👤 https://github.com/nanonigit (全体を追加)</button>
-            <button class="table-view-btn" onclick="quickBrowseOrg('https://github.com/nanonigit')" data-i18n="modal_org_quick_browse">📂 nanonigit の配下一覧</button>
-          </div>
-          <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 6px;" data-i18n="modal_direct_quick_title">📦 個別リポジトリをダイレクトに追加:</div>
-          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/AmazonDeliverySync')">📦 nanonigit/AmazonDeliverySync</button>
-            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/VisualBarTimer')">⏱️ nanonigit/VisualBarTimer</button>
-            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/DesktopCalendar')">📅 nanonigit/DesktopCalendar</button>
-            <button class="table-view-btn" onclick="quickFillAndAnalyze('https://github.com/nanonigit/RepoCHK-Mac')">🐰 nanonigit/RepoCHK-Mac</button>
-          </div>
+        <div id="org-repos-browser-box" style="display: none;">
+          <h4 id="org-repos-browser-title" data-i18n="workspace_browse_title">組織のリポジトリ</h4>
+          <div id="org-repos-browser-list"></div>
         </div>
-
-        <!-- Organization / User Repository Browser List -->
-        <div id="org-repos-browser-box" style="display: none; background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-            <div id="org-repos-browser-title" style="font-size: 0.8rem; font-weight: 800; color: #60a5fa;" data-i18n="modal_org_browser_title">📂 配下リポジトリ一覧</div>
-            <button class="table-view-btn" style="background: #2563eb; color: #fff; border-color: #60a5fa;" onclick="submitModalAnalyze()" data-i18n="modal_org_add_all_btn">
-              🏢 この組織の全体エコシステム＋全リポジトリを一括追加
-            </button>
-          </div>
-          <div id="org-repos-browser-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; max-height: 200px; overflow-y: auto;"></div>
+        <div id="analyze-progress-box" role="status" aria-live="polite" style="display: none;">
+          <div id="analyze-progress-title"></div>
+          <span id="modal-analyze-countdown-text"></span>
+          <div class="workspace-progress-track"><div id="modal-analyze-progress-bar"></div></div>
+          <div id="analyze-progress-detail"></div>
         </div>
-
-        <div id="analyze-progress-box" style="display: none; background: #090d16; border: 1.5px solid #38bdf8; border-radius: 8px; padding: 14px; margin-bottom: 14px; box-shadow: 0 4px 16px rgba(56, 189, 248, 0.15);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
-            <div id="analyze-progress-title" style="font-size: 0.85rem; font-weight: 800; color: #38bdf8;">
-              ⏳ リポジトリをクローン＆静的解析中...
-            </div>
-            <div id="modal-analyze-countdown-text" style="font-size: 0.84rem; font-weight: 900; color: #fde047; font-family: 'JetBrains Mono', monospace; background: rgba(253, 224, 71, 0.12); border: 1px solid rgba(253, 224, 71, 0.3); padding: 2px 8px; border-radius: 9999px;">
-              約18秒
-            </div>
-          </div>
-          <div style="height: 5px; background: #1e293b; border-radius: 3px; overflow: hidden; margin: 8px 0;">
-            <div id="modal-analyze-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.8s ease;"></div>
-          </div>
-          <div id="analyze-progress-detail" style="font-size: 0.74rem; color: #94a3b8; line-height: 1.5;" data-i18n="modal_analyze_persist_note">
-            解析結果は保有リストに自動保存され、次回起動時もそのまま保持されます。
-          </div>
-        </div>
-
-        <!-- Saved / Retained Repositories Management List -->
-        <div style="background: #090d16; border: 1px solid #334155; border-radius: 10px; padding: 14px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
-            <div style="font-size: 0.84rem; font-weight: 800; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
-              <span><span data-i18n="modal_saved_list_title">📋 現在保有しているリポジトリ一覧</span> (<span id="saved-repos-total-count">0</span>)</span>
-              <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;" data-i18n="modal_saved_list_note">※アプリを閉じてもデータは自動保持されます</span>
-            </div>
-            <input id="saved-repos-filter-input" type="text" placeholder="🔍 保有リスト内を検索..." data-i18n-placeholder="modal_saved_filter_placeholder"
-              oninput="renderSavedReposManageList()"
-              style="background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 5px 10px; color: #f8fafc; font-size: 0.74rem; width: 200px; outline: none;" />
-          </div>
-          <div id="saved-repos-manage-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto;"></div>
-        </div>
+        <details class="workspace-saved-management">
+          <summary><span data-i18n="workspace_manage">保存済みリポジトリの管理</span> (<span id="saved-repos-total-count">0</span>)</summary>
+          <input id="saved-repos-filter-input" type="search" aria-label="Filter saved repositories" placeholder="Filter" oninput="renderSavedReposManageList()" />
+          <div id="saved-repos-manage-list"></div>
+        </details>
       </div>
     </div>
   </div>
-
 
   <!-- Admin Settings: Multi-LLM API Keys (OpenAI, Claude, Gemini, Groq) & PHP/Node.js Vulnerability MCP/Skills Modal -->
   <div id="admin-settings-modal" style="display: none;" onclick="closeAdminSettingsModal()">
@@ -12639,7 +12423,7 @@ def build_portal_html(data, is_shareable=False):
 
         <!-- 4 AI Providers API Key Inputs -->
         <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;" data-i18n="adm_keys_header">
-          🔑 AI プロバイダー APIキー設定 <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">(ローカルの ~/Library/Application Support/RepoCHK Mac/settings.json に暗号権限 0600 で安全に保存されます)</span>
+          🔑 AI プロバイダー APIキー設定 <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">(ローカルの ~/Library/Application Support/RepoAUDT Mac/settings.json に暗号権限 0600 で安全に保存されます)</span>
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(370px, 1fr)); gap: 12px; margin-bottom: 18px;">
@@ -12755,11 +12539,11 @@ def build_portal_html(data, is_shareable=False):
 
         <!-- Built-in MCP Server Integration Card -->
         <div style="font-size: 0.82rem; font-weight: 800; color: #f8fafc; margin-bottom: 8px;" data-i18n="adm_mcp_server_header">
-          🔌 RepoCHK Mac 公式 MCP サーバー連携 (Claude Code / Cursor / Antigravity 用)
+          🔌 RepoAUDT Mac 公式 MCP サーバー連携 (Claude Code / Cursor / Antigravity 用)
         </div>
         <div style="background: #090d16; border: 1px solid #38bdf8; border-radius: 10px; padding: 14px; margin-bottom: 18px;">
           <div style="font-size: 0.72rem; color: #cbd5e1; margin-bottom: 10px; line-height: 1.5;" data-i18n="adm_mcp_server_desc">
-            外部AIエージェントから RepoCHK Mac の構成図・シーケンス図・CVE/SAST監査レポートを直接呼び出せる標準 JSON-RPC 2.0 MCP サーバー (`mcp_server.py` / `/api/mcp`) が内蔵されています。
+            外部AIエージェントから RepoAUDT Mac の構成図・シーケンス図・CVE/SAST監査レポートを直接呼び出せる標準 JSON-RPC 2.0 MCP サーバー (`mcp_server.py` / `/api/mcp`) が内蔵されています。
           </div>
           <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;">
             <span class="sec-legend-badge sec-legend-green" style="font-family: monospace; font-size: 0.65rem;">🛠️ list_analyzed_repositories</span>
@@ -12772,9 +12556,9 @@ def build_portal_html(data, is_shareable=False):
           </div>
           <pre id="adm-mcp-config-pre" style="background: #040711; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; color: #38bdf8; font-size: 0.7rem; font-family: 'JetBrains Mono', monospace; overflow-x: auto; margin: 0 0 10px 0;">{
   "mcpServers": {
-    "repochk-mac": {
+    "repoaudt-mac": {
       "command": "python3",
-      "args": ["/Applications/RepoCHK Mac.app/Contents/Resources/backend/mcp_server.py"]
+      "args": ["/Applications/RepoAUDT Mac.app/Contents/Resources/backend/mcp_server.py"]
     }
   }
 }</pre>
@@ -12797,9 +12581,19 @@ def build_portal_html(data, is_shareable=False):
     </div>
   </div>
 
+<script>__WORKSPACE_SCRIPT__</script>
 </body>
 </html>
 """
+
+    webui_dir = Path(__file__).resolve().parent.parent / "webui"
+    palette = json.loads((webui_dir / "semantic-colors.json").read_text(encoding="utf-8"))
+    def palette_rules(theme):
+        return ";".join(f"--workspace-{re.sub(r'([A-Z])', lambda match: '-' + match.group(1).lower(), key)}:{value}"
+                        for key, value in palette[theme].items())
+    colors_css = ":root{" + palette_rules("dark") + "} @media(prefers-color-scheme:light){:root{" + palette_rules("light") + "}}"
+    template = template.replace("__WORKSPACE_STYLES__", colors_css + (webui_dir / "workspace.css").read_text(encoding="utf-8"))
+    template = template.replace("__WORKSPACE_SCRIPT__", (webui_dir / "native-workspace.js").read_text(encoding="utf-8"))
 
     # Safe literal replacement avoiding re.sub unescaping of newlines
     # Find positions between const diagrams = and const navContainer =
@@ -12829,7 +12623,7 @@ def build_portal_html(data, is_shareable=False):
         out_path = Path(__file__).resolve().parent.parent / "webui" / "index.html"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(html, encoding="utf-8")
-        print(f"Generated RepoCHK Mac webui at {out_path}")
+        print(f"Generated RepoAUDT Mac webui at {out_path}")
 
 def main():
     data = collect_all_data()

@@ -1,5 +1,5 @@
 """
-RepoCHK Mac — Tier 1: Feature Coverage E2E Tests (85 Tests)
+RepoAUDT Mac — Tier 1: Feature Coverage E2E Tests (85 Tests)
 Covers all 17 features (F1 through F17) with >=5 tests per feature.
 Specification authoritative sources: ORIGINAL_REQUEST.md, AGENTS.md, PROJECT.md, TEST_INFRA.md.
 """
@@ -370,7 +370,7 @@ class TestF07PeriodicSyncDaemon(unittest.TestCase):
         """Sync daemon interval is configurable via parameter or environment variable."""
         has_cfg = (
             "interval" in self.server_src
-            or "REPOCHK_SYNC_INTERVAL" in self.server_src
+            or "REPOAUDT_SYNC_INTERVAL" in self.server_src
             or "sync_interval" in self.server_src
         )
         self.assertTrue(has_cfg, "Sync daemon interval must be configurable")
@@ -481,8 +481,8 @@ class TestF10LiveHealthVerification(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue("checked_at" in body or "uptime_sec" in body)
 
-    def test_f10_03_repochk_engine_service_checked(self):
-        """Health check validates local RepoCHK engine status."""
+    def test_f10_03_repoaudt_engine_service_checked(self):
+        """Health check validates local RepoAUDT engine status."""
         status, headers, body = simulate_http_request("GET", "/api/health")
         services = body.get("services", [])
         engine = next((s for s in services if "engine" in s.get("id", "") or "local" in s.get("type", "").lower()), None)
@@ -556,7 +556,7 @@ class TestF12SwiftSupervisor(unittest.TestCase):
         self.swift_src = get_swift_app_source()
 
     def test_f12_01_swift_manager_has_termination_handler(self):
-        """Sources/RepoCHKMacApp.swift attaches terminationHandler to Process."""
+        """Sources/RepoAUDTMacApp.swift attaches terminationHandler to Process."""
         has_termination = (
             "terminationHandler" in self.swift_src
             or "autoRestart" in self.swift_src
@@ -778,7 +778,7 @@ File: `app/loader.py:42`
         self.assertTrue(has_diff)
 
     def test_f16_03_maps_pr_comments_to_action_items(self):
-        """CodeRabbit PR findings map to RepoCHK action items schema."""
+        """CodeRabbit PR findings map to RepoAUDT action items schema."""
         item = {
             "severity": "high",
             "title": "Insecure Deserialization",
@@ -820,7 +820,7 @@ class TestF17AutonomousRemediation(unittest.TestCase):
     def test_f17_01_auto_fix_endpoint_accepts_valid_payload(self):
         """POST /api/remediate/auto-fix route or handler is supported."""
         status, headers, body = simulate_http_request("POST", "/api/remediate/auto-fix", {
-            "repo_name": "RepoCHK-Mac",
+            "repo_name": "RepoAUDT-Mac",
             "issue_id": "SEC-001",
             "dry_run": True
         })
@@ -831,17 +831,17 @@ class TestF17AutonomousRemediation(unittest.TestCase):
         dry_run_plan = {
             "dry_run": True,
             "status": "planned",
-            "target_branch": "repochk-fix/SEC-001",
+            "target_branch": "repoaudt-fix/SEC-001",
             "simulated_patch": True
         }
         self.assertTrue(dry_run_plan["dry_run"])
         self.assertEqual(dry_run_plan["status"], "planned")
 
     def test_f17_03_execution_mode_generates_fix_branch_name(self):
-        """Fix branch follows repochk-fix/{issue_id} format."""
+        """Fix branch follows repoaudt-fix/{issue_id} format."""
         issue_id = "CVE-2024-1234"
-        branch_name = f"repochk-fix/{issue_id.lower().replace('_', '-')}"
-        self.assertEqual(branch_name, "repochk-fix/cve-2024-1234")
+        branch_name = f"repoaudt-fix/{issue_id.lower().replace('_', '-')}"
+        self.assertEqual(branch_name, "repoaudt-fix/cve-2024-1234")
 
     def test_f17_04_verification_gate_runs_tests_before_pr(self):
         """Pipeline enforces verification test execution before PR creation."""
@@ -867,7 +867,7 @@ class TestF18McpServerIntegration(unittest.TestCase):
             "method": "initialize",
             "params": {"protocolVersion": "2024-11-05"},
         })
-        self.assertEqual(init_resp["result"]["serverInfo"]["name"], "repochk-mac-mcp")
+        self.assertEqual(init_resp["result"]["serverInfo"]["name"], "repoaudt-mac-mcp")
         tools_resp = mcp_server.handle_jsonrpc_request({
             "jsonrpc": "2.0",
             "id": 2,
@@ -904,7 +904,7 @@ class TestF18McpServerIntegration(unittest.TestCase):
         status_get, _, body_get = simulate_http_request("GET", "/api/mcp")
         self.assertEqual(status_get, 200)
         meta = body_get if isinstance(body_get, dict) else json.loads(body_get)
-        self.assertEqual(meta["name"], "repochk-mac-mcp")
+        self.assertEqual(meta["name"], "repoaudt-mac-mcp")
         self.assertIn("mcpServers", meta["client_config"])
 
         status_post, _, body_post = simulate_http_request("POST", "/api/mcp", {
@@ -947,8 +947,8 @@ class TestF18McpServerIntegration(unittest.TestCase):
         import security_audit_engine
         sample_diag = {
             "id": "sample-repo",
-            "repo": "nanonigit/RepoCHK-Mac",
-            "github_url": "https://github.com/nanonigit/RepoCHK-Mac",
+            "repo": "nanonigit/RepoAUDT-Mac",
+            "github_url": "https://github.com/nanonigit/RepoAUDT-Mac",
             "commit_hash": "abc1234",
             "deps": {
                 "frameworks": [{"name": "Next.js", "version": "14.2.5", "desc": "Web framework"}],

@@ -1,5 +1,5 @@
 """
-RepoCHK Mac — Tier 3: Combinatorial & Pairwise Cross-Feature E2E Tests (17 Tests)
+RepoAUDT Mac — Tier 3: Combinatorial & Pairwise Cross-Feature E2E Tests (17 Tests)
 Verifies complex interactions across feature boundaries per TEST_INFRA.md § Feature Inventory & Test Coverage Matrix.
 """
 
@@ -132,7 +132,7 @@ class TestTier3PairwiseInteractions(unittest.TestCase):
         health = {
             "status": "ok",
             "active_sync_jobs": 1,
-            "services": [{"id": "repochk_engine", "status": "ONLINE"}]
+            "services": [{"id": "repoaudt_engine", "status": "ONLINE"}]
         }
         self.assertEqual(health["active_sync_jobs"], 1)
 
@@ -144,7 +144,7 @@ class TestTier3PairwiseInteractions(unittest.TestCase):
             "online_count": 2,
             "total": 3,
             "services": [
-                {"id": "repochk_engine", "status": "ONLINE"},
+                {"id": "repoaudt_engine", "status": "ONLINE"},
                 {"id": "github_api", "status": github_status},
                 {"id": "gh_cli", "status": "ONLINE"}
             ]
@@ -196,8 +196,8 @@ class TestTier3PairwiseInteractions(unittest.TestCase):
         """Pair 17: F16 (CodeRabbit PR) + F17 (Remediation): CodeRabbit comment diff feeds into auto-fix branch."""
         cr_diff = "- let x = 1\n+ let x = 2"
         issue_id = "CR-PR-12"
-        branch_name = f"repochk-fix/{issue_id.lower()}"
-        self.assertEqual(branch_name, "repochk-fix/cr-pr-12")
+        branch_name = f"repoaudt-fix/{issue_id.lower()}"
+        self.assertEqual(branch_name, "repoaudt-fix/cr-pr-12")
 
 
 if __name__ == "__main__":

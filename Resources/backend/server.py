@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Local HTTP Backend Server for RepoCHK Mac App.
+Local HTTP Backend Server for RepoAUDT Mac App.
 Serves the interactive WebUI and provides REST endpoints:
   - GET  /api/state    : Load persisted analyzed GitHub repositories
   - POST /api/analyze  : Analyze any GitHub Organization/User URL or Repository URL
@@ -31,6 +31,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 import analyzer  # noqa: E402
 import mcp_server  # noqa: E402
+import mcp_client  # noqa: E402
 import security_audit_engine  # noqa: E402
 
 
@@ -38,7 +39,7 @@ class SyncDaemon:
     """Background daemon that periodically refreshes registered repositories."""
 
     def __init__(self, interval_sec: Optional[int] = None) -> None:
-        raw_env = os.environ.get("REPOCHK_SYNC_INTERVAL", str(DEFAULT_SYNC_INTERVAL_SEC))
+        raw_env = os.environ.get("REPOAUDT_SYNC_INTERVAL", str(DEFAULT_SYNC_INTERVAL_SEC))
         try:
             parsed_interval = int(raw_env)
         except ValueError:
@@ -52,7 +53,7 @@ class SyncDaemon:
         if self.running:
             return
         self.running = True
-        self._thread = threading.Thread(target=self._run_loop, name="RepoCHKSyncDaemon", daemon=True)
+        self._thread = threading.Thread(target=self._run_loop, name="RepoAUDTSyncDaemon", daemon=True)
         self._thread.start()
 
     def _run_loop(self) -> None:
@@ -93,8 +94,8 @@ def check_live_health(port: int) -> Dict[str, Any]:
     now_str = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
     services.append({
-        "id": "repochk_engine",
-        "name": f"RepoCHK Mac Analysis Engine (Port {port})",
+        "id": "repoaudt_engine",
+        "name": f"RepoAUDT Mac Analysis Engine (Port {port})",
         "type": "Local macOS Backend",
         "status": "ONLINE",
         "latency_ms": 2,
@@ -109,7 +110,7 @@ def check_live_health(port: int) -> Dict[str, Any]:
     gh_limit: Optional[int] = None
     gh_reset: Optional[int] = None
     try:
-        req = urllib.request.Request("https://api.github.com/rate_limit", headers={"User-Agent": "RepoCHK-Mac"})
+        req = urllib.request.Request("https://api.github.com/rate_limit", headers={"User-Agent": "RepoAUDT-Mac"})
         with urllib.request.urlopen(req, timeout=5) as resp:
             status_code = getattr(resp, "status", 200)
             raw_bytes = resp.read()
@@ -171,7 +172,7 @@ def check_live_health(port: int) -> Dict[str, Any]:
     }
 
 
-class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
+class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
     server_port: int = 18765
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -239,6 +240,12 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
             self.send_response(204)
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if self.path == "/api/connections/mcp":
+            try:
+                self._send_json(200, mcp_client.load_config())
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
             return
         if self.path.startswith("/api/state"):
             state = analyzer.load_saved_analyses()
@@ -308,6 +315,20 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(413, {"error": "Request body too large"})
             return
         body_raw = self.rfile.read(length).decode("utf-8", errors="ignore") if length > 0 else "{}"
+
+        if self.path in ("/api/connections/mcp", "/api/connections/mcp/test", "/api/connections/mcp/call"):
+            try:
+                body = json.loads(body_raw)
+                config = body.get("config", body)
+                if self.path == "/api/connections/mcp":
+                    result = mcp_client.save_config(config)
+                else:
+                    method = "tools/call" if self.path.endswith("/call") else "tools/list"
+                    result = mcp_client.run_operation(config, method, body.get("params"))
+                self._send_json(200, {"ok": True, "data": result})
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
 
         if self.path.startswith("/api/mcp"):
             try:
@@ -469,7 +490,7 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
 
                 clean_name = os.path.basename(raw_filename)
                 if not clean_name or clean_name in (".", "..") or clean_name.startswith("."):
-                    clean_name = f"RepoCHK_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+                    clean_name = f"RepoAUDT_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
 
                 downloads_dir = (Path.home() / "Downloads").resolve()
                 downloads_dir.mkdir(parents=True, exist_ok=True)
@@ -573,7 +594,7 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
                     self._send_json(400, {"ok": False, "error": "repo_name and issue_id are required"})
                     return
                 safe_issue = issue_id.lower().replace("_", "-")
-                branch_name = f"repochk-fix/{safe_issue}"
+                branch_name = f"repoaudt-fix/{safe_issue}"
                 self._send_json(200, {
                     "ok": True,
                     "dry_run": dry_run,
@@ -593,16 +614,16 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
 
 def main() -> None:
     port = int(
-        os.environ.get("REPOCHK_PORT")
+        os.environ.get("REPOAUDT_PORT")
         or os.environ.get("REPOCHEX_PORT")
         or os.environ.get("REPOCHECKER_PORT")
         or "18765"
     )
-    RepoCHKRequestHandler.server_port = port
+    RepoAUDTRequestHandler.server_port = port
     start_sync_daemon()
     ThreadingHTTPServer.allow_reuse_address = True
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), RepoCHKRequestHandler)
-    print(f"RepoCHK Mac server listening on http://127.0.0.1:{port}", flush=True)
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), RepoAUDTRequestHandler)
+    print(f"RepoAUDT Mac server listening on http://127.0.0.1:{port}", flush=True)
     httpd.serve_forever()
 
 

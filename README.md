@@ -1,4 +1,6 @@
-# RepoCHK Mac — GitHub Architecture & CodeRabbit AI Studio for macOS
+# RepoAUDT Mac — GitHub Architecture & CodeRabbit AI Studio for macOS
+
+`AUDT` stands for **Audit**.
 
 GitHubのURL（`https://github.com/owner/repo` または `owner/repo`）を入力するだけで、あらゆるリポジトリのソースコード構造を自動解析し、インタラクティブな構成図・シーケンス図・CodeRabbit風AIコード監査・要対応（脆弱性・バグ・改善提案）の可視化を行うネイティブ macOS アプリケーションです。
 
@@ -12,11 +14,19 @@ GitHubのURL（`https://github.com/owner/repo` または `owner/repo`）を入�
    - ソースコードの静的解析（例外処理漏れ、タイムアウト未設定、リソース解放漏れ、ハードコードされた設定、肥大化モジュール等）
    - **図上の対象コンポーネントを赤枠＋`🚨 要対応 (Click!)` バッジで自動ハイライト**
    - クリックすると右ペイン（および専用モーダル）に **「⚠️ 要対応の理由」** と **「🛠️ 対応方法の提案（Diffパッチ＆コピー可能な修正コマンド）」** を即座に表示
-3. **7タブ構成のコンポーネント詳細インスペクター**
-   - `📋 概要` / `🛡️ バージョン` / `🚀 インフラ` / `🔌 API` / `🗄️ DB` / `⚙️ 環境変数` / `🔗 連携` / `📁 ファイル`
-4. **リアルタイム死活監視 (`🟢 死活監視`)**
-   - ローカル分析エンジン、GitHub API、Auth0、各種ローカルポート・バックグラウンドジョブの稼働状態と疎通レイテンシを監視
-5. **どのウィンドウ幅でも重ならない レスポンシブヘッダー & スマート動的トグル**
+3. **兄弟アプリと共通の操作体系**
+   - 標準サイドバー、検索、ツールバー、必要時に開く詳細、日英切替
+   - 保存済みリポジトリのダッシュボード、監査結果、構成図、実行フロー
+   - ライト／ダーク対応。青は操作、赤は重大、橙は注意、緑は確認済み成功という意味を共有
+4. **AI 接続**
+   - OpenAI / Claude / Gemini / Groq の既存監査連携とネイティブ設定画面
+   - ローカルの OpenAI 互換 API に対応。接続先 URL とモデル名を設定して接続テスト
+5. **MCP サーバーとクライアント**
+   - 既存の7ツールを stdio / ローカル HTTP で提供
+   - 外部サーバーへ stdio / HTTP で接続し、ツール一覧・引数・実行結果を確認
+   - ツールの実行は明示操作。接続設定変更時は取得済みツールをリセット
+
+配色の根拠と検証範囲は [色の設計](docs/ui-redesign/colors.md)、実装・実機確認の記録は [検証記録](docs/ui-redesign/verification.md) を参照してください。
 
 ## ビルドとインストール
 
@@ -24,4 +34,4 @@ GitHubのURL（`https://github.com/owner/repo` または `owner/repo`）を入�
 ./build.sh --install
 ```
 
-ビルド完了後、`/Applications/RepoCHK Mac.app` にインストールされます。
+ビルド完了後、`/Applications/RepoAUDT Mac.app` にインストールされます。

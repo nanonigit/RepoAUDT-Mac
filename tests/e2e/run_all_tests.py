@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RepoCHK Mac — 4-Tier E2E Test Suite Runner
+RepoAUDT Mac — 4-Tier E2E Test Suite Runner
 Executes Tier 1 (Features), Tier 2 (Boundaries), Tier 3 (Pairwise), and Tier 4 (Scenarios).
 Outputs comprehensive structured metrics and diagnostic reports.
 Exit code 0 on all tests passing, exit code 1 on any failure.
@@ -35,7 +35,7 @@ def run_test_suite(suite_module_name: str, tier_title: str) -> unittest.TestResu
 
 
 def main():
-    parser = argparse.ArgumentParser(description="RepoCHK Mac 4-Tier E2E Test Runner")
+    parser = argparse.ArgumentParser(description="RepoAUDT Mac 4-Tier E2E Test Runner")
     parser.add_argument("--tier", type=int, choices=[1, 2, 3, 4], help="Run only specific tier (1, 2, 3, or 4)")
     args = parser.parse_args()
 
@@ -50,7 +50,7 @@ def main():
         tiers = [t for t in tiers if t[0] == args.tier]
 
     print("\n" + "="*70)
-    print("REPOCHK MAC — 4-TIER OPAQUE-BOX E2E TEST SUITE")
+    print("REPOAUDT MAC — 4-TIER OPAQUE-BOX E2E TEST SUITE")
     print(f"Directory: {E2E_DIR}")
     print("="*70)
 

@@ -1,14 +1,14 @@
-# RepoCHK Mac — Remote Agent Instruction & Architecture Guide
+# RepoAUDT Mac — Remote Agent Instruction & Architecture Guide
 
-This document guides Google Antigravity Remote Agents (running in Google-managed cloud virtual machines) to understand, build, and extend the **RepoCHK Mac** codebase.
+This document guides Google Antigravity Remote Agents (running in Google-managed cloud virtual machines) to understand, build, and extend the **RepoAUDT Mac** codebase.
 
 ---
 
 ## 1. Project Overview & Architecture
-RepoCHK Mac is a native macOS + WebUI Studio for GitHub repository architecture visualization, sequence flow tracking, and CodeRabbit AI security & code-quality auditing.
+RepoAUDT Mac is a native macOS + WebUI Studio for GitHub repository architecture visualization, sequence flow tracking, and CodeRabbit AI security & code-quality auditing.
 
-- **App Name**: `RepoCHK Mac` (renamed from legacy RepoChex / RepoChecker across all configs, remotes, and codebases).
-- **GitHub Repository**: `https://github.com/nanonigit/RepoCHK-Mac.git`
+- **App Name**: `RepoAUDT Mac` (renamed from legacy RepoChex / RepoChecker across all configs, remotes, and codebases).
+- **GitHub Repository**: `https://github.com/nanonigit/RepoAUDT-Mac.git`
 - **Frontend / WebUI**: `Resources/webui/index.html` (Bilingual: Japanese & English, Mermaid.js diagram viewer, PanZoom, interactive inspectors).
 - **Backend Generator & API**:
   - `Resources/backend/analyzer.py`: GitHub API & local repository scanner, AST parser, ecosystem builder, CVE & CodeRabbit issue collector.
@@ -16,8 +16,8 @@ RepoCHK Mac is a native macOS + WebUI Studio for GitHub repository architecture 
   - `Resources/backend/server.py`: Local lightweight HTTP & REST API server (default port: `18765`).
   - `Resources/backend/security_audit_engine.py`: Vulnerability & architectural risk analysis engine.
 - **Native macOS Shell**:
-  - `Sources/RepoCHKMacApp.swift`: SwiftUI + WKWebView native host container & backend server process manager.
-  - `build.sh`: Builds and code-signs `/Applications/RepoCHK Mac.app`.
+  - `Sources/RepoAUDTMacApp.swift`: SwiftUI + WKWebView native host container & backend server process manager.
+  - `build.sh`: Builds and code-signs `/Applications/RepoAUDT Mac.app`.
 
 ---
 

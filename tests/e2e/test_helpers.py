@@ -1,5 +1,5 @@
 """
-Common test helper utilities for RepoCHK Mac E2E Test Suite.
+Common test helper utilities for RepoAUDT Mac E2E Test Suite.
 Provides file loaders, mock HTTP socket handling, temporary environment builders,
 and HTML/AST analysis helpers.
 """
@@ -53,8 +53,8 @@ def get_security_audit_source() -> str:
 
 
 def get_swift_app_source() -> str:
-    """Load Sources/RepoCHKMacApp.swift source code."""
-    swift_path = SOURCES_DIR / "RepoCHKMacApp.swift"
+    """Load Sources/RepoAUDTMacApp.swift source code."""
+    swift_path = SOURCES_DIR / "RepoAUDTMacApp.swift"
     return swift_path.read_text(encoding="utf-8", errors="ignore")
 
 
@@ -81,7 +81,7 @@ def simulate_http_request(
     headers: Optional[Dict[str, str]] = None,
 ) -> Tuple[int, Dict[str, str], Any]:
     """
-    Executes a simulated HTTP request against server.RepoCHKRequestHandler in-memory.
+    Executes a simulated HTTP request against server.RepoAUDTRequestHandler in-memory.
     Returns: (status_code, response_headers, parsed_json_or_text)
     """
     import server
@@ -98,8 +98,8 @@ def simulate_http_request(
     request_raw = ("\r\n".join(hdr_lines) + "\r\n\r\n").encode("utf-8") + raw_body
     sock = MockSocket(request_raw)
 
-    server.RepoCHKRequestHandler.server_port = 18765
-    handler = server.RepoCHKRequestHandler(sock, ("127.0.0.1", 54321), None)
+    server.RepoAUDTRequestHandler.server_port = 18765
+    handler = server.RepoAUDTRequestHandler(sock, ("127.0.0.1", 54321), None)
 
     raw_response = bytes(sock.output)
     if b"\r\n\r\n" not in raw_response:

@@ -1,5 +1,5 @@
 """
-RepoCHK Mac — Tier 4: Real-World Application Scenarios E2E Tests (5 Tests)
+RepoAUDT Mac — Tier 4: Real-World Application Scenarios E2E Tests (5 Tests)
 Validates end-to-end user workflows and resilient system operations per TEST_INFRA.md § Real-World Application Scenarios.
 """
 
@@ -59,9 +59,9 @@ class TestTier4RealWorldScenarios(unittest.TestCase):
         self.assertEqual(safety_score, 98)
 
         # Step 4: Markdown report generation
-        repo_name = "nanonigit/RepoCHK-Mac"
+        repo_name = "nanonigit/RepoAUDT-Mac"
         title = "Dependency Security Verification"
-        report_md = f"""# RepoCHK Mac 改善レポート: {title}
+        report_md = f"""# RepoAUDT Mac 改善レポート: {title}
 - 対象リポジトリ: {repo_name}
 - 安全性スコア: {safety_score} / 100
 - 評価結果: 健全 (Clean)
@@ -117,7 +117,7 @@ class TestTier4RealWorldScenarios(unittest.TestCase):
         """
         Scenario 3: Live Health & Rate Limit Degraded Mode Workflow.
         Flow:
-        1. Local backend is operational (repochk_engine = ONLINE).
+        1. Local backend is operational (repoaudt_engine = ONLINE).
         2. GitHub REST rate limit is fully exhausted (resources.core.remaining = 0).
         3. Real health check evaluates remaining tokens and marks github_api = DEGRADED / RATE_LIMITED.
         4. Application continues operating in offline cached mode without crashing.
@@ -184,13 +184,13 @@ class TestTier4RealWorldScenarios(unittest.TestCase):
         Flow:
         1. Detected vulnerability SEC-CVE-001 with fix command 'npm update lodash'.
         2. Auto-fix requested via /api/remediate/auto-fix.
-        3. Automated fix branch created ('repochk-fix/sec-cve-001').
+        3. Automated fix branch created ('repoaudt-fix/sec-cve-001').
         4. Diff applied and verified against project tests.
         5. Ready-for-PR response returned with branch metadata.
         """
         issue_id = "SEC-CVE-001"
-        repo_name = "RepoCHK-Mac"
-        fix_branch = f"repochk-fix/{issue_id.lower()}"
+        repo_name = "RepoAUDT-Mac"
+        fix_branch = f"repoaudt-fix/{issue_id.lower()}"
 
         remediation_result = {
             "status": "pr_ready",
@@ -203,7 +203,7 @@ class TestTier4RealWorldScenarios(unittest.TestCase):
         }
 
         self.assertEqual(remediation_result["status"], "pr_ready")
-        self.assertEqual(remediation_result["branch"], "repochk-fix/sec-cve-001")
+        self.assertEqual(remediation_result["branch"], "repoaudt-fix/sec-cve-001")
         self.assertEqual(remediation_result["verification_status"], "passed")
 
 
