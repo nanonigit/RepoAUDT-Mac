@@ -17,6 +17,8 @@ import shutil
 import sys
 import urllib.error
 import urllib.request
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -224,13 +226,17 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                     if vulns:
                         v0 = vulns[0]
                         vid = v0.get("id", "OSV-VULN")
+                        aliases = v0.get("aliases") or []
+                        cve_alias = next((a for a in aliases if str(a).startswith("CVE-")), None)
+                        display_cve = cve_alias or vid
                         advisories.append({
                             "pkg": f"{pkg_name} ({eco})",
                             "installed": clean_ver,
-                            "cve": vid,
+                            "cve": display_cve,
+                            "osv_id": vid,
                             "severity": "HIGH",
-                            "title": f"[OSV脆弱性検出] {pkg_name} v{clean_ver} ({vid})",
-                            "summary": f"OSV.dev 脆弱性データベースにおいて `{pkg_name}` ({eco}) バージョン `{clean_ver}` に既知の脆弱性 `{vid}` (他 {len(vulns)} 件) が報告されています。最新パッチバージョンへの更新を強く推奨します。",
+                            "title": f"[OSV脆弱性検出] {pkg_name} v{clean_ver} ({display_cve})",
+                            "summary": f"OSV.dev 脆弱性データベースにおいて `{pkg_name}` ({eco}) バージョン `{clean_ver}` に既知の脆弱性 `{display_cve}` (他 {len(vulns)} 件) が報告されています。最新パッチバージョンへの更新を強く推奨します。",
                             "sources": [
                                 {"name": f"OSV.dev ({vid})", "url": f"https://osv.dev/vulnerability/{vid}"},
                                 {"name": "GitHub Advisory", "url": f"https://github.com/advisories?query={pkg_name}"},
@@ -238,6 +244,55 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                         })
     except Exception as exc:
         print(f"Notice: OSV vulnerability query skipped/failed: {exc}", file=sys.stderr)
+
+    return enrich_advisories_with_epss(advisories)
+
+
+def enrich_advisories_with_epss(advisories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Enrich CVE advisories with real-time FIRST.org EPSS (Exploit Prediction Scoring System)
+    30-day exploitation probability and percentile scores (`https://api.first.org/data/v1/epss`).
+    """
+    if not advisories:
+        return advisories
+
+    cve_pattern = re.compile(r"\b(CVE-\d{4}-\d{4,7})\b", re.IGNORECASE)
+    cve_to_indices: Dict[str, List[int]] = {}
+    for idx, adv in enumerate(advisories):
+        raw_cve = str(adv.get("cve") or adv.get("id") or adv.get("title") or "")
+        m = cve_pattern.search(raw_cve)
+        if m:
+            cve_id = m.group(1).upper()
+            cve_to_indices.setdefault(cve_id, []).append(idx)
+
+    if not cve_to_indices:
+        return advisories
+
+    try:
+        cve_param = ",".join(sorted(cve_to_indices.keys())[:30])
+        url = f"https://api.first.org/data/v1/epss?cve={cve_param}"
+        req = urllib.request.Request(url, headers={"User-Agent": "RepoCHK-Mac-EPSS/1.2"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if getattr(resp, "status", 200) == 200:
+                payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                for item in payload.get("data") or []:
+                    cid = str(item.get("cve") or "").upper()
+                    if cid in cve_to_indices:
+                        epss_val = float(item.get("epss", 0.0))
+                        pct_val = float(item.get("percentile", 0.0))
+                        for i in cve_to_indices[cid]:
+                            advisories[i]["epss"] = round(epss_val, 5)
+                            advisories[i]["epss_percentile"] = round(pct_val, 5)
+                            sources = advisories[i].setdefault("sources", [])
+                            epss_url = f"https://api.first.org/data/v1/epss?cve={cid}"
+                            if not any(s.get("url") == epss_url for s in sources):
+                                sources.append({
+                                    "name": f"FIRST.org EPSS ({epss_val * 100:.1f}%)",
+                                    "url": epss_url,
+                                    "type": "EPSS",
+                                })
+    except Exception as exc:
+        print(f"Notice: EPSS enrichment skipped/failed: {exc}", file=sys.stderr)
 
     return advisories
 
@@ -752,10 +807,15 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         security_advisories.extend(osv_advisories)
 
     # =========================================================================
-    # 5. Scan Hardcoded Secrets & Token Leaks
+    # 5. Scan GitHub Actions Workflows & Hardcoded Secrets
     # =========================================================================
+    if skills_cfg.get("owasp_sast_skill", True):
+        gha_findings = scan_github_actions_workflows(repo_dir, match_comp)
+        sast_findings.extend(gha_findings)
+
     secret_findings = scan_secrets_and_credentials(repo_dir, match_comp)
     sast_findings = secret_findings + sast_findings
+    security_advisories = enrich_advisories_with_epss(security_advisories)
 
     return {
         "frameworks": frameworks,
@@ -764,6 +824,291 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         "runtime": runtime_info,
         "security_advisories": security_advisories,
         "sast_findings": sast_findings,
+    }
+
+
+def scan_github_actions_workflows(
+    repo_dir: Path,
+    match_comp: Any,
+) -> List[Dict[str, Any]]:
+    """
+    Audit GitHub Actions workflows (.github/workflows/*.yml, *.yaml) for OWASP CI/CD
+    and zizmor/actionlint security anti-patterns:
+      1. Script injection via untrusted ${{ github.event.* }} / ${{ github.head_ref }} in `run:`
+      2. Privileged `pull_request_target` combined with untrusted PR head checkout (Pwn Request)
+      3. Over-privileged `permissions: write-all`
+      4. Unpinned third-party Action mutable branch references (`@main`, `@master`, `@HEAD`)
+    """
+    findings: List[Dict[str, Any]] = []
+    workflows_dir = Path(repo_dir) / ".github" / "workflows"
+    if not workflows_dir.exists() or not workflows_dir.is_dir():
+        return findings
+
+    untrusted_expr_re = re.compile(
+        r"\$\{\{\s*github\.(?:head_ref|event\.(?:issue|pull_request|comment|review|discussion|commits|head_commit|pages)\.[A-Za-z0-9_.\[\]]*(?:title|body|message|ref|label|name|email|page_name))\s*\}\}",
+        re.IGNORECASE,
+    )
+    unpinned_uses_re = re.compile(
+        r"^\s*-?\s*uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@(main|master|HEAD|develop)\b"
+    )
+
+    workflow_files = sorted(list(workflows_dir.glob("*.yml")) + list(workflows_dir.glob("*.yaml")))
+    for wf in workflow_files[:25]:
+        rel_path = str(wf.relative_to(repo_dir))
+        try:
+            content = wf.read_text(encoding="utf-8", errors="ignore")
+            lines = content.splitlines()
+        except Exception:
+            continue
+
+        tnode = match_comp(rel_path)
+        has_pr_target = bool(re.search(r"\bpull_request_target\b", content))
+
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            # 1. Script injection via ${{ github.event.* }}
+            m_inj = untrusted_expr_re.search(stripped)
+            if m_inj:
+                expr = m_inj.group(0)
+                findings.append({
+                    "severity": "critical",
+                    "title": f"🚨 [GitHub Actions監査] `${{{{ ... }}}}` によるシェルインジェクションリスク ({wf.name}:{idx})",
+                    "file": f"{rel_path}:{idx} (Target: {tnode})",
+                    "target_node": tnode,
+                    "desc": f"`{rel_path}` の {idx}行目で外部入力由来のコンテキスト式 `{expr}` が直接展開されています。PRタイトルやブランチ名にシェルメタ文字が含まれると任意コマンド実行 (RCE) につながるため、`env:` 環境変数経由で参照してください。",
+                    "diff": f"- {stripped}\n+ env:\n+   UNTRUSTED_INPUT: {expr}\n+ run: echo \"$UNTRUSTED_INPUT\"",
+                    "fix_cmd": f"sed -n '{max(1, idx-2)},{idx+2}p' {rel_path}",
+                })
+
+            # 2. Pwn request: pull_request_target + checkout of PR head
+            if has_pr_target and "github.event.pull_request.head" in stripped and ("ref:" in stripped or "sha" in stripped):
+                findings.append({
+                    "severity": "critical",
+                    "title": f"🚨 [GitHub Actions Pwn Request] `pull_request_target` での外部ForkコードCheckout ({wf.name}:{idx})",
+                    "file": f"{rel_path}:{idx} (Target: {tnode})",
+                    "target_node": tnode,
+                    "desc": f"`{rel_path}` は特権トークン・Secretsアクセス権を持つ `pull_request_target` トリガーを使用しながら、{idx}行目で信頼できない外部PRのHEADを直接チェックアウトしています。シークレット漏洩やリポジトリ乗っ取りに直結します。",
+                    "diff": f"- {stripped}\n+ # Avoid checking out untrusted PR head inside pull_request_target",
+                    "fix_cmd": f"sed -n '{max(1, idx-3)},{idx+3}p' {rel_path}",
+                })
+
+            # 3. Over-privileged permissions: write-all
+            if re.match(r"^permissions:\s*write-all\b", stripped, re.IGNORECASE):
+                findings.append({
+                    "severity": "high",
+                    "title": f"[GitHub Actions監査] 過剰なトークン権限 `permissions: write-all` ({wf.name}:{idx})",
+                    "file": f"{rel_path}:{idx} (Target: {tnode})",
+                    "target_node": tnode,
+                    "desc": f"`{rel_path}` の {idx}行目で `GITHUB_TOKEN` に `write-all` が付与されています。最小権限の原則に従い `contents: read` 等を明示してください。",
+                    "diff": f"- {stripped}\n+ permissions:\n+   contents: read",
+                    "fix_cmd": f"sed -n '{max(1, idx-1)},{idx+3}p' {rel_path}",
+                })
+
+            # 4. Unpinned mutable branch in third-party action
+            m_unpin = unpinned_uses_re.match(line)
+            if m_unpin and not m_unpin.group(1).startswith("actions/"):
+                action_slug, branch_ref = m_unpin.group(1), m_unpin.group(2)
+                findings.append({
+                    "severity": "medium",
+                    "title": f"[GitHub Actions監査] サードパーティActionの未固定ブランチ参照 `{action_slug}@{branch_ref}` ({wf.name}:{idx})",
+                    "file": f"{rel_path}:{idx} (Target: {tnode})",
+                    "target_node": tnode,
+                    "desc": f"`{rel_path}` の {idx}行目でサードパーティActionが可変ブランチ `@{branch_ref}` で参照されています。サプライチェーン攻撃防止のためフルコミットSHAまたはリリースタグに固定してください。",
+                    "diff": f"- {stripped}\n+ uses: {action_slug}@<commit-sha-or-release-tag>",
+                    "fix_cmd": f"sed -n '{max(1, idx-1)},{idx+2}p' {rel_path}",
+                })
+
+    return findings
+
+
+def generate_cyclonedx_sbom(diagram_item: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Generate an industry-standard CycloneDX 1.5 JSON Software Bill of Materials (SBOM)
+    with Package URLs (purl) and embedded vulnerability advisories + EPSS scores.
+    """
+    repo_name = str(diagram_item.get("repo") or "repository")
+    github_url = str(diagram_item.get("github_url") or "")
+    deps = diagram_item.get("deps") or {}
+    components: List[Dict[str, Any]] = []
+    seen_purls = set()
+
+    def _add_comp(name: str, version: str, comp_type: str, eco: str, desc: str = "") -> None:
+        clean_name = re.sub(r"\s*\(.*?\)\s*$", "", str(name)).replace("Composer: ", "").strip()
+        clean_ver = re.sub(r"^[\^~>=<v\s]+", "", str(version)).split(" ")[0].strip() or "latest"
+        purl = f"pkg:{eco}/{clean_name}@{clean_ver}"
+        if purl in seen_purls:
+            return
+        seen_purls.add(purl)
+        components.append({
+            "type": comp_type,
+            "bom-ref": purl,
+            "name": clean_name,
+            "version": clean_ver,
+            "purl": purl,
+            "description": desc,
+        })
+
+    for fw in deps.get("frameworks") or []:
+        if isinstance(fw, dict):
+            fname = str(fw.get("name") or "")
+            eco = "composer" if "composer" in fname.lower() or "php" in fname.lower() else "npm"
+            _add_comp(fname, str(fw.get("version") or "latest"), "framework", eco, str(fw.get("desc") or ""))
+
+    for db in deps.get("databases") or []:
+        if isinstance(db, dict):
+            _add_comp(str(db.get("name") or ""), str(db.get("version") or "latest"), "library", "generic", str(db.get("desc") or ""))
+
+    for ai in deps.get("ai_sdks") or []:
+        if isinstance(ai, dict):
+            _add_comp(str(ai.get("name") or ""), str(ai.get("version") or "latest"), "library", "npm", str(ai.get("desc") or ""))
+
+    vulnerabilities: List[Dict[str, Any]] = []
+    for adv in deps.get("security_advisories") or []:
+        if not isinstance(adv, dict):
+            continue
+        vid = str(adv.get("cve") or adv.get("id") or "VULN")
+        ratings = [{"severity": str(adv.get("severity") or "HIGH").lower(), "method": "other"}]
+        if adv.get("epss") is not None:
+            ratings.append({
+                "score": float(adv["epss"]),
+                "severity": "high" if float(adv["epss"]) >= 0.1 else "medium",
+                "method": "other",
+            })
+        vulnerabilities.append({
+            "id": vid,
+            "source": {"name": "OSV / NVD / FIRST EPSS"},
+            "ratings": ratings,
+            "description": str(adv.get("summary") or adv.get("title") or ""),
+            "advisories": [{"title": s.get("name", ""), "url": s.get("url", "")} for s in (adv.get("sources") or []) if isinstance(s, dict)],
+        })
+
+    return {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "serialNumber": f"urn:uuid:{uuid.uuid4()}",
+        "version": 1,
+        "metadata": {
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "tools": [{"vendor": "RepoCHK Mac", "name": "RepoCHK Mac Security & Architecture Studio", "version": "1.2.0"}],
+            "component": {
+                "type": "application",
+                "name": repo_name,
+                "version": str(diagram_item.get("commit_hash") or "HEAD"),
+                "externalReferences": [{"type": "vcs", "url": github_url}] if github_url else [],
+            },
+        },
+        "components": components,
+        "vulnerabilities": vulnerabilities,
+    }
+
+
+def generate_sarif_report(diagram_item: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Generate a GitHub Code Scanning compatible SARIF 2.1.0 JSON report from
+    a repository's CodeRabbit / OWASP SAST action items and CVE advisories.
+    """
+    repo_name = str(diagram_item.get("repo") or "repository")
+    cr = diagram_item.get("coderabbit") or {}
+    deps = diagram_item.get("deps") or {}
+    action_items = list(cr.get("action_items") or []) + list(cr.get("findings") or [])
+    advisories = list(deps.get("security_advisories") or [])
+
+    rules: List[Dict[str, Any]] = []
+    results: List[Dict[str, Any]] = []
+    seen_rules = set()
+
+    for idx, item in enumerate(action_items, start=1):
+        if not isinstance(item, dict):
+            continue
+        rule_id = str(item.get("cve") or f"REPOCHK-SAST-{idx:03d}")
+        sev = str(item.get("severity") or "high").lower()
+        sarif_level = "error" if sev in ("critical", "high") else ("warning" if sev == "medium" else "note")
+        sec_score = "9.0" if sev == "critical" else ("7.5" if sev == "high" else "5.0")
+
+        if rule_id not in seen_rules:
+            seen_rules.add(rule_id)
+            rules.append({
+                "id": rule_id,
+                "name": re.sub(r"[^A-Za-z0-9_]", "", str(item.get("title") or rule_id))[:48] or f"Rule{idx}",
+                "shortDescription": {"text": str(item.get("title") or rule_id)},
+                "fullDescription": {"text": str(item.get("desc") or item.get("title") or "")},
+                "defaultConfiguration": {"level": sarif_level},
+                "properties": {"security-severity": sec_score},
+            })
+
+        raw_file = str(item.get("file") or "README.md").split(" (Target:")[0].strip()
+        uri_part = raw_file
+        start_line = 1
+        if ":" in raw_file:
+            parts = raw_file.rsplit(":", 1)
+            uri_part = parts[0].strip() or "README.md"
+            try:
+                start_line = max(1, int(re.sub(r"[^0-9]", "", parts[1]) or "1"))
+            except ValueError:
+                start_line = 1
+
+        results.append({
+            "ruleId": rule_id,
+            "level": sarif_level,
+            "message": {"text": f"[{repo_name}] {item.get('title', '')}: {item.get('desc', '')}"},
+            "locations": [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": uri_part.lstrip("/")},
+                        "region": {"startLine": start_line, "startColumn": 1},
+                    }
+                }
+            ],
+        })
+
+    for idx, adv in enumerate(advisories, start=1):
+        if not isinstance(adv, dict):
+            continue
+        rule_id = str(adv.get("cve") or f"REPOCHK-CVE-{idx:03d}")
+        if rule_id in seen_rules:
+            continue
+        seen_rules.add(rule_id)
+        rules.append({
+            "id": rule_id,
+            "name": re.sub(r"[^A-Za-z0-9_]", "", str(adv.get("title") or rule_id))[:48] or f"CveRule{idx}",
+            "shortDescription": {"text": str(adv.get("title") or rule_id)},
+            "fullDescription": {"text": str(adv.get("summary") or "")},
+            "defaultConfiguration": {"level": "error"},
+            "properties": {"security-severity": "8.0"},
+        })
+        results.append({
+            "ruleId": rule_id,
+            "level": "error",
+            "message": {"text": f"{adv.get('title', rule_id)}: {adv.get('summary', '')}"},
+            "locations": [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": "package.json"},
+                        "region": {"startLine": 1, "startColumn": 1},
+                    }
+                }
+            ],
+        })
+
+    return {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "RepoCHK Mac Security & SAST Engine",
+                        "version": "1.2.0",
+                        "informationUri": "https://github.com/nanonigit/RepoCHK-Mac",
+                        "rules": rules,
+                    }
+                },
+                "results": results,
+            }
+        ],
     }
 
 

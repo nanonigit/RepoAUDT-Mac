@@ -300,6 +300,9 @@ def clone_or_update_repo(owner: str, repo: str, github_url: str, local_override:
     if res.returncode == 0 and target_dir.exists():
         return target_dir
 
+    if target_dir.exists() and not (target_dir / ".git").exists():
+        shutil.rmtree(target_dir, ignore_errors=True)
+
     res2 = subprocess.run(
         ["git", "clone", "--depth", "30", f"{github_url}.git", str(target_dir)],
         capture_output=True,

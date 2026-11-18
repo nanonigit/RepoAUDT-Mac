@@ -125,6 +125,40 @@ def get_mcp_tools() -> List[Dict[str, Any]]:
                 "required": ["code", "filename"],
             },
         },
+        {
+            "name": "export_cyclonedx_sbom",
+            "description": (
+                "Generate an industry-standard CycloneDX 1.5 JSON Software Bill of Materials (SBOM) "
+                "with Package URLs (purl), components, and CVE/EPSS vulnerability ratings for a repository."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "repo": {
+                        "type": "string",
+                        "description": "Repository name or ID (e.g. 'RepoCHK-Mac').",
+                    }
+                },
+                "required": ["repo"],
+            },
+        },
+        {
+            "name": "export_sarif_report",
+            "description": (
+                "Generate a GitHub Code Scanning compatible SARIF 2.1.0 JSON report containing "
+                "all OWASP SAST/AST findings, CodeRabbit action items, and CVE advisories for a repository."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "repo": {
+                        "type": "string",
+                        "description": "Repository name or ID (e.g. 'RepoCHK-Mac').",
+                    }
+                },
+                "required": ["repo"],
+            },
+        },
     ]
 
 
@@ -370,6 +404,34 @@ def execute_mcp_tool(name: str, arguments: Optional[Dict[str, Any]] = None) -> D
         }
         return {
             "content": [{"type": "text", "text": json.dumps(payload, ensure_ascii=False, indent=2)}],
+            "isError": False,
+        }
+
+    if name == "export_cyclonedx_sbom":
+        repo_query = str(args.get("repo") or "").strip()
+        matched = _find_diagram(diagrams, repo_query)
+        if not matched:
+            return {
+                "content": [{"type": "text", "text": f"Repository '{repo_query}' not found."}],
+                "isError": True,
+            }
+        sbom = security_audit_engine.generate_cyclonedx_sbom(matched)
+        return {
+            "content": [{"type": "text", "text": json.dumps(sbom, ensure_ascii=False, indent=2)}],
+            "isError": False,
+        }
+
+    if name == "export_sarif_report":
+        repo_query = str(args.get("repo") or "").strip()
+        matched = _find_diagram(diagrams, repo_query)
+        if not matched:
+            return {
+                "content": [{"type": "text", "text": f"Repository '{repo_query}' not found."}],
+                "isError": True,
+            }
+        sarif = security_audit_engine.generate_sarif_report(matched)
+        return {
+            "content": [{"type": "text", "text": json.dumps(sarif, ensure_ascii=False, indent=2)}],
             "isError": False,
         }
 

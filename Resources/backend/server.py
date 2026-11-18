@@ -253,6 +253,30 @@ class RepoCHKRequestHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/mcp"):
             self._send_json(200, mcp_server.get_mcp_server_metadata())
             return
+        if self.path.startswith("/api/sbom"):
+            parsed_url = urllib.parse.urlparse(self.path)
+            qs = urllib.parse.parse_qs(parsed_url.query)
+            repo_q = (qs.get("repo") or [""])[0].strip()
+            state = analyzer.load_saved_analyses()
+            diagrams = state.get("diagrams", [])
+            matched = mcp_server._find_diagram(diagrams, repo_q)
+            if not matched:
+                self._send_json(404, {"error": f"Repository '{repo_q}' not found"})
+                return
+            self._send_json(200, security_audit_engine.generate_cyclonedx_sbom(matched))
+            return
+        if self.path.startswith("/api/sarif"):
+            parsed_url = urllib.parse.urlparse(self.path)
+            qs = urllib.parse.parse_qs(parsed_url.query)
+            repo_q = (qs.get("repo") or [""])[0].strip()
+            state = analyzer.load_saved_analyses()
+            diagrams = state.get("diagrams", [])
+            matched = mcp_server._find_diagram(diagrams, repo_q)
+            if not matched:
+                self._send_json(404, {"error": f"Repository '{repo_q}' not found"})
+                return
+            self._send_json(200, security_audit_engine.generate_sarif_report(matched))
+            return
         if self.path.startswith("/api/sync/status"):
             parsed_url = urllib.parse.urlparse(self.path)
             qs = urllib.parse.parse_qs(parsed_url.query)

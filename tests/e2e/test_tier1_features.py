@@ -917,6 +917,78 @@ class TestF18McpServerIntegration(unittest.TestCase):
         self.assertEqual(rpc_data["id"], 10)
         self.assertGreaterEqual(len(rpc_data["result"]["resources"]), 2)
 
+    def test_f18_04_github_actions_workflow_sast_scanner(self):
+        """GitHub Actions SAST scanner detects script injection, pwn requests, write-all, and unpinned actions."""
+        import tempfile
+        import security_audit_engine
+        with tempfile.TemporaryDirectory() as tmp:
+            wf_dir = Path(tmp) / ".github" / "workflows"
+            wf_dir.mkdir(parents=True)
+            (wf_dir / "ci.yml").write_text(
+                "name: CI\n"
+                "on: pull_request_target\n"
+                "permissions: write-all\n"
+                "jobs:\n"
+                "  build:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                "      - uses: thirdparty/custom-action@main\n"
+                "      - uses: actions/checkout@v4\n"
+                "        with:\n"
+                "          ref: ${{ github.event.pull_request.head.sha }}\n"
+                "      - run: echo \"${{ github.event.pull_request.title }}\"\n",
+                encoding="utf-8",
+            )
+            findings = security_audit_engine.scan_github_actions_workflows(Path(tmp), lambda _: "CI")
+            self.assertGreaterEqual(len(findings), 4)
+
+    def test_f18_05_cyclonedx_sbom_and_sarif_export(self):
+        """CycloneDX 1.5 SBOM and SARIF 2.1.0 generators produce spec-compliant documents."""
+        import security_audit_engine
+        sample_diag = {
+            "id": "sample-repo",
+            "repo": "nanonigit/RepoCHK-Mac",
+            "github_url": "https://github.com/nanonigit/RepoCHK-Mac",
+            "commit_hash": "abc1234",
+            "deps": {
+                "frameworks": [{"name": "Next.js", "version": "14.2.5", "desc": "Web framework"}],
+                "security_advisories": [
+                    {
+                        "cve": "CVE-2024-39338",
+                        "severity": "HIGH",
+                        "epss": 0.42,
+                        "title": "Axios SSRF",
+                        "summary": "SSRF vulnerability",
+                        "sources": [{"name": "NVD", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-39338"}],
+                    }
+                ],
+            },
+            "coderabbit": {
+                "action_items": [
+                    {
+                        "severity": "high",
+                        "title": "Unsafe eval",
+                        "file": "src/app.py:42 (Target: Core)",
+                        "desc": "Avoid eval()",
+                    }
+                ]
+            },
+        }
+        sbom = security_audit_engine.generate_cyclonedx_sbom(sample_diag)
+        self.assertEqual(sbom["bomFormat"], "CycloneDX")
+        self.assertEqual(sbom["specVersion"], "1.5")
+        self.assertGreaterEqual(len(sbom["components"]), 1)
+        self.assertEqual(sbom["vulnerabilities"][0]["id"], "CVE-2024-39338")
+
+        sarif = security_audit_engine.generate_sarif_report(sample_diag)
+        self.assertEqual(sarif["version"], "2.1.0")
+        self.assertIn("sarif-2.1.0.json", sarif["$schema"])
+        self.assertGreaterEqual(len(sarif["runs"][0]["results"]), 2)
+        self.assertEqual(
+            sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["region"]["startLine"],
+            42,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
