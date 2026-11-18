@@ -8532,16 +8532,18 @@ def build_portal_html(data, is_shareable=False):
             ${repoActions.map((act, idx) => {
               const actJsonStr = encodeDataArg(act);
               const repoNameStr = encodeURIComponent(repoItem.repo || '').replace(/'/g, '%27');
+              const isEn = currentLang === 'en';
+              const impactInfo = explainWhatCouldHappen(act, isEn);
               return `
-                <div class="action-alert-card collapsed" id="action-alert-card-${idx}">
-                  <div class="action-alert-header" role="button" tabindex="0" onclick="toggleActionCard('${idx}')" title="クリックして詳細を展開 / 折りたたむ">
-                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-                      <span class="action-arrow" id="action-arrow-${idx}">▶</span>
+                <div class="action-alert-card ${idx === 0 ? '' : 'collapsed'}" id="action-alert-card-${idx}">
+                  <div class="action-alert-header" role="button" tabindex="0" onclick="toggleActionCard('${idx}')" title="クリックして詳細を展開 / 折りたたむ" style="align-items: flex-start;">
+                    <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0;">
+                      <span class="action-arrow" id="action-arrow-${idx}" style="margin-top: 2px;">${idx === 0 ? '▼' : '▶'}</span>
                       <div style="min-width: 0; flex: 1;">
-                        <div style="font-size: 0.8rem; font-weight: 800; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <div style="font-size: 0.84rem; font-weight: 800; color: #ffffff; line-height: 1.4; word-break: break-word;">
                           🔴 ${escapeHtml(act.title)}
                         </div>
-                        <div style="font-size: 0.68rem; color: #fda4af; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <div style="font-size: 0.72rem; color: #fda4af; font-family: monospace; line-height: 1.35; word-break: break-all; margin-top: 3px;">
                           🎯 ${escapeHtml(act.file)}
                         </div>
                       </div>
@@ -8553,12 +8555,20 @@ def build_portal_html(data, is_shareable=False):
                     </div>
                   </div>
                   <div class="action-alert-body" id="action-alert-body-${idx}">
-                    <div style="background: rgba(15, 23, 42, 0.75); border-left: 3px solid #f87171; padding: 8px 10px; border-radius: 6px; margin-bottom: 8px;">
-                      <div style="font-size: 0.7rem; font-weight: 800; color: #f87171; margin-bottom: 3px;">${dict.why_needed}</div>
-                      <div style="font-size: 0.78rem; color: #f1f5f9; line-height: 1.5;">${escapeHtml(act.desc)}</div>
+                    <div style="background: rgba(15, 23, 42, 0.8); border-left: 3px solid #f87171; padding: 10px 12px; border-radius: 6px; margin-bottom: 8px;">
+                      <div style="font-size: 0.74rem; font-weight: 800; color: #f87171; margin-bottom: 4px;">${dict.why_needed}</div>
+                      <div style="font-size: 0.82rem; color: #f1f5f9; line-height: 1.55;">${escapeHtml(act.desc)}</div>
                     </div>
-                    <div style="background: rgba(6, 78, 59, 0.35); border-left: 3px solid #34d399; padding: 8px 10px; border-radius: 6px;">
-                      <div style="font-size: 0.7rem; font-weight: 800; color: #34d399; margin-bottom: 4px;">${dict.how_to_fix}</div>
+                    <div style="background: rgba(120, 53, 15, 0.28); border: 1px solid rgba(251, 191, 36, 0.35); border-left: 3px solid #fbbf24; padding: 10px 12px; border-radius: 6px; margin-bottom: 8px;">
+                      <div style="font-size: 0.76rem; font-weight: 800; color: #fde047; margin-bottom: 4px;">
+                        💥 ${isEn ? 'What Could Happen / Potential Attack & Impact:' : 'どんなことがされちゃうのか・起こりうる被害 (放置した場合のリスク):'}
+                      </div>
+                      <div style="font-size: 0.82rem; color: #fef3c7; line-height: 1.58;">
+                        ${escapeHtml(impactInfo)}
+                      </div>
+                    </div>
+                    <div style="background: rgba(6, 78, 59, 0.35); border-left: 3px solid #34d399; padding: 10px 12px; border-radius: 6px;">
+                      <div style="font-size: 0.74rem; font-weight: 800; color: #34d399; margin-bottom: 4px;">${dict.how_to_fix}</div>
                       ${act.diff ? `
                         <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 4px;">${dict.recommended_diff}</div>
                         <pre class="cr-diff-container" style="margin: 0 0 8px 0; font-size: 0.72rem;">${act.diff.split(String.fromCharCode(10)).map(line => {
@@ -9735,6 +9745,10 @@ def build_portal_html(data, is_shareable=False):
                     <div style="font-size: 0.8rem; color: #f1f5f9; line-height: 1.5; margin-bottom: 6px;">
                       ${act.desc}
                     </div>
+                    <div style="margin: 6px 0 8px 0; background: rgba(120, 53, 15, 0.28); border: 1px solid rgba(251, 191, 36, 0.35); border-left: 3px solid #fbbf24; padding: 8px 11px; border-radius: 6px;">
+                      <div style="font-size: 0.73rem; font-weight: 800; color: #fde047; margin-bottom: 3px;">💥 ${currentLang === 'en' ? 'What Could Happen / Potential Risk:' : 'どんなことがされちゃうのか・起こりうる被害:'}</div>
+                      <div style="font-size: 0.78rem; color: #fef3c7; line-height: 1.52;">${escapeHtml(explainWhatCouldHappen(act, currentLang === 'en'))}</div>
+                    </div>
                     ${act.official_source ? `
                       <div style="margin-bottom: 6px;">
                         <a href="${act.official_source}" target="_blank" style="color: #38bdf8; font-size: 0.72rem; text-decoration: none;">
@@ -9918,6 +9932,71 @@ def build_portal_html(data, is_shareable=False):
       `;
     }
 
+    function explainWhatCouldHappen(act, isEn) {
+      if (!act) return '';
+      if (act.impact && act.impact.length > 20) return act.impact;
+      const hay = `${act.title || ''} ${act.desc || ''} ${act.file || ''} ${act.id || ''}`.toLowerCase();
+
+      if (hay.includes('auth0') || hay.includes('ghsa-mr6f-h57v-rpj5') || hay.includes('cve-2025-67716')) {
+        return isEn
+          ? 'Attackers can craft a malicious login redirect URL (returnTo parameter) to inject unintended OAuth query parameters into Auth0 authorization requests. This can cause authentication tokens to be issued with unintended scopes/settings or allow session manipulation and unauthorized access.'
+          : '【認証・ログイン乗っ取りリスク】ログイン後の移動先を指定するURLパラメータ（returnTo）のチェックに穴があるため、攻撃者が細工したログイン用URLをユーザーに踏ませると、Auth0への認証リクエストに不正な設定を混ぜ込まれる危険があります。その結果、意図しない権限を持った認証トークンが発行されたり、なりすまし・不正アクセスにつながる恐れがあります（v4.13.0以上で修正済）。';
+      }
+      if (hay.includes('axios') || hay.includes('cve-2024-39338') || hay.includes('ssrf')) {
+        return isEn
+          ? 'Server-Side Request Forgery (SSRF): An attacker can supply a crafted relative URL (e.g. //internal-host) that tricks the server into sending requests to internal private networks or cloud metadata endpoints (such as AWS IMDS), potentially leaking internal secrets and credentials.'
+          : '【社内ネットワーク侵入・機密情報窃取（SSRF攻撃）】外部から特殊なURLを指定されることで、サーバー自身が騙されて「本来外部からは絶対に見えないはずの社内システムやクラウドの裏側（AWSの機密設定メタデータ等）」へ勝手にアクセスしてしまい、サーバー内部の秘密情報や認証キーを盗み見られる危険があります。';
+      }
+      if (hay.includes('cve-2024-34351') || hay.includes('cache poisoning') || hay.includes('キャッシュ汚染') || (hay.includes('next.js') && hay.includes('13.5'))) {
+        return isEn
+          ? 'SSR Cache Poisoning & Open Redirect: An attacker can send a request with a spoofed Host header, causing Next.js Server Actions to redirect to an attacker-controlled domain or cache a poisoned response that gets served to other legitimate users.'
+          : '【偽画面の拡散・フィッシング誘導（キャッシュ汚染）】攻撃者が送信元ホスト名を偽装した通信を送ることで、サーバーが騙されて「攻撃者の作った偽サイト」へ誘導してしまったり、汚染された偽の画面データがサーバーにキャッシュ（一時保存）されて他の一般ユーザーの画面にも表示されてしまう危険があります。';
+      }
+      if (hay.includes('シークレット漏洩') || hay.includes('api key') || hay.includes('ハードコード') || hay.includes('secret')) {
+        return isEn
+          ? 'Credential Leak & Account Takeover: Because the API key or secret is stored in plaintext inside repository files, anyone with repository access (or automated scanners) can extract it, run up massive unauthorized AI/cloud bills under your account, or access private data.'
+          : '【API不正利用・高額請求・情報漏洩】コードやログの中にパスワード・APIキーがそのまま書かれているため、万が一ファイルが外部や第三者の目に触れると、あなたのアカウント名義でAIやクラウドを無断で大量に使われて高額請求が発生したり、保存されているデータを盗み見・改ざんされる危険があります。';
+      }
+      if (hay.includes('timeout') || hay.includes('abortsignal') || hay.includes('タイムアウト')) {
+        return isEn
+          ? 'Application Freeze & Denial of Service (DoS): Without a timeout, if the external command or network endpoint hangs or slows down, the process waits forever—causing the app UI or backend worker to freeze completely and block all subsequent operations.'
+          : '【アプリのフリーズ・連鎖的なシステム停止】連携先の外部プログラムや通信先が混雑・応答停止したときに「何秒で諦めるか（タイムアウト）」が設定されていないため、アプリが永遠に返事を待ち続けて画面が固まったり、サーバーの処理枠が埋め尽くされて他のユーザーの操作まで完全に止まってしまう危険があります。';
+      }
+      if (hay.includes('shell=true') || hay.includes('eval') || hay.includes('exec') || hay.includes('シェルインジェクション') || hay.includes('コマンド実行')) {
+        return isEn
+          ? 'Remote Code Execution (RCE): Untrusted input reaching a shell or dynamic eval allows an attacker to execute arbitrary OS commands on the server or user machine, potentially taking full control of the system.'
+          : '【サーバー・PCの乗っ取り（任意コード実行）】入力された文字がそのままプログラムやOSコマンドとして実行されてしまう仕組みになっているため、悪意ある文字（`; rm -rf` や外部通信コマンド等）を入力されると、コンピュータ内で勝手な命令を実行されてシステムを乗っ取られる危険があります。';
+      }
+      if (hay.includes('pickle') || hay.includes('yaml.load') || hay.includes('unserialize') || hay.includes('デシリアライズ')) {
+        return isEn
+          ? 'Insecure Deserialization (RCE): Loading untrusted serialized data via pickle/yaml.load/unserialize allows attackers to execute arbitrary code instantly during data unpacking.'
+          : '【データ読み込み時のウイルス実行】外部から受け取ったデータをそのまま復元（デシリアライズ）しているため、細工されたデータを読み込ませるだけで裏で悪성プログラムを自動実行されてしまう危険があります。';
+      }
+      if (hay.includes('sql') || hay.includes('sqli')) {
+        return isEn
+          ? 'SQL Injection: Attackers can inject malicious SQL syntax into input fields to bypass login checks, dump the entire database, or overwrite/delete records.'
+          : '【全データベースの抜き取り・改ざん（SQLインジェクション）】入力欄に特殊な記号を入れられることでデータベースへの命令文が書き換えられ、ログインなしで管理者として突破されたり、登録されている全ユーザーの個人情報を丸ごと抜き取られる危険があります。';
+      }
+      if (hay.includes('xss') || hay.includes('htmlspecialchars')) {
+        return isEn
+          ? 'Cross-Site Scripting (XSS): Malicious JavaScript injected by an attacker runs in other users browsers, stealing their login cookies/tokens or performing actions on their behalf.'
+          : '【他人の画面での不正プログラム実行（XSS）】悪意あるスクリプトが画面に埋め込まれ、そのページを開いた他のユーザーのブラウザ上で勝手に動作し、ログイン情報を盗まれたり勝手な操作をされる危険があります。';
+      }
+      if (hay.includes('肥大化モジュール') || hay.includes('責務分離')) {
+        return isEn
+          ? 'High Regression & Bug Risk: Because too many responsibilities are packed into a single large file, fixing one feature can easily break unrelated features or hide subtle security bugs.'
+          : '【修正時のバグ連鎖・故障リスク】1つの巨大なファイルの中に画面・通信・データ処理が詰め込まれているため、将来少し機能を追加・修正したときに「関係ないはずの別の機能まで突然動かなくなる（デグレ）」事故や、セキュリティの抜け穴が見落とされる原因になります。';
+      }
+      if (hay.includes('osv') || hay.includes('cve-') || hay.includes('ghsa-')) {
+        return isEn
+          ? 'Known Public Vulnerability (CVE/GHSA): Because this library version has a publicly documented security flaw, automated bots and attackers can exploit it to cause unauthorized access, data leaks, or service crashes.'
+          : '【公開済みセキュリティ弱点の悪用リスク】使用している部品（ライブラリ）のこのバージョンには、すでに世界中で公開された弱点（脆弱性）が見つかっています。攻撃手法が公になっているため、放置すると自動巡回ボットや攻撃者から不正アクセス・情報漏洩・システム停止の標的にされやすくなります。';
+      }
+      return isEn
+        ? 'If left unaddressed, this issue can degrade system stability, security posture, or cause unexpected runtime failures under edge-case conditions.'
+        : '放置すると、予期しないエラーによる機能停止や、セキュリティ・安全性の低下につながる恐れがあります。早めの対策を推奨します。';
+    }
+
     function getRepoActionItems(repoItem) {
       if (!repoItem) return [];
       const cr = repoItem.coderabbit || {};
@@ -10089,6 +10168,11 @@ def build_portal_html(data, is_shareable=False):
             <div style="margin: 8px 0; background: rgba(15, 23, 42, 0.6); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #ef4444;">
               <div style="font-size: 0.72rem; font-weight: 700; color: #f87171; margin-bottom: 3px;">${isEn ? '⚠️ WHY IT MATTERS:' : '⚠️ 要対応の理由 (WHY IT MATTERS):'}</div>
               <div style="font-size: 0.8rem; color: #f1f5f9; line-height: 1.5;">${act.desc}</div>
+            </div>
+
+            <div style="margin: 8px 0; background: rgba(120, 53, 15, 0.28); border: 1px solid rgba(251, 191, 36, 0.35); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #fbbf24;">
+              <div style="font-size: 0.74rem; font-weight: 800; color: #fde047; margin-bottom: 4px;">💥 ${isEn ? 'WHAT COULD HAPPEN (POTENTIAL IMPACT):' : 'どんなことがされちゃうのか・起こりうる被害:'}</div>
+              <div style="font-size: 0.8rem; color: #fef3c7; line-height: 1.55;">${escapeHtml(explainWhatCouldHappen(act, isEn))}</div>
             </div>
 
             <div style="margin: 8px 0; background: rgba(6, 78, 59, 0.2); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #10b981;">

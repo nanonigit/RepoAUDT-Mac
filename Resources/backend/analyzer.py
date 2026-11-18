@@ -239,23 +239,56 @@ def list_org_or_user_repositories(owner: str, limit: int = 35) -> List[Dict[str,
             except Exception as exc:
                 print(f"Notice: GitHub REST API fallback failed for {owner}: {exc}", file=sys.stderr)
 
-    # Also check local directories under ~/Git/<owner>
-    local_org_dir = Path.home() / "Git" / owner
-    if local_org_dir.exists() and local_org_dir.is_dir():
-        existing_names = {r["name"].lower() for r in repos}
-        for sub in sorted(local_org_dir.iterdir()):
-            if sub.is_dir() and (sub / ".git").exists() and sub.name.lower() not in existing_names:
-                repos.append({
-                    "name": sub.name,
-                    "description": f"{owner}/{sub.name} ローカルリポジトリ",
-                    "createdAt": "",
-                    "updatedAt": "",
-                    "pushedAt": "",
-                    "url": f"https://github.com/{owner}/{sub.name}",
-                    "language": "TypeScript",
-                })
+    # Fallback to local directories under ~/Git/<owner> ONLY if GitHub CLI & API returned nothing (offline fallback)
+    if not repos:
+        local_org_dir = Path.home() / "Git" / owner
+        if local_org_dir.exists() and local_org_dir.is_dir():
+            existing_names = {r["name"].lower() for r in repos}
+            for sub in sorted(local_org_dir.iterdir()):
+                if sub.is_dir() and (sub / ".git").exists() and sub.name.lower() not in existing_names:
+                    repos.append({
+                        "name": sub.name,
+                        "description": f"{owner}/{sub.name} ローカルリポジトリ",
+                        "createdAt": "",
+                        "updatedAt": "",
+                        "pushedAt": "",
+                        "url": f"https://github.com/{owner}/{sub.name}",
+                        "language": "TypeScript",
+                    })
 
     return [r for r in repos if r.get("name")]
+
+
+def resolve_canonical_github_repo(owner: str, repo: str, github_url: str) -> Tuple[str, str, str, List[str]]:
+    """
+    Check GitHub via `gh repo view` to detect if a repository was renamed/redirected
+    (e.g. `nanonigit/artex-mac` -> `nanonigit/networkpntr-mac`).
+    Returns (canonical_owner, canonical_repo, canonical_url, replaced_diagram_ids).
+    """
+    replaced_ids: List[str] = []
+    if owner == "local":
+        return owner, repo, github_url, replaced_ids
+
+    gh_bin = "/opt/homebrew/bin/gh" if Path("/opt/homebrew/bin/gh").exists() else "gh"
+    raw = run_cmd([gh_bin, "repo", "view", f"{owner}/{repo}", "--json", "name,owner,url"], timeout=10)
+    if raw:
+        try:
+            data = json.loads(raw)
+            new_name = str(data.get("name") or "").strip()
+            owner_obj = data.get("owner") or {}
+            new_owner = str(owner_obj.get("login") if isinstance(owner_obj, dict) else owner).strip() or owner
+            new_url = str(data.get("url") or "").strip() or f"https://github.com/{new_owner}/{new_name}"
+            if new_name and (new_name.lower() != repo.lower() or new_owner.lower() != owner.lower()):
+                old_id = f"gh-{owner}-{repo}-overall".lower()
+                replaced_ids.append(old_id)
+                old_cache = REPOS_CACHE_DIR / f"{owner}__{repo}"
+                if old_cache.exists():
+                    shutil.rmtree(old_cache, ignore_errors=True)
+                return new_owner, new_name, new_url, replaced_ids
+        except Exception:
+            pass
+
+    return owner, repo, github_url, replaced_ids
 
 
 def find_existing_local_repo(owner: str, repo: str) -> Optional[Path]:
@@ -1118,6 +1151,9 @@ def analyze_repository(
     fallback_meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     owner, repo, github_url, local_override = parse_github_input(raw_url_or_slug)
+    replaced_ids: List[str] = []
+    if not local_override and fallback_meta is None:
+        owner, repo, github_url, replaced_ids = resolve_canonical_github_repo(owner, repo, github_url)
     repo_dir = clone_or_update_repo(owner, repo, github_url, local_override)
     meta = extract_git_metadata(repo_dir, owner, repo, fallback_meta=fallback_meta)
     deps = detect_tech_stack_and_deps(repo_dir)
@@ -1222,6 +1258,7 @@ def analyze_repository(
     return {
         "diagram": diagram_entry,
         "diagrams": [diagram_entry],
+        "replaced_ids": replaced_ids,
         "techSpecs": repo_tech_specs,
         "tableSchemas": extracted_schemas,
         "analyzed_at": datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
@@ -1633,15 +1670,30 @@ def save_analysis_result(result: Dict[str, Any]) -> Dict[str, Any]:
         new_diagrams = result.get("diagrams") or ([result["diagram"]] if "diagram" in result else [])
         new_ids = {d["id"] for d in new_diagrams}
         new_urls = {(d.get("github_url"), d.get("perspective")) for d in new_diagrams}
+        replaced_ids = set(result.get("replaced_ids") or [])
+
+        # If this is a full Organization/User scan, prune any old repos under that owner
+        # that no longer exist on GitHub (e.g. deleted or renamed repositories)
+        org_owner = str(result.get("owner") or "").strip().lower() if result.get("mode") == "org" else ""
 
         # If user re-adds a previously deleted repo, remove it from deleted_ids
-        deleted_ids = set(state.get("deleted_ids", [])) - new_ids
+        deleted_ids = (set(state.get("deleted_ids", [])) - new_ids) | replaced_ids
         state["deleted_ids"] = list(deleted_ids)
 
-        existing = [
-            d for d in state.get("diagrams", [])
-            if d.get("id") not in new_ids and (d.get("github_url"), d.get("perspective")) not in new_urls
-        ]
+        existing = []
+        for d in state.get("diagrams", []):
+            did = str(d.get("id") or "")
+            durl = str(d.get("github_url") or "")
+            if did in new_ids or did in replaced_ids or (durl, d.get("perspective")) in new_urls:
+                continue
+            if org_owner and (
+                did.startswith(f"gh-{org_owner}-")
+                or durl.lower().startswith(f"https://github.com/{org_owner}/")
+            ):
+                # Prune stale/renamed repo from this owner
+                continue
+            existing.append(d)
+
         state["diagrams"] = new_diagrams + existing
         state.setdefault("techSpecs", {}).update(result.get("techSpecs", {}))
         state.setdefault("tableSchemas", {}).update(result.get("tableSchemas", {}))

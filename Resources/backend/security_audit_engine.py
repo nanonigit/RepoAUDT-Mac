@@ -226,17 +226,39 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                     if vulns:
                         v0 = vulns[0]
                         vid = v0.get("id", "OSV-VULN")
-                        aliases = v0.get("aliases") or []
+                        aliases = list(v0.get("aliases") or [])
+                        osv_summary = str(v0.get("summary") or "").strip()
+                        osv_details = str(v0.get("details") or "").strip()
+                        if not osv_summary and len(advisories) < 8:
+                            try:
+                                vreq = urllib.request.Request(
+                                    f"https://api.osv.dev/v1/vulns/{vid}",
+                                    headers={"User-Agent": "RepoCHK-SecuritySkill"},
+                                )
+                                with urllib.request.urlopen(vreq, timeout=4) as vresp:
+                                    if getattr(vresp, "status", 200) == 200:
+                                        vfull = json.loads(vresp.read().decode("utf-8", errors="ignore"))
+                                        osv_summary = str(vfull.get("summary") or "").strip()
+                                        osv_details = str(vfull.get("details") or "").strip()
+                                        for al in vfull.get("aliases") or []:
+                                            if al not in aliases:
+                                                aliases.append(al)
+                            except Exception:
+                                pass
                         cve_alias = next((a for a in aliases if str(a).startswith("CVE-")), None)
-                        display_cve = cve_alias or vid
+                        display_cve = f"{vid} ({cve_alias})" if (cve_alias and cve_alias != vid) else (cve_alias or vid)
+                        clean_details = re.sub(r"[#*`]+", "", osv_details).strip()
+                        first_sentence = clean_details.split("\n\n")[0].replace("\n", " ")[:240] if clean_details else ""
+                        detail_suffix = f" 脆弱性の内容: {osv_summary} ({first_sentence})" if osv_summary else ""
                         advisories.append({
                             "pkg": f"{pkg_name} ({eco})",
                             "installed": clean_ver,
                             "cve": display_cve,
                             "osv_id": vid,
                             "severity": "HIGH",
-                            "title": f"[OSV脆弱性検出] {pkg_name} v{clean_ver} ({display_cve})",
-                            "summary": f"OSV.dev 脆弱性データベースにおいて `{pkg_name}` ({eco}) バージョン `{clean_ver}` に既知の脆弱性 `{display_cve}` (他 {len(vulns)} 件) が報告されています。最新パッチバージョンへの更新を強く推奨します。",
+                            "title": f"[OSV脆弱性検出] {pkg_name} v{clean_ver} ({display_cve})" + (f" — {osv_summary}" if osv_summary else ""),
+                            "summary": f"OSV.dev 脆弱性データベースにおいて `{pkg_name}` ({eco}) バージョン `{clean_ver}` に既知の脆弱性 `{display_cve}` (計 {len(vulns)} 件) が報告されています。{detail_suffix}",
+                            "impact": first_sentence or osv_summary or "放置すると外部からの不正リクエストによって認証回避・情報漏洩・サービス妨害 (DoS) 等に悪用される危険があります。",
                             "sources": [
                                 {"name": f"OSV.dev ({vid})", "url": f"https://osv.dev/vulnerability/{vid}"},
                                 {"name": "GitHub Advisory", "url": f"https://github.com/advisories?query={pkg_name}"},
