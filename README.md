@@ -87,7 +87,10 @@ In a finding that has a suggested command, select **Copy command** and review it
 
 ## Verification and current scope
 
+For supported commit-pinned authorization findings, open **Private disclosure draft** to review or edit a draft and copy it. The repository's **Security policy** link opens separately so you can identify the maintainers' private channel. The draft is local to the current view.
+
 ```bash
+node --test tests/ui/test_disclosure_draft.js
 python3 tests/e2e/run_all_tests.py
 python3 -m unittest discover -s tests/connections -v
 python3 -m unittest discover -s tests/ui -v

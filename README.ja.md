@@ -87,7 +87,10 @@ GitHub CLIでローカル資格情報を取得できてもHTTP通信に失敗す
 
 ## 検証と現在の実装範囲
 
+コミットが固定された対応する認可指摘では、「非公開報告の下書き」を開いて内容の確認・編集・コピーができます。「セキュリティポリシー」のリンクから、メンテナーが指定する非公開の報告先を確認できます。下書きは現在の画面内に保持されます。
+
 ```bash
+node --test tests/ui/test_disclosure_draft.js
 python3 tests/e2e/run_all_tests.py
 python3 -m unittest discover -s tests/connections -v
 python3 -m unittest discover -s tests/ui -v

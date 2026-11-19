@@ -1,0 +1,3 @@
+# Design
+
+Lazyweb's disclosure-form examples put the summary and affected location before the narrative. Keep those fields and the verification scope together in a collapsible editor within the finding. The draft uses the recognized rule, reviewed GitHub identity and pinned location. It does not republish raw source, stored patches, or arbitrary finding text. Edits live in the view until it closes. Copy is explicit and the link opens only the GitHub repository's security policy, without the draft. See [GitHub's private reporting guidance](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/report-privately).

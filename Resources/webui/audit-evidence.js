@@ -100,6 +100,66 @@ function recordedAuthorizationChain(repo, issue) {
 }
 
 
+function disclosureDraft(repo, issue) {
+  const revision = repo.source_revision;
+  const finding = String(issue.file).match(/^([A-Za-z0-9_./-]+\.py):([1-9][0-9]{0,6})$/);
+  if (issue.scanner !== 'authorization-evidence' ||
+      issue.id !== 'CWE-862-python-local-privileged-route' ||
+      revision?.kind !== 'github_commit' ||
+      !/^[0-9a-f]{40}$/.test(revision.commit_sha) || repo.commit_hash !== revision.commit_sha ||
+      !/^[A-Za-z0-9][A-Za-z0-9-]*\/(?!\.{1,2}$)[A-Za-z0-9_.-]+$/.test(revision.repository) ||
+      !finding || finding[1].split('/').some(part => !part || part === '.' || part === '..' || part === '.git')) {
+    return null;
+  }
+  const root = 'https://github.com/' + revision.repository;
+  const path = finding[1].split('/').map(encodeURIComponent).join('/');
+  const location = root + '/blob/' + revision.commit_sha + '/' + path + '#L' + finding[2];
+  const lines = [
+    auditLabel('# Private disclosure draft', '# 非公開報告用の下書き'),
+    '',
+    auditLabel('## Summary', '## 概要'),
+    auditLabel('CWE-862. Caller authorization is missing on a local API path to a privileged operation.', 'CWE-862。高権限処理につながるローカルAPIの経路で、呼び出し元の認可が確認できません。'),
+    '',
+    auditLabel('## Audited revision and location', '## 監査対象のコミットと箇所'),
+    '- ' + revision.repository + ' @ ' + revision.commit_sha,
+    '- ' + location,
+    '',
+    auditLabel('## Impact and verification scope', '## 影響と確認範囲'),
+    auditLabel('Static review identified a path to privileged processing in this revision. Runtime behavior, affected releases and actual impact require confirmation.', 'このコミットの静的監査で高権限処理への経路を確認しました。稼働時の挙動、影響を受けるリリース、実際の影響は別途確認が必要です。'),
+    '',
+    auditLabel('## Suggested remediation', '## 修正案'),
+    auditLabel('Remove the route if it is unnecessary. If it is required, authenticate the caller and enforce authorization before privileged processing.', '不要な経路は廃止してください。必要な場合は呼び出し元を認証し、高権限処理の前に認可を検証してください。'),
+  ];
+  return {text: lines.join('\n'), policy: root + '/security/policy'};
+}
+
+function disclosureEditor(repo, issue) {
+  const draft = disclosureDraft(repo, issue);
+  if (!draft) return '';
+  const title = auditLabel('Private disclosure draft', '非公開報告の下書き');
+  return `<details class="audit-comparison audit-disclosure">
+    <summary>${title}</summary>
+    <p>${auditLabel('Review this local draft and use the repository’s security policy to find its private reporting channel.', '下書きの内容を確認し、報告先はリポジトリのセキュリティポリシーで確認してください。')}</p>
+    <textarea rows="10" spellcheck="false" aria-label="${title}">${escapeHtml(draft.text)}</textarea>
+    <div class="issue-actions">
+      <button type="button" class="table-view-btn" onclick="copyDisclosureDraft(this)">${auditLabel('Copy draft', '下書きをコピー')}</button>
+      ${auditLink(draft.policy, auditLabel('Security policy', 'セキュリティポリシー'))}
+      <span role="status"></span>
+    </div>
+  </details>`;
+}
+
+async function copyDisclosureDraft(button) {
+  const editor = button.closest('.audit-disclosure');
+  const status = editor.querySelector('[role="status"]');
+  try {
+    await navigator.clipboard.writeText(editor.querySelector('textarea').value);
+    status.textContent = auditLabel('Copied', 'コピーしました');
+  } catch (_) {
+    status.textContent = auditLabel('Copy failed. Select the draft to copy it manually.', 'コピーできませんでした。下書きの本文を選択してコピーしてください。');
+  }
+}
+
 function findingSourceControls(repo, issue, file) {
   if (!document.documentElement.classList.contains('native-host')) return '';
   const location = String(file).match(/^(.+?):(\d+)(?:\s|$)/);
@@ -131,6 +191,7 @@ function findingSourceControls(repo, issue, file) {
       <div role="status" data-commit-verification></div>
     </form>` : ''}
     ${recordedAuthorizationChain(repo, issue)}
+    ${disclosureEditor(repo, issue)}
     <div data-evidence-result aria-live="polite"></div>
   </div>`;
 }

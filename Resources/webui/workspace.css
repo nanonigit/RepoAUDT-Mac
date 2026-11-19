@@ -215,6 +215,17 @@
 .audit-comparison { margin: 14px 0; padding: 14px; border: 1px solid var(--workspace-border); border-radius: 8px; }
 .audit-comparison-status { color: var(--workspace-info-text); margin-top: 12px; }
 .audit-source-version pre { margin: 4px 0 12px; }
+.audit-disclosure summary { cursor: pointer; font-weight: 600; }
+.audit-disclosure textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px;
+  color: var(--workspace-text);
+  background: var(--workspace-background);
+  border: 1px solid var(--workspace-border);
+  border-radius: 6px;
+  resize: vertical;
+}
 [data-audit-repository-status] button { margin-top: 6px; font-size: 12px; }
 #audit-chat { position: fixed; inset: 0; z-index: 120; background: var(--workspace-background); color: var(--workspace-text); overflow: auto; }
 .audit-chat-inner { max-width: 900px; min-height: 100%; padding: 24px 32px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
