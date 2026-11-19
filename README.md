@@ -10,6 +10,7 @@ Enter a GitHub repository URL or `owner/repo`, analyze the code, and inspect fin
 
 - **Repository workspace:** saved-repository dashboard, search, audit results, architecture diagrams, and execution flows.
 - **Code audits:** static-analysis findings, dependency vulnerability checks, evidence, affected components, and remediation suggestions where available. Copy fix prompts and save reports for review.
+- **Runtime inventory and security updates:** list repository-declared images, runtime pins and compatibility settings. Upstream lookups cover PHP, nginx, Node.js, Go and PostgreSQL. Findings link to the official advisory or security release and show the documented fixed version when available.
 - **Python quality and secret candidates:** Ruff checks selected Python rules for issues such as undefined names and unused imports. Gitleaks scans tracked files for potential credentials. Secret findings are redacted in source previews and reports.
 - **GitHub Actions audit:** optionally add [zizmor](https://docs.zizmor.sh/audits/). The app scans workflow copies offline and merges findings with its built-in checks. Open a finding for the file, line, and rule documentation.
 - **Current source and history:** open a finding to see its audited and current source lines with commit links, the default branch's latest commit, the repository's last push, and the file's last change. Live evidence uses authenticated GitHub CLI access.
@@ -63,6 +64,12 @@ Ruff and Gitleaks run on temporary copies of tracked working-tree files. The com
 
 Saved analysis belongs to the recorded commit and can become outdated. Run analysis again to inspect newer code.
 
+## Runtime patch coverage
+
+Open **Component inventory and security updates** after re-scanning. The report includes Dockerfile and YAML images, version files, toolchain declarations and known compatibility fields. Vendor-unmapped images, unresolved tags and feed failures have separate statuses. The scan reads up to 200 declaration files and records up to 300 entries. It checks up to 16 pins per supported product, and shows the first 15 matching advisories per pin in the audit view. The structured MCP audit report contains the match list for checked pins.
+
+PHP checks the latest 50 public php-src advisories and the upstream unsupported-branches page. nginx and PostgreSQL use official product advisories. Node.js and Go report their own branch's security releases. When a PHP advisory names affected functions, the app looks for those names in up to 120 PHP files. Results indicate possible source locations, with reachability and deployed versions unverified. Package-manager backports, base-image contents, and arbitrary dynamically resolved versions require separate evidence.
+
 ## Verification and current scope
 
 ```bash
@@ -72,9 +79,10 @@ python3 -m unittest discover -s tests/ui -v
 python3 -m unittest discover -s tests/audit -v
 python3 -m unittest discover -s tests/audit-tools -v
 python3 -m unittest discover -s tests/source-scanners -v
+python3 -m unittest discover -s tests/runtime-patches -v
 ```
 
-The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, 5 audit evidence tests, 4 workflow-audit tests, and 5 source-scanner tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
+The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, 5 audit evidence tests, 4 workflow-audit tests, 5 source-scanner tests, and 6 runtime-patch tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
 
 Local LLM requests were verified with a mock HTTP server; a live Ollama / LM Studio model was not tested. MCP tool discovery and snippet scanning were also checked in the installed app. The complete PR submission, progress tracking, and fix-verification workflow remains outside this delivery's completed scope.
 
@@ -86,6 +94,7 @@ The following implementation documents are currently in Japanese:
 - [UI design](docs/ui-redesign/design.md)
 - [Color roles, references, and contrast checks](docs/ui-redesign/colors.md)
 - [Verification record](docs/ui-redesign/verification.md)
+- [Runtime patch design](docs/runtime-patches/design.md)
 - [Source scanner selection and scope](docs/source-scanners/design.md)
 - [Audit tool evaluation and design](docs/audit-tools/design.md)
 - [Audit evidence design](docs/audit-evidence/design.md) and [incident review](docs/audit-evidence/incident.md)

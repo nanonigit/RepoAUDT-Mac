@@ -20,6 +20,7 @@ import urllib.request
 from connection_utils import validate_endpoint, open_endpoint
 from workflow_audit import MAX_FILES, read_small_file, run_zizmor, workflow_files
 from source_scanners import scan_source
+from runtime_patches import scan_runtime_patches
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -666,7 +667,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     composer_json = repo_dir / "composer.json"
     php_files = [p for p in repo_dir.rglob("*.php") if not any(part in ignore_dirs for part in p.parts)]
     if composer_json.exists() or php_files:
-        runtime_info["php"] = "PHP 8.x Runtime"
+        runtime_info["php"] = "PHP (version not declared)"
         if composer_json.exists():
             try:
                 cdata = json.loads(composer_json.read_text(encoding="utf-8", errors="ignore"))
@@ -677,33 +678,13 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
                 php_ver = str(req_all.get("php", ""))
                 if php_ver:
                     runtime_info["php"] = f"PHP {php_ver}"
-                    if re.search(r"(?:^|[^\d.])(5\.|7\.|8\.0(?:\b|$))", php_ver):
-                        security_advisories.append({
-                            "pkg": "php (Runtime)",
-                            "installed": php_ver,
-                            "cve": "PHP-EOL-SECURITY",
-                            "severity": "CRITICAL",
-                            "title": f"PHP ランタイム ({php_ver}) セキュリティサポート終了 (EOL) リスク",
-                            "summary": f"`composer.json` で指定されている PHP バージョン `{php_ver}` は公式セキュリティサポートが終了 (EOL) しています。未パッチの遠隔コード実行 (RCE) 等のリスクがあるため、PHP 8.2 / 8.3 LTS への移行が必要です。",
-                            "sources": [
-                                {"name": "PHP Supported Versions", "url": "https://www.php.net/supported-versions.php"},
-                            ],
-                        })
-                        frameworks.append({
-                            "name": "PHP Runtime Engine",
-                            "version": php_ver,
-                            "status": "warn",
-                            "desc": "⚠️ EOLバージョン検出 — PHP 8.2/8.3への更新推奨",
-                            "security_link": "https://www.php.net/supported-versions.php",
-                        })
-                    else:
-                        frameworks.append({
-                            "name": "PHP Runtime Engine",
-                            "version": php_ver,
-                            "status": "latest",
-                            "desc": "PHP サーバーサイド実行ランタイム",
-                            "security_link": "https://www.php.net/supported-versions.php",
-                        })
+                    frameworks.append({
+                        "name": "PHP Runtime Engine",
+                        "version": php_ver,
+                        "status": "info",
+                        "desc": "Composer の互換性要件。稼働版は別途確認してください。",
+                        "security_link": "https://www.php.net/supported-versions.php",
+                    })
 
                 for pkg_name, ver in req_all.items():
                     if pkg_name == "php" or pkg_name.startswith("ext-"):
@@ -778,20 +759,8 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         try:
             pdata = json.loads(pkg_json.read_text(encoding="utf-8", errors="ignore"))
             engines = pdata.get("engines") or {}
-            node_ver = str(engines.get("node", "Node.js 20.x LTS"))
-            runtime_info["node"] = node_ver
-            if re.search(r"(?:^|[^\d.])(12|14|16|18)(?:\.|$|x|\s)", node_ver):
-                security_advisories.append({
-                    "pkg": "Node.js Runtime",
-                    "installed": node_ver,
-                    "cve": "NODEJS-EOL-AUDIT",
-                    "severity": "HIGH",
-                    "title": f"Node.js ランタイム ({node_ver}) EOL / セキュリティ更新終了警告",
-                    "summary": f"`package.json` の `engines.node` ({node_ver}) は旧世代ランタイムを含んでいます。OpenSSL および HTTP/2 関連の脆弱性対策のため Node.js 20 LTS または 22 LTS へのアップグレードを推奨します。",
-                    "sources": [
-                        {"name": "Node.js Security Releases", "url": "https://nodejs.org/en/blog/vulnerability"},
-                    ],
-                })
+            if engines.get("node"):
+                runtime_info["node"] = str(engines["node"])
 
             all_deps = {}
             all_deps.update(pdata.get("dependencies") or {})
@@ -872,8 +841,11 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     source_findings, source_scan = scan_source(
         Path(repo_dir), match_comp, include_quality=skills_cfg.get("owasp_sast_skill", True)
     )
+    runtime_findings, runtime_patch_scan = ([], {"status": "disabled"})
+    if skills_cfg.get("php_node_runtime_audit", True):
+        runtime_findings, runtime_patch_scan = scan_runtime_patches(Path(repo_dir), match_comp)
     secret_findings = scan_secrets_and_credentials(repo_dir, match_comp)
-    sast_findings = secret_findings + source_findings + sast_findings
+    sast_findings = secret_findings + runtime_findings + source_findings + sast_findings
     security_advisories = enrich_advisories_with_epss(security_advisories)
 
     return {
@@ -885,6 +857,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         "sast_findings": sast_findings,
         "workflow_scan": workflow_scan,
         "source_scan": source_scan,
+        "runtime_patch_scan": runtime_patch_scan,
     }
 
 

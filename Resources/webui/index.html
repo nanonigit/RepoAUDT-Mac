@@ -4779,7 +4779,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/19 21:00:00</strong>
+              <strong id="portal-sync-time">2026/11/19 21:41:34</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -8731,7 +8731,7 @@
                 <summary>
                   <span class="issue-severity ${tone}"><span aria-hidden="true">${tone === 'danger' ? '⛔' : tone === 'warning' ? '△' : tone === 'info' ? 'ⓘ' : '—'}</span> ${escapeHtml(severity.toUpperCase())}</span>
                   <div class="issue-heading">
-                    <div class="issue-title">${escapeHtml(issue.title || (en ? 'Review finding' : '確認事項'))}</div>
+                    <div class="issue-title">${escapeHtml((en && issue.title_en) || issue.title || (en ? 'Review finding' : '確認事項'))}</div>
                     <div class="issue-path">${escapeHtml(file || (en ? 'Location not recorded' : '場所未記録'))}</div>
                   </div>
                 </summary>
@@ -8739,13 +8739,13 @@
                   ${findingSourceControls(repo, issue, file)}
                   <div class="saved-finding-description">
                   <h3>${en ? 'Recorded evidence and reason' : '保存された根拠と理由'}</h3>
-                  <p>${escapeHtml(issue.desc || issue.comment || issue.summary || (en ? 'No additional evidence recorded.' : '追加の根拠は記録されていません。'))}</p>
-                  <h3>${en ? 'Potential impact' : '想定される影響'}</h3>
-                  <p>${escapeHtml(explainWhatCouldHappen(issue, en))}</p>
+                  <p>${escapeHtml((en && issue.desc_en) || issue.desc || issue.comment || issue.summary || (en ? 'No additional evidence recorded.' : '追加の根拠は記録されていません。'))}</p>
+                  ${!String(issue.scanner || '').startsWith('runtime-') ? `<h3>${en ? 'Potential impact' : '想定される影響'}</h3>
+                  <p>${escapeHtml(explainWhatCouldHappen(issue, en))}</p>` : ''}
                   ${issue.diff ? `<h3>${en ? 'Suggested change' : '修正案'}</h3><pre>${escapeHtml(issue.diff)}</pre>` : ''}
                   ${issue.fix_cmd ? `<h3>${en ? 'Suggested command' : '修正コマンド案'}</h3><pre>${escapeHtml(issue.fix_cmd)}</pre>` : ''}
                   <div class="issue-actions">
-                    <button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${prompt}">${en ? 'Copy fix prompt' : '修正プロンプトをコピー'}</button>
+                    ${issue.scanner !== 'runtime-inventory' ? `<button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${prompt}">${en ? 'Copy fix prompt' : '修正プロンプトをコピー'}</button>` : ''}
                     <button type="button" class="table-view-btn" onclick="downloadSingleActionReport('${report}', '${name}')">${en ? 'Save report' : 'レポートを保存'}</button>
                     ${sourceLink}
                   </div>
@@ -8923,12 +8923,16 @@
             id: a.id || 'act',
             severity: a.severity || 'CRITICAL',
             title: a.title,
+            title_en: a.title_en,
+            desc_en: a.desc_en,
+            scanner: a.scanner,
+            runtime_patch: a.runtime_patch,
             file: a.file || 'src/',
             target_node: a.target_node || '',
             desc: a.desc,
             fix_cmd: a.fix_cmd,
             official_source: a.official_source,
-            diff: a.diff || ((cr.findings && cr.findings[0] && cr.findings[0].diff) ? cr.findings[0].diff : '')
+            diff: a.diff || ''
           });
         });
       }

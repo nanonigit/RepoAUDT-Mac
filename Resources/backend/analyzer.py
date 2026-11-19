@@ -1178,9 +1178,16 @@ def analyze_repository(
     # Merge PHP / Node.js / OWASP SAST findings
     coderabbit["workflow_scan"] = sec_scan.get("workflow_scan")
     coderabbit["source_scan"] = sec_scan.get("source_scan")
+    coderabbit["runtime_patch_scan"] = sec_scan.get("runtime_patch_scan")
+    runtime_inventory = None
     for sf in sec_scan.get("sast_findings", []):
+        if sf.get("scanner") == "runtime-inventory":
+            runtime_inventory = sf
+            continue
         coderabbit["action_items"].insert(0, sf)
         coderabbit["findings"].insert(0, {**sf, "line": "SAST"})
+        if sf.get("scanner") == "runtime-patches":
+            coderabbit["status"] = "ACTION_REQUIRED"
 
     # Run Live Multi-LLM Deep Audit if OpenAI / Claude / Gemini / Groq API key is configured
     llm_items, llm_label = security_audit_engine.run_llm_deep_vulnerability_audit(repo_dir, repo, components)
@@ -1188,6 +1195,8 @@ def analyze_repository(
         coderabbit["action_items"] = llm_items + coderabbit["action_items"]
         coderabbit["findings"] = llm_items + coderabbit["findings"]
         coderabbit["status"] = "ACTION_REQUIRED"
+    if runtime_inventory:
+        coderabbit["action_items"].insert(0, runtime_inventory)
     if llm_label:
         coderabbit["summary"] = f"[{llm_label} + OSV/Security-Skill 監査済] " + coderabbit["summary"]
     extracted_schemas = extract_data_models_from_repo(repo_dir, repo)
