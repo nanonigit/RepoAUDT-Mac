@@ -28,10 +28,26 @@ class EvidenceError(ValueError):
     pass
 
 
+GITHUB_CLI_PATHS = ("/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh")
+FULL_SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def installed_github_cli():
+    return next((path for path in GITHUB_CLI_PATHS if os.access(path, os.X_OK)), None)
+
+
 def github(endpoint):
     try:
         result = subprocess.run(
-            ["gh", "api", "--hostname", "github.com", "--method", "GET", endpoint],
+            [
+                installed_github_cli() or "gh",
+                "api",
+                "--hostname",
+                "github.com",
+                "--method",
+                "GET",
+                endpoint,
+            ],
             capture_output=True,
             timeout=15,
             check=False,
@@ -46,9 +62,11 @@ def github(endpoint):
             raise EvidenceError(
                 "GitHub did not return this repository, commit or file (404). Check access and path."
             )
-        raise EvidenceError(
-            "GitHub access failed. Check your GitHub CLI authentication and retry."
-        )
+        status = re.search(rb"HTTP (\d{3})", result.stderr)
+        if status:
+            code = status[1].decode("ascii")
+            raise EvidenceError(f"GitHub returned HTTP {code}. Check access and retry.")
+        raise EvidenceError("GitHub CLI could not retrieve the requested data.")
     try:
         return json.loads(result.stdout)
     except ValueError as exc:
@@ -208,6 +226,32 @@ def finding_evidence(
     }
 
 
+def recorded_source(revision, path, number, items):
+    commit = revision.get("commit_sha", "")
+    if (
+        revision.get("kind") != "github_commit"
+        or not isinstance(commit, str)
+        or not FULL_SHA.fullmatch(commit)
+    ):
+        return None
+    for item in items:
+        if item.get("scanner") != "authorization-evidence":
+            continue
+        saved = item.get("recorded_source")
+        if not isinstance(saved, dict):
+            continue
+        text = saved.get("text")
+        if (
+            saved.get("commit") == commit
+            and saved.get("file") == path
+            and saved.get("number") == number
+            and isinstance(text, str)
+            and len(text) <= 2000
+        ):
+            return {"number": number, "text": text, "secrets_manager_arn": False}
+    return None
+
+
 def chat_answer(payload, evidence):
     prompt = payload.get("question")
     history = payload.get("history", [])
@@ -274,7 +318,9 @@ def handle(payload, state, chat=False):
         raise EvidenceError("Select a saved GitHub repository first.")
     root = "repos/" + url[1]
     if (repo.get("source_revision") or {}).get("kind") == "local_worktree":
-        raise EvidenceError("This analysis was of a local working tree. Scan the GitHub repository to compare committed evidence.")
+        raise EvidenceError(
+            "This analysis was of a local working tree. Scan the GitHub repository to compare committed evidence."
+        )
     saved = str(repo.get("commit_hash", ""))
     path, number = payload.get("path"), payload.get("line")
     if path is not None and (
@@ -290,15 +336,36 @@ def handle(payload, state, chat=False):
         raise EvidenceError(
             "Enter a repository-relative source path and a valid line number."
         )
-    status = repository_status(root, saved)
+    saved_items = (repo.get("coderabbit") or {}).get("action_items") or []
+    matching_items = [
+        item
+        for item in saved_items
+        if path
+        and str(item.get("file", "")).split(" (Target:", 1)[0] == f"{path}:{number}"
+    ]
+    revision = repo.get("source_revision") or {}
+    recorded = (
+        recorded_source(revision, path, number, matching_items)
+        if path and saved == revision.get("commit_sha")
+        else None
+    )
+    try:
+        status = repository_status(root, saved)
+    except EvidenceError as exc:
+        if recorded is None:
+            raise
+        status = {
+            "saved_commit": saved,
+            "saved_sha": revision["commit_sha"],
+            "path": path,
+            "audited_line": recorded,
+            "audited_source": "recorded",
+            "current_error": str(exc),
+            "line_comparison": "unresolved",
+            "latest_unavailable": True,
+        }
     status["repository_url"] = "https://github.com/" + url[1]
-    if path:
-        saved_items = (repo.get("coderabbit") or {}).get("action_items") or []
-        matching_items = [
-            item
-            for item in saved_items
-            if str(item.get("file", "")).split(" (Target:", 1)[0] == f"{path}:{number}"
-        ]
+    if path and not status.get("latest_unavailable"):
         legacy_alert = payload.get("legacy_password_alert") is not False and any(
             "Database / Hardcoded Password" in str(item.get("title", ""))
             and "シークレット漏洩検知" in str(item.get("title", ""))
@@ -314,6 +381,11 @@ def handle(payload, state, chat=False):
                 item.get("scanner") == "gitleaks" for item in matching_items
             ),
         )
+        if recorded and not status.get("audited_line"):
+            status["saved_sha"] = revision["commit_sha"]
+            status["audited_line"] = recorded
+            status["audited_source"] = "recorded"
+            status["saved_error"] = None
         status["saved_severities"] = sorted(
             {
                 item.get("severity")

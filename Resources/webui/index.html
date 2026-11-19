@@ -4779,7 +4779,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/19 21:57:25</strong>
+              <strong id="portal-sync-time">2026/11/19 22:05:08</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -11783,6 +11783,9 @@ function auditLink(url, title) {
 }
 
 function repositoryFacts(info) {
+  if (info.latest_unavailable) {
+    return `<p>${auditLabel('Latest GitHub status unavailable', 'GitHub の最新情報を取得できません')}</p>`;
+  }
   const root = info.repository_url;
   return `<div>${auditLabel('Latest branch commit', '最新ブランチのコミット')}:
     <code>${escapeHtml(info.branch)}</code> ${auditLink(root + '/commit/' + info.head, info.head.slice(0, 7))}
@@ -11818,6 +11821,39 @@ async function updateAuditRepositoryStatus(hero, repo, force = false) {
   target.append(retry);
 }
 
+function recordedAuthorizationChain(repo, issue) {
+  const revision = repo.source_revision;
+  const root = String(repo.github_url || '');
+  if (issue.scanner !== 'authorization-evidence' ||
+      revision?.kind !== 'github_commit' || repo.commit_hash !== revision.commit_sha ||
+      !/^[0-9a-f]{40}$/.test(revision.commit_sha) ||
+      !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(root)) return '';
+  const labels = {
+    entry: auditLabel('Entry point', '入口'),
+    boundary: auditLabel('Authorization boundary', '認可境界'),
+    input: auditLabel('Request input', 'リクエスト入力'),
+    privileged_effect: auditLabel('Privileged operation', '高権限処理')
+  };
+  const rows = (issue.evidence_chain || []).filter(step =>
+    Object.hasOwn(labels, step.kind) && step.commit === revision.commit_sha &&
+    typeof step.file === 'string' && Number.isInteger(step.line) && step.line > 0 &&
+    typeof step.source === 'string'
+  );
+  if (!rows.length) return '';
+  return `<div class="audit-comparison" aria-label="${auditLabel('Recorded evidence', '保存済みのコード根拠')}">
+    <h3>${auditLabel('Recorded evidence', '保存済みのコード根拠')} · <code>${revision.commit_sha.slice(0, 9)}</code></h3>
+    ${rows.map(step => {
+      const pathname = step.file.split('/').map(encodeURIComponent).join('/');
+      const url = root + '/blob/' + revision.commit_sha + '/' + pathname + '#L' + step.line;
+      return `<div class="audit-source-version">
+        <h3>${labels[step.kind]} · ${auditLink(url, step.file + ':' + step.line)}</h3>
+        <pre>${step.line}  ${escapeHtml(step.source)}</pre>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+
 function findingSourceControls(repo, issue, file) {
   if (!document.documentElement.classList.contains('native-host')) return '';
   const location = String(file).match(/^(.+?):(\d+)(?:\s|$)/);
@@ -11834,6 +11870,7 @@ function findingSourceControls(repo, issue, file) {
       <button type="button" class="table-view-btn" onclick="chatAboutFinding(this)">
         ${auditLabel('Ask AI about this finding', 'この指摘をAIに相談')}</button>
     </div>
+    ${recordedAuthorizationChain(repo, issue)}
     <div data-evidence-result aria-live="polite"></div>
   </div>`;
 }
@@ -11863,7 +11900,9 @@ function sourceComparison(info) {
     <div>${auditLabel('File last changed', 'ファイルの最終変更')}:
       ${change ? auditDate(change.date) + ' · ' + auditLink(root + '/commit/' + change.sha, change.sha.slice(0, 7)) : auditLabel('Unavailable', '未取得')}</div>
     ${status ? `<p class="audit-comparison-status">${status}</p>` : ''}
-    ${source(auditLabel('Audited source', '監査時のソース'), info.saved_sha, info.audited_line, info.saved_error)}
+    ${source(info.audited_source === 'recorded'
+      ? auditLabel('Audited source (saved)', '監査時のソース（保存済み）')
+      : auditLabel('Audited source', '監査時のソース'), info.saved_sha, info.audited_line, info.saved_error)}
     ${source(currentTitle, info.head, info.current_line || info.current_line_at_old_number, info.current_error)}
   </div>`;
 }

@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from urllib.parse import quote
 
+from audit_evidence import source_line
 from workflow_audit import read_small_file
 
 RULE_ID = "CWE-862-python-local-privileged-route"
@@ -336,6 +337,7 @@ def scan_authorization(root, revision, match_component):
             skipped += 1
             continue
         checked += 1
+        lines = source.splitlines()
         for route, steps in matches:
             diff = proposed_patch(source, relative, route)
             if not diff:
@@ -363,12 +365,18 @@ def scan_authorization(root, revision, match_component):
                     "official_source": link,
                     "diff": diff,
                     "weakness_reference": CWE,
+                    "recorded_source": {
+                        **source_line(relative, lines, route.lineno),
+                        "file": relative,
+                        "commit": revision["commit_sha"],
+                    },
                     "evidence_chain": [
                         {
                             "kind": kind,
                             "file": relative,
                             "line": line,
                             "commit": revision["commit_sha"],
+                            "source": source_line(relative, lines, line)["text"],
                         }
                         for kind, line in steps
                     ],

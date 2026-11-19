@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 from urllib.parse import quote
 
-from audit_evidence import github
+from audit_evidence import github, installed_github_cli
 
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
 SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/(?!\.{1,2}$)[A-Za-z0-9_.-]+")
@@ -88,14 +88,7 @@ def isolated_git_environment():
 
 
 def run_git(root, arguments, *, timeout=65, authorize=False):
-    gh = next(
-        (
-            path
-            for path in ("/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh")
-            if os.access(path, os.X_OK)
-        ),
-        None,
-    )
+    gh = installed_github_cli()
     config = [
         "-c",
         "core.hooksPath=/dev/null",

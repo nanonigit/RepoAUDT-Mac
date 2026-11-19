@@ -13,7 +13,7 @@ Enter a GitHub repository URL or `owner/repo`, analyze the code, and inspect fin
 - **Runtime inventory and security updates:** list repository-declared images, runtime pins and compatibility settings. Upstream lookups cover PHP, nginx, Node.js, Go and PostgreSQL. Findings link to the official advisory or security release and show the documented fixed version when available.
 - **Python quality and secret candidates:** Ruff checks selected Python rules for issues such as undefined names and unused imports. Gitleaks scans tracked files for potential credentials. Secret findings are redacted in source previews and reports.
 - **GitHub Actions audit:** optionally add [zizmor](https://docs.zizmor.sh/audits/). The app scans workflow copies offline and merges findings with its built-in checks. Open a finding for the file, line, and rule documentation.
-- **Authorization evidence:** for supported GitHub-pinned Python HTTP handlers, findings trace the request entry, authorization boundary, input and privileged operation. The finding includes source locations and a statically checked defensive patch for review.
+- **Authorization evidence:** for supported GitHub-pinned Python HTTP handlers, findings trace the request entry, authorization boundary, input and privileged operation. The finding includes redacted recorded snippets, exact source links and a statically checked defensive patch. Recorded evidence remains available independently of live GitHub comparison.
 - **Current source and history:** open a finding to see its audited and current source lines with commit links, the default branch's latest commit, the repository's last push, and the file's last change. Live evidence uses authenticated GitHub CLI access.
 - **Audit chat:** start in the sidebar or from a finding. Each question checks GitHub again and sends the question, recent messages, and comparison metadata to the configured AI provider. Source lines stay in the workspace.
 - **Native navigation:** a macOS sidebar and toolbar, optional detail inspector, and Japanese / English switching, aligned with NetworkPNTR Mac and NetworkISPR Mac.
@@ -87,9 +87,10 @@ python3 -m unittest discover -s tests/source-scanners -v
 python3 -m unittest discover -s tests/runtime-patches -v
 python3 -m unittest discover -s tests/source-revision -v
 python3 -m unittest discover -s tests/authorization -v
+python3 -m unittest discover -s tests/recorded-source -v
 ```
 
-The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, 5 audit evidence tests, 4 workflow-audit tests, 5 source-scanner tests, 6 runtime-patch tests, 5 source-revision tests, and 5 authorization-evidence tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
+The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, 5 audit evidence tests, 4 workflow-audit tests, 5 source-scanner tests, 6 runtime-patch tests, 5 source-revision tests, 5 authorization-evidence tests, and 3 recorded-source tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
 
 Local LLM requests were verified with a mock HTTP server; a live Ollama / LM Studio model was not tested. MCP tool discovery and snippet scanning were also checked in the installed app. The complete PR submission, progress tracking, and fix-verification workflow remains outside this delivery's completed scope.
 
@@ -101,6 +102,7 @@ The following implementation documents are currently in Japanese:
 - [UI design](docs/ui-redesign/design.md)
 - [Color roles, references, and contrast checks](docs/ui-redesign/colors.md)
 - [Verification record](docs/ui-redesign/verification.md)
+- [Recorded-source design](docs/recorded-source/design.md)
 - [Authorization evidence](docs/authorization-evidence/design.md)
 - [Commit-pinned source](docs/commit-pinned-audit/design.md)
 - [Runtime patch design](docs/runtime-patches/design.md)
