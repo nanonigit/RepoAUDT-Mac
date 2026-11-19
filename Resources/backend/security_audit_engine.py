@@ -18,6 +18,7 @@ import sys
 import urllib.error
 import urllib.request
 from connection_utils import validate_endpoint, open_endpoint
+from workflow_audit import MAX_FILES, read_workflow, run_zizmor, workflow_files
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -854,9 +855,18 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     # =========================================================================
     # 5. Scan GitHub Actions Workflows & Hardcoded Secrets
     # =========================================================================
+    workflow_scan = {"scanner": None, "status": "disabled"}
     if skills_cfg.get("owasp_sast_skill", True):
-        gha_findings = scan_github_actions_workflows(repo_dir, match_comp)
-        sast_findings.extend(gha_findings)
+        files = workflow_files(Path(repo_dir))
+        gha_findings, status = run_zizmor(files, match_comp)
+        builtin_findings = scan_github_actions_workflows(repo_dir, match_comp)
+        external_keys = {(item["rule_id"], item["file"]) for item in (gha_findings or [])}
+        sast_findings.extend(gha_findings or [])
+        sast_findings.extend(
+            item for item in builtin_findings if (item["rule_id"], item["file"]) not in external_keys
+        )
+        scanner = "builtin+zizmor" if status == "complete" else "builtin" if files else None
+        workflow_scan = {"scanner": scanner, "status": status}
 
     secret_findings = scan_secrets_and_credentials(repo_dir, match_comp)
     sast_findings = secret_findings + sast_findings
@@ -869,6 +879,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         "runtime": runtime_info,
         "security_advisories": security_advisories,
         "sast_findings": sast_findings,
+        "workflow_scan": workflow_scan,
     }
 
 
@@ -885,9 +896,6 @@ def scan_github_actions_workflows(
       4. Unpinned third-party Action mutable branch references (`@main`, `@master`, `@HEAD`)
     """
     findings: List[Dict[str, Any]] = []
-    workflows_dir = Path(repo_dir) / ".github" / "workflows"
-    if not workflows_dir.exists() or not workflows_dir.is_dir():
-        return findings
 
     untrusted_expr_re = re.compile(
         r"\$\{\{\s*github\.(?:head_ref|event\.(?:issue|pull_request|comment|review|discussion|commits|head_commit|pages)\.[A-Za-z0-9_.\[\]]*(?:title|body|message|ref|label|name|email|page_name))\s*\}\}",
@@ -897,13 +905,15 @@ def scan_github_actions_workflows(
         r"^\s*-?\s*uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@(main|master|HEAD|develop)\b"
     )
 
-    workflow_files = sorted(list(workflows_dir.glob("*.yml")) + list(workflows_dir.glob("*.yaml")))
-    for wf in workflow_files[:25]:
+    for wf in workflow_files(Path(repo_dir))[:MAX_FILES]:
         rel_path = str(wf.relative_to(repo_dir))
         try:
-            content = wf.read_text(encoding="utf-8", errors="ignore")
+            raw = read_workflow(wf)
+            if raw is None:
+                continue
+            content = raw.decode("utf-8", errors="ignore")
             lines = content.splitlines()
-        except Exception:
+        except OSError:
             continue
 
         tnode = match_comp(rel_path)
@@ -920,6 +930,7 @@ def scan_github_actions_workflows(
                 expr = m_inj.group(0)
                 findings.append({
                     "severity": "critical",
+                    "rule_id": "template-injection",
                     "title": f"🚨 [GitHub Actions監査] `${{{{ ... }}}}` によるシェルインジェクションリスク ({wf.name}:{idx})",
                     "file": f"{rel_path}:{idx} (Target: {tnode})",
                     "target_node": tnode,
@@ -932,6 +943,7 @@ def scan_github_actions_workflows(
             if has_pr_target and "github.event.pull_request.head" in stripped and ("ref:" in stripped or "sha" in stripped):
                 findings.append({
                     "severity": "critical",
+                    "rule_id": "dangerous-triggers",
                     "title": f"🚨 [GitHub Actions Pwn Request] `pull_request_target` での外部ForkコードCheckout ({wf.name}:{idx})",
                     "file": f"{rel_path}:{idx} (Target: {tnode})",
                     "target_node": tnode,
@@ -944,6 +956,7 @@ def scan_github_actions_workflows(
             if re.match(r"^permissions:\s*write-all\b", stripped, re.IGNORECASE):
                 findings.append({
                     "severity": "high",
+                    "rule_id": "excessive-permissions",
                     "title": f"[GitHub Actions監査] 過剰なトークン権限 `permissions: write-all` ({wf.name}:{idx})",
                     "file": f"{rel_path}:{idx} (Target: {tnode})",
                     "target_node": tnode,
@@ -958,6 +971,7 @@ def scan_github_actions_workflows(
                 action_slug, branch_ref = m_unpin.group(1), m_unpin.group(2)
                 findings.append({
                     "severity": "medium",
+                    "rule_id": "unpinned-uses",
                     "title": f"[GitHub Actions監査] サードパーティActionの未固定ブランチ参照 `{action_slug}@{branch_ref}` ({wf.name}:{idx})",
                     "file": f"{rel_path}:{idx} (Target: {tnode})",
                     "target_node": tnode,

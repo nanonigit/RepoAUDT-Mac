@@ -10,6 +10,7 @@ Enter a GitHub repository URL or `owner/repo`, analyze the code, and inspect fin
 
 - **Repository workspace:** saved-repository dashboard, search, audit results, architecture diagrams, and execution flows.
 - **Code audits:** static-analysis findings, dependency vulnerability checks, evidence, affected components, and remediation suggestions where available. Copy fix prompts and save reports for review.
+- **GitHub Actions audit:** optionally add [zizmor](https://docs.zizmor.sh/audits/). The app scans workflow copies offline and merges findings with its built-in checks. Open a finding for the file, line, and rule documentation.
 - **Current source and history:** open a finding to see its audited and current source lines with commit links, the default branch's latest commit, the repository's last push, and the file's last change. Live evidence uses authenticated GitHub CLI access.
 - **Audit chat:** start in the sidebar or from a finding. Each question checks GitHub again and sends the question, recent messages, and comparison metadata to the configured AI provider. Source lines stay in the workspace.
 - **Native navigation:** a macOS sidebar and toolbar, optional detail inspector, and Japanese / English switching, aligned with NetworkPNTR Mac and NetworkISPR Mac.
@@ -41,6 +42,14 @@ To build a bundle in the repository without installing it:
 ./build.sh --no-install
 ```
 
+## Optional workflow scanner
+
+```bash
+brew install zizmor
+```
+
+Run **Re-scan** to add zizmor results to a saved audit. The app checks up to 25 local workflow files. zizmor receives no GitHub token or repository configuration. The app retains built-in checks when zizmor is missing, times out or cannot parse an input. The MCP audit report includes scan status.
+
 ## Getting started
 
 1. Open RepoAUDT Mac and choose **Add Repository**.
@@ -58,9 +67,10 @@ python3 tests/e2e/run_all_tests.py
 python3 -m unittest discover -s tests/connections -v
 python3 -m unittest discover -s tests/ui -v
 python3 -m unittest discover -s tests/audit -v
+python3 -m unittest discover -s tests/audit-tools -v
 ```
 
-The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, and 5 audit evidence tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
+The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, 5 audit evidence tests, and 4 workflow-audit tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
 
 Local LLM requests were verified with a mock HTTP server; a live Ollama / LM Studio model was not tested. MCP tool discovery and snippet scanning were also checked in the installed app. The complete PR submission, progress tracking, and fix-verification workflow remains outside this delivery's completed scope.
 
@@ -72,6 +82,7 @@ The following implementation documents are currently in Japanese:
 - [UI design](docs/ui-redesign/design.md)
 - [Color roles, references, and contrast checks](docs/ui-redesign/colors.md)
 - [Verification record](docs/ui-redesign/verification.md)
+- [Audit tool evaluation and design](docs/audit-tools/design.md)
 - [Audit evidence design](docs/audit-evidence/design.md) and [incident review](docs/audit-evidence/incident.md)
 
 When features, setup instructions, or verification scope change, update both this English README and [the Japanese README](README.ja.md) together.

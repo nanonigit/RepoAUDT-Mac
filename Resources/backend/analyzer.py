@@ -1176,6 +1176,7 @@ def analyze_repository(
     coderabbit = run_coderabbit_static_audit(repo_dir, repo, components, deps)
 
     # Merge PHP / Node.js / OWASP SAST findings
+    coderabbit["workflow_scan"] = sec_scan.get("workflow_scan")
     for sf in sec_scan.get("sast_findings", []):
         coderabbit["action_items"].insert(0, sf)
         coderabbit["findings"].insert(0, {**sf, "line": "SAST"})
