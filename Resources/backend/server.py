@@ -149,13 +149,23 @@ def check_live_health(port: int) -> Dict[str, Any]:
         "checked_at": now_str,
     })
 
+    credential_started = time.monotonic()
+    credential_status = audit_evidence.github_cli_credential_status()
+    credential_details = {
+        "present": ("ONLINE", "Local GitHub credential available. Repository access has not been checked."),
+        "not_installed": ("OFFLINE", "GitHub CLI was not found."),
+        "unavailable": ("OFFLINE", "GitHub CLI could not provide a local credential."),
+        "unknown": ("DEGRADED", "Local GitHub credential status could not be verified."),
+    }
+    gh_cli_status, gh_cli_details = credential_details[credential_status]
     services.append({
         "id": "gh_cli",
         "name": "GitHub CLI & Git Credentials",
         "type": "Local Auth Provider",
-        "status": "ONLINE",
-        "latency_ms": 5,
-        "details": "Authenticated (Org/User & Private Repo Clone Ready)",
+        "status": gh_cli_status,
+        "details": gh_cli_details,
+        "credential_status": credential_status,
+        "latency_ms": max(1, int((time.monotonic() - credential_started) * 1000)),
         "checked_at": now_str,
     })
 

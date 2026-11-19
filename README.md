@@ -73,7 +73,7 @@ PHP checks the latest 50 public php-src advisories and the upstream unsupported-
 
 ## Source revision
 
-A GitHub repository URL resolves to the default branch's current commit. You can also specify `/tree/<branch>` or `/commit/<full-sha>`. Encode slashes in branch names as `%2F`. The audit checks out the verified commit and tree in an isolated temporary directory. The MCP audit report includes the source revision. Explicit local paths are recorded as local working-tree scans. Background refresh applies to single-repository default-branch scans. Explicit commit and branch scans remain pinned.
+A GitHub repository URL resolves to the default branch's current commit. You can also specify `/tree/<branch>` or `/commit/<full-sha>`. Encode slashes in branch names as `%2F`. The audit checks out the verified commit and tree in an isolated temporary directory. The MCP audit report includes the source revision. Explicit local paths are recorded as local working-tree scans. Background refresh applies to single-repository default-branch scans. Explicit commit and branch scans remain pinned. A branch scan compares against that branch. GitHub diagnostics report local credential availability and API connectivity separately.
 
 ## Verification and current scope
 
@@ -88,9 +88,10 @@ python3 -m unittest discover -s tests/runtime-patches -v
 python3 -m unittest discover -s tests/source-revision -v
 python3 -m unittest discover -s tests/authorization -v
 python3 -m unittest discover -s tests/recorded-source -v
+python3 -m unittest discover -s tests/github-transport -v
 ```
 
-The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, 5 audit evidence tests, 4 workflow-audit tests, 5 source-scanner tests, 6 runtime-patch tests, 5 source-revision tests, 5 authorization-evidence tests, and 3 recorded-source tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
+The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, 5 audit evidence tests, 4 workflow-audit tests, 5 source-scanner tests, 6 runtime-patch tests, 5 source-revision tests, 5 authorization-evidence tests, 3 recorded-source tests, and 4 GitHub transport tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
 
 Local LLM requests were verified with a mock HTTP server; a live Ollama / LM Studio model was not tested. MCP tool discovery and snippet scanning were also checked in the installed app. The complete PR submission, progress tracking, and fix-verification workflow remains outside this delivery's completed scope.
 

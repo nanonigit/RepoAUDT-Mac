@@ -36,6 +36,77 @@ def installed_github_cli():
     return next((path for path in GITHUB_CLI_PATHS if os.access(path, os.X_OK)), None)
 
 
+def github_error(stderr, returncode):
+    """Summarize known CLI failures without returning raw command output."""
+    message = stderr.lower()
+    match = re.search(rb"http (\d{3})", message)
+    if match:
+        code = match[1].decode("ascii")
+        if code == "404":
+            return "GitHub did not return this repository, commit or file (404). Check access and path."
+        return f"GitHub returned HTTP {code}. Check access and retry."
+    categories = (
+        (
+            (b"keychain", b"keyring", b"interaction is not allowed"),
+            "GitHub CLI could not access its credential store.",
+        ),
+        (
+            (b"gh auth login", b"not logged", b"bad credentials"),
+            "GitHub CLI requires authentication.",
+        ),
+        (
+            (b"certificate", b"x509:"),
+            "GitHub CLI could not verify the server certificate.",
+        ),
+        (
+            (b"no such host", b"could not resolve", b"name resolution"),
+            "GitHub CLI could not resolve GitHub.",
+        ),
+        (
+            (
+                b"connection refused",
+                b"network is unreachable",
+                b"connection reset",
+                b"operation not permitted",
+                b"i/o timeout",
+                b"connecting to api.github.com",
+                b"connection closed",
+                b"bad file descriptor",
+            ),
+            "GitHub CLI could not connect to GitHub.",
+        ),
+        (
+            (b"permission denied", b"access denied"),
+            "The system denied GitHub CLI access.",
+        ),
+    )
+    for needles, explanation in categories:
+        if any(needle in message for needle in needles):
+            return explanation
+    return f"GitHub CLI could not retrieve the requested data (exit {returncode})."
+
+
+def github_cli_credential_status():
+    """Check the local credential without reading it into the application."""
+    cli = installed_github_cli()
+    if cli is None:
+        return "not_installed"
+    try:
+        result = subprocess.run(
+            [cli, "auth", "token", "--hostname", "github.com"],
+            cwd=os.path.expanduser("~"),
+            env={**os.environ, "GH_PROMPT_DISABLED": "1"},
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unknown"
+    return "present" if result.returncode == 0 else "unavailable"
+
+
 def github(endpoint):
     try:
         result = subprocess.run(
@@ -48,34 +119,28 @@ def github(endpoint):
                 "GET",
                 endpoint,
             ],
+            cwd=os.path.expanduser("~"),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             timeout=15,
             check=False,
             env={**os.environ, "GH_PROMPT_DISABLED": "1"},
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise EvidenceError(
-            "GitHub could not be reached. Check the GitHub CLI and its authentication."
-        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise EvidenceError("GitHub CLI timed out during the read.") from exc
+    except OSError as exc:
+        raise EvidenceError("GitHub CLI could not be started.") from exc
     if result.returncode:
-        if b"HTTP 404" in result.stderr:
-            raise EvidenceError(
-                "GitHub did not return this repository, commit or file (404). Check access and path."
-            )
-        status = re.search(rb"HTTP (\d{3})", result.stderr)
-        if status:
-            code = status[1].decode("ascii")
-            raise EvidenceError(f"GitHub returned HTTP {code}. Check access and retry.")
-        raise EvidenceError("GitHub CLI could not retrieve the requested data.")
+        raise EvidenceError(github_error(result.stderr, result.returncode))
     try:
         return json.loads(result.stdout)
     except ValueError as exc:
         raise EvidenceError("GitHub returned an unreadable response.") from exc
 
 
-def repository_status(root, saved_commit):
+def repository_status(root, saved_commit, *, selected_branch=None):
     meta = github(root)
-    branch = meta["default_branch"]
+    branch = selected_branch or meta["default_branch"]
     head = github(f"{root}/branches/{quote(branch, safe='')}")["commit"]
     sha = head["sha"]
     return {
@@ -350,7 +415,16 @@ def handle(payload, state, chat=False):
         else None
     )
     try:
-        status = repository_status(root, saved)
+        if (
+            revision.get("kind") == "github_commit"
+            and revision.get("selection") == "branch"
+        ):
+            branch = revision.get("branch")
+            if not isinstance(branch, str) or not branch or len(branch) > 240:
+                raise EvidenceError("This saved audit has an invalid branch reference.")
+            status = repository_status(root, saved, selected_branch=branch)
+        else:
+            status = repository_status(root, saved)
     except EvidenceError as exc:
         if recorded is None:
             raise
