@@ -4706,7 +4706,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/20 03:06:13</strong>
+              <strong id="portal-sync-time">2026/11/20 03:10:09</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -11665,20 +11665,51 @@ function findingSourceControls(repo, issue, file) {
     legacy_password_alert: String(issue.title).includes('Database / Hardcoded Password')
       && String(issue.title).includes('シークレット漏洩検知')
   };
+  const canVerify = issue.scanner === 'authorization-evidence' && issue.diff
+    && repo.source_revision?.kind === 'github_commit';
   return `<div class="finding-source" data-context="${escapeHtml(JSON.stringify(context))}">
     <div class="issue-actions">
       <button type="button" class="table-view-btn" data-load-finding-source onclick="loadFindingSource(this)">
         ${auditLabel('Compare current source', '現在のソースを照合')}</button>
       <button type="button" class="table-view-btn" onclick="chatAboutFinding(this)">
         ${auditLabel('Ask AI about this finding', 'この指摘をAIに相談')}</button>
-      ${issue.scanner === 'authorization-evidence' && issue.diff && repo.source_revision?.kind === 'github_commit'
+      ${canVerify
         ? `<button type="button" class="table-view-btn" onclick="verifyFindingDiff(this)">
           ${auditLabel('Verify diff locally', '修正差分をローカル検証')}</button>` : ''}
     </div>
     <div data-diff-verification role="status"></div>
+    ${canVerify ? `<form class="issue-actions" onsubmit="event.preventDefault(); verifyRemediationCommit(this)">
+      <label>${auditLabel('Remediation commit SHA', '修正コミットのSHA')}
+        <input name="commit" type="text" pattern="[0-9a-fA-F]{40}" maxlength="40"
+          autocomplete="off" spellcheck="false" size="22" required>
+      </label>
+      <button type="submit" class="table-view-btn">${auditLabel('Check commit locally', '修正コミットを再監査')}</button>
+      <div role="status" data-commit-verification></div>
+    </form>` : ''}
     ${recordedAuthorizationChain(repo, issue)}
     <div data-evidence-result aria-live="polite"></div>
   </div>`;
+}
+
+async function verifyRemediationCommit(form) {
+  const {repository, path, line} = JSON.parse(form.closest('.finding-source').dataset.context);
+  const output = form.querySelector('[data-commit-verification]');
+  const button = form.querySelector('button');
+  const compare_commit = form.elements.commit.value.toLowerCase();
+  button.disabled = true;
+  output.textContent = auditLabel('Checking the selected local commit…', '指定コミットをローカルで確認中…');
+  try {
+    const result = await auditRequest('verify-diff', {repository, path, line, compare_commit});
+    const status = result.after === 'not_detected'
+      ? auditLabel('The same static rule no longer detects this finding.', '同じ静的ルールではこの指摘を検出しません。')
+      : auditLabel('The same static rule still detects this finding.', '同じ静的ルールで引き続き検出しました。');
+    const commitLink = sha => auditLink(result.repository_url + '/commit/' + sha, sha.slice(0, 9));
+    output.innerHTML = `${commitLink(result.audited_commit)} → ${commitLink(result.commit)} · ${auditLabel('Local Git objects', 'ローカルのGitオブジェクト')} · ${status}`;
+  } catch (error) {
+    output.textContent = auditLabel('Check unavailable: ', '再監査できません：') + error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function verifyFindingDiff(button) {

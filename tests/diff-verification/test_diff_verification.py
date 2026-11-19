@@ -1,7 +1,7 @@
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -101,6 +101,56 @@ class DiffVerificationTests(TestCase):
         ):
             verify.handle(self.payload, self.state, lambda *_: self.root)
 
+    def test_committed_fix_is_checked_independently_of_worktree(self):
+        self.source.write_text(
+            FIXTURE.split("        if self.path.startswith")[0] + "        return\n"
+        )
+        self.git("commit", "-am", "retire fixture route")
+        head = self.git("rev-parse", "HEAD")
+        self.source.write_text(FIXTURE)
+        result = verify.handle(
+            {**self.payload, "compare_commit": head}, self.state, lambda *_: self.root
+        )
+        self.assertEqual(result["audited_commit"], self.revision["commit_sha"])
+        self.assertEqual(result["commit"], head)
+        self.assertEqual(result["after"], "not_detected")
+        self.assertEqual(result["source"], "local_git")
+        self.assertEqual(self.source.read_text(), FIXTURE)
+
+    def test_descendant_without_the_fix_still_matches(self):
+        self.git("commit", "--allow-empty", "-m", "unrelated change")
+        result = verify.handle(
+            {**self.payload, "compare_commit": self.git("rev-parse", "HEAD")},
+            self.state,
+            lambda *_: self.root,
+        )
+        self.assertEqual(result["after"], "detected")
+
+    def test_invalid_unrelated_or_missing_source_cannot_clear_a_finding(self):
+        tree = self.revision["tree_sha"]
+        unrelated = self.git("commit-tree", tree, "-m", "separate history")
+        for target, message in [
+            ("HEAD", "full 40-character"),
+            (unrelated, "descendant"),
+        ]:
+            with (
+                self.subTest(target=target),
+                self.assertRaisesRegex(verify.VerificationError, message),
+            ):
+                verify.handle(
+                    {**self.payload, "compare_commit": target},
+                    self.state,
+                    lambda *_: self.root,
+                )
+        self.git("rm", "server.py")
+        self.git("commit", "-m", "remove file")
+        with self.assertRaises(verify.VerificationError):
+            verify.handle(
+                {**self.payload, "compare_commit": self.git("rev-parse", "HEAD")},
+                self.state,
+                lambda *_: self.root,
+            )
+
     def test_wrong_tree_or_wrong_origin_cannot_be_used(self):
         other = {**self.revision, "tree_sha": "0" * 40}
         with self.assertRaisesRegex(verify.VerificationError, "tree does not match"):
@@ -110,13 +160,15 @@ class DiffVerificationTests(TestCase):
             verify.local_blob(self.root, self.revision, "server.py")
 
     def test_missing_pinned_source_or_unsupported_path_is_not_clear(self):
-        with patch.object(
-            verify.source_revision, "checkout", side_effect=ValueError("offline")
-        ):
-            with self.assertRaisesRegex(
+        with (
+            patch.object(
+                verify.source_revision, "checkout", side_effect=ValueError("offline")
+            ),
+            self.assertRaisesRegex(
                 verify.VerificationError, "pinned source is unavailable"
-            ):
-                verify.handle(self.payload, self.state, lambda *_: None)
+            ),
+        ):
+            verify.handle(self.payload, self.state, lambda *_: None)
         with self.assertRaisesRegex(verify.VerificationError, "supported source line"):
             verify.handle(
                 {**self.payload, "path": "../server.py"},

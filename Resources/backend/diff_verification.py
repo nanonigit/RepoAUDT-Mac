@@ -1,9 +1,9 @@
 """Read-only verification of the deterministic authorization remediation."""
 
 import hashlib
-from pathlib import Path
 import subprocess
 import tempfile
+from pathlib import Path
 
 import authorization_audit
 import source_revision
@@ -17,6 +17,7 @@ class VerificationError(ValueError):
 def git_bytes(directory, args, *, patch=None):
     env = source_revision.isolated_git_environment()
     env["GIT_NO_LAZY_FETCH"] = "1"
+    env["GIT_GRAFT_FILE"] = "/dev/null"
     try:
         result = subprocess.run(
             [
@@ -44,8 +45,7 @@ def git_bytes(directory, args, *, patch=None):
     return result.stdout
 
 
-def local_blob(directory, revision, path):
-    slug = revision["repository"]
+def require_matching_origin(directory, slug):
     accepted = {
         f"https://github.com/{slug}".lower(),
         f"https://github.com/{slug}.git".lower(),
@@ -62,6 +62,10 @@ def local_blob(directory, revision, path):
         raise VerificationError(
             "The local origin does not match the recorded GitHub repository."
         )
+
+
+def local_blob(directory, revision, path):
+    require_matching_origin(directory, revision["repository"])
     return pinned_blob(directory, revision, path)
 
 
@@ -118,18 +122,27 @@ def obtain_source(revision, path, find_local):
         ) from exc
 
 
-def verify_source(data, path, line, stored_diff):
+def trace_source(data):
     try:
         source = data.decode("utf-8")
-        before = list(authorization_audit.trace(source))
+        return source, list(authorization_audit.trace(source))
     except (UnicodeError, SyntaxError, ValueError, RecursionError) as exc:
         raise VerificationError(
             "The pinned Python source could not be analyzed."
         ) from exc
+
+
+def finding_route(before, line):
     matches = [route for route, _ in before if route.lineno == line]
     if len(matches) != 1:
         raise VerificationError("The original finding did not match the pinned source.")
-    proposed = authorization_audit.proposed_patch(source, path, matches[0])
+    return matches[0]
+
+
+def verify_source(data, path, line, stored_diff):
+    source, before = trace_source(data)
+    original = finding_route(before, line)
+    proposed = authorization_audit.proposed_patch(source, path, original)
     if (
         not proposed
         or proposed != stored_diff
@@ -151,7 +164,14 @@ def verify_source(data, path, line, stored_diff):
             after = list(authorization_audit.trace(target.read_bytes().decode("utf-8")))
         except (OSError, UnicodeError, SyntaxError, ValueError, RecursionError) as exc:
             raise VerificationError("The patched copy could not be analyzed.") from exc
-    target_route = authorization_audit.route_path(matches[0])
+    return {
+        **comparison(original, before, after),
+        "diff_sha256": hashlib.sha256(patch).hexdigest(),
+    }
+
+
+def comparison(original, before, after):
+    target_route = authorization_audit.route_path(original)
     remains = any(
         authorization_audit.route_path(route) == target_route for route, _ in after
     )
@@ -161,7 +181,46 @@ def verify_source(data, path, line, stored_diff):
         "after": "detected" if remains else "not_detected",
         "other_matches_before": len(before) - 1,
         "matches_after": len(after),
-        "diff_sha256": hashlib.sha256(patch).hexdigest(),
+    }
+
+
+def verify_commit(revision, path, line, commit, find_local):
+    if not isinstance(commit, str) or not source_revision.FULL_SHA.fullmatch(commit):
+        raise VerificationError("Enter the full 40-character commit SHA.")
+    audited = revision["commit_sha"]
+    if commit == audited:
+        raise VerificationError("Choose a commit after the audit commit.")
+    directory = find_local(*revision["repository"].split("/"))
+    if directory is None:
+        raise VerificationError(
+            "The GitHub repository needs a matching local checkout."
+        )
+    require_matching_origin(directory, revision["repository"])
+    try:
+        actual = git_bytes(directory, ["rev-parse", "--verify", commit + "^{commit}"])
+        if actual.decode("ascii").strip() != commit:
+            raise VerificationError("The selected object is not a commit.")
+        git_bytes(directory, ["merge-base", "--is-ancestor", audited, commit])
+    except VerificationError as exc:
+        raise VerificationError(
+            "The selected commit is unavailable or is not a descendant of the audited commit."
+        ) from exc
+    tree = git_bytes(directory, ["rev-parse", "--verify", commit + "^{tree}"])
+    tree = tree.decode("ascii").strip()
+    target = {**revision, "commit_sha": commit, "tree_sha": tree}
+    _, before = trace_source(pinned_blob(directory, revision, path))
+    original = finding_route(before, line)
+    _, after = trace_source(pinned_blob(directory, target, path))
+    return {
+        **comparison(original, before, after),
+        "commit": commit,
+        "audited_commit": audited,
+        "tree": tree,
+        "file": path,
+        "line": line,
+        "source": "local_git",
+        "rule": authorization_audit.RULE_ID,
+        "repository_url": f"https://github.com/{revision['repository']}",
     }
 
 
@@ -212,6 +271,10 @@ def handle(payload, state, find_local):
     )
     if not match or not isinstance(match.get("diff"), str):
         raise VerificationError("This finding has no supported saved diff.")
+    if "compare_commit" in payload:
+        return verify_commit(
+            revision, path, line, payload["compare_commit"], find_local
+        )
     source, provenance = obtain_source(revision, path, find_local)
     return {
         **verify_source(source, path, line, match["diff"]),
