@@ -22,6 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import unquote
+import authorization_audit
 import security_audit_engine
 import source_revision
 
@@ -1151,6 +1152,16 @@ def analyze_checkout(
         coderabbit["status"] = "ACTION_REQUIRED"
     if runtime_inventory:
         coderabbit["action_items"].insert(0, runtime_inventory)
+    authorization_findings, authorization_scope = authorization_audit.scan_authorization(
+        repo_dir, revision,
+        lambda path: next((item["name"] for item in components
+                           if path in item.get("files", [])), repo),
+    )
+    coderabbit["authorization_scan"] = authorization_scope
+    if authorization_findings:
+        coderabbit["action_items"] = authorization_findings + coderabbit["action_items"]
+        coderabbit["findings"] = authorization_findings + coderabbit["findings"]
+        coderabbit["status"] = "ACTION_REQUIRED"
     if llm_label:
         coderabbit["summary"] = f"[{llm_label} + OSV/Security-Skill 監査済] " + coderabbit["summary"]
     extracted_schemas = extract_data_models_from_repo(repo_dir, repo)
