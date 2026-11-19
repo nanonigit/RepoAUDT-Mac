@@ -1,16 +1,16 @@
 """Compare repository runtime pins to official upstream security releases."""
 
-from datetime import date, datetime, timezone
-from functools import lru_cache
-from html import unescape
 import json
 import operator
 import os
-from pathlib import Path
 import re
 import subprocess
 import tempfile
 import time
+from datetime import date, datetime, timezone
+from functools import lru_cache
+from html import unescape
+from pathlib import Path
 
 from workflow_audit import read_small_file
 
@@ -28,16 +28,23 @@ NODE_SECURITY = "https://nodejs.org/en/blog/vulnerability"
 VERSION = r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
 CVE = re.compile(r"CVE-[0-9]{4}-[0-9]{4,12}")
 GHSA = re.compile(r"GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}")
-IMAGE = re.compile(
+OFFICIAL_IMAGE = (
     r"(?:(?:docker\.io|index\.docker\.io)/)?(?:library/)?"
-    r"(php|nginx|node|golang|postgres)(?::([\w][\w.-]*))?(@\S+)?"
+    r"(php|nginx|node|golang|postgres)"
 )
+IMAGE = re.compile(rf"{OFFICIAL_IMAGE}(?::([\w][\w.-]*))?(@\S+)?")
 SUFFIX = (
     r"(?:alpine(?:[0-9.]+)?|bookworm|bullseye|trixie|slim|fpm|apache|cli|zts|perl|otel)"
 )
 VARIANT = re.compile(rf"({VERSION})(?:-{SUFFIX})*")
 POSTGRES_TAG = re.compile(rf"([0-9]{{1,3}}\.[0-9]{{1,3}})(?:-{SUFFIX})*")
 FROM = re.compile(r"^\s*FROM\s+(?:--platform=\S+\s+)?([^\s#]+)", re.IGNORECASE)
+ARG = re.compile(r"\s*(?i:ARG)\s+([A-Za-z_][A-Za-z0-9_]*)(?:=(.*))?")
+ARG_TAG = re.compile(rf"[0-9]{{1,3}}(?:\.[0-9]{{1,3}}){{0,2}}(?:-{SUFFIX})*")
+TAG_REFERENCE = re.compile(rf"{OFFICIAL_IMAGE}:([^@]+)(@\S+)?")
+ARG_REFERENCE = re.compile(
+    r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))"
+)
 YAML_IMAGE = re.compile(r"^\s*(?:-\s+)?image:\s*['\"]?([^\s#'\"]+)['\"]?\s*(?:#.*)?$")
 CI_VERSION = re.compile(
     r"^\s*(node|php|go|python|ruby|java|rust)-version:\s*['\"]?([\w.*-]+)['\"]?\s*(?:#.*)?$"
@@ -118,6 +125,26 @@ def read_text(path):
         return None
 
 
+def docker_arg_image(ref, defaults):
+    """Resolve only version-like ARG defaults used in an official image tag."""
+    image = TAG_REFERENCE.fullmatch(ref)
+    if not image:
+        return None, [], None
+    sources = {}
+
+    def substitute(match):
+        name = match[1] or match[2]
+        if name not in defaults:
+            return match[0]
+        value, line = defaults[name]
+        sources[name] = line
+        return value
+
+    tag = ARG_REFERENCE.sub(substitute, image[2])
+    resolved = ref[: image.start(2)] + tag + (image[3] or "")
+    return IMAGE.fullmatch(resolved), list(sources.values()), image[1]
+
+
 def repository_evidence(root):
     evidence = []
     checked = 0
@@ -147,7 +174,16 @@ def repository_evidence(root):
             skipped = True
             continue
 
-        def add(product, declared, line, exact=None, kind="version_file"):
+        def add(
+            product,
+            declared,
+            line,
+            exact=None,
+            kind="version_file",
+            arg_lines=(),
+            *,
+            filename=relative,
+        ):
             if (
                 len(declared) > 180
                 or len(evidence) >= 300
@@ -159,9 +195,10 @@ def repository_evidence(root):
                     "product": product,
                     "declared": declared,
                     "version": exact,
-                    "file": relative,
+                    "file": filename,
                     "line": line,
                     "kind": kind,
+                    **({"arg_lines": arg_lines} if arg_lines else {}),
                 }
             )
 
@@ -207,13 +244,28 @@ def repository_evidence(root):
                     )
         else:
             aliases = set()
+            defaults = {}
+            in_global_scope = dockerfile
             pattern = FROM if dockerfile else YAML_IMAGE
             for number, line in enumerate(text.splitlines(), 1):
+                if in_global_scope and (argument := ARG.fullmatch(line)):
+                    name, value = argument.groups()
+                    if value is not None and ARG_TAG.fullmatch(value):
+                        defaults[name] = (value, number)
+                    else:
+                        defaults.pop(name, None)
                 declaration = pattern.match(line)
                 if declaration:
+                    in_global_scope = False
                     ref = declaration[1]
                     if ref not in aliases and ref != "scratch":
                         image = IMAGE.fullmatch(ref)
+                        arg_lines = []
+                        unresolved_product = None
+                        if not image and dockerfile and "$" in ref:
+                            image, arg_lines, unresolved_product = docker_arg_image(
+                                ref, defaults
+                            )
                         if image:
                             product = "go" if image[1] == "golang" else image[1]
                             tag = image[2] or "latest"
@@ -232,8 +284,16 @@ def repository_evidence(root):
                                     or int(variant[1].split(".")[0]) >= 10
                                 )
                                 else None,
-                                "image",
+                                "image_arg_default" if arg_lines else "image",
+                                arg_lines,
                             )
+                        elif unresolved_product:
+                            product = (
+                                "go"
+                                if unresolved_product == "golang"
+                                else unresolved_product
+                            )
+                            add(product, ref, number, kind="image")
                         elif "$" in ref or re.fullmatch(
                             r"[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,179}", ref
                         ):
@@ -580,6 +640,8 @@ def issue_for(evidence, advisory, match_component):
     product = PRODUCTS[evidence["product"]]
     identifier = advisory["id"]
     pin = evidence["declared"]
+    if evidence["kind"] == "image_arg_default":
+        pin = evidence["version"]
     title = title_en = f"[{product}] {identifier}"
     if identifier == "security-release":
         title = f"[{product}] 同系列のセキュリティ更新"
@@ -617,6 +679,10 @@ def issue_for(evidence, advisory, match_component):
         if symbols:
             summary += f" 対象関数: {symbols}。名前が一致する箇所: {symbol_hits or '探索範囲では未確認'}。実行経路は未確認です。"
             summary_en += f" Named symbols: {symbols}. Lexical matches: {symbol_hits or 'none in scan scope'}. Reachability is unverified."
+    if evidence["kind"] == "image_arg_default":
+        lines = ", ".join(map(str, evidence["arg_lines"]))
+        summary += f" DockerfileのARG既定値（行 {lines}）で照合しました。ビルド時の上書きは別途確認してください。"
+        summary_en += f" Checked the Dockerfile ARG default (lines {lines}). Verify any build-time overrides."
     relative = evidence["file"]
     return {
         "severity": advisory["severity"],
@@ -658,6 +724,9 @@ def inventory_finding(scan):
         location = entry["file"] + (f":{entry['line']}" if entry["line"] else "")
         line = f"{PRODUCTS.get(product, product)} · {entry['declared']} · {location}"
         label_jp, label_en = INVENTORY_STATUS[status]
+        if entry["kind"] == "image_arg_default" and entry["version"]:
+            label_jp = f"ARG既定値 {entry['version']} · {label_jp}"
+            label_en = f"ARG default {entry['version']} · {label_en}"
         if status == "checked":
             advisories = record.get("advisories", [])
             number = len(advisories)
@@ -706,8 +775,15 @@ def scan_runtime_patches(root, match_component):
         declarations = [item for item in evidence if item["product"] == product]
         pinned = {}
         for entry in declarations:
-            if entry["version"]:
-                pinned.setdefault(entry["version"], entry)
+            pin = entry["version"]
+            if not pin:
+                continue
+            previous = pinned.setdefault(pin, entry)
+            if (
+                previous["kind"] == "image_arg_default"
+                and entry["kind"] != "image_arg_default"
+            ):
+                pinned[pin] = entry
         if not pinned:
             result["feeds"][product] = {
                 "status": "version_unresolved",

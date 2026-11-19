@@ -4,3 +4,5 @@
 - Link to vendor advisories or security releases and show documented fixed versions where available.
 - Distinguish exact repository pins, constraints, unchecked feeds and actual deployments.
 - Preserve the existing audit flow and include structured results in the MCP report.
+
+- Match official-image versions expressed through simple Dockerfile build-argument defaults. Preserve the source declaration and make the conditional nature of the finding explicit.

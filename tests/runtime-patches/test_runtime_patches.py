@@ -1,8 +1,8 @@
 import json
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "Resources/backend"))
@@ -79,6 +79,52 @@ class RuntimePatchTests(unittest.TestCase):
         self.assertEqual(
             runtime.nginx_matches(NGINX, (1, 31, 8))[0]["fixed_versions"], ["1.31.9"]
         )
+
+    def test_docker_image_defaults_keep_global_scope_and_source_lines(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Dockerfile").write_text(
+                "ARG NODE_VERSION=24.19.0\n"
+                "ARG NGINX_VERSION=1.30.6\n"
+                "ARG PHP_VERSION=8.4.20\n"
+                "ARG UNRESOLVED=dynamic\n"
+                "FROM node:${NODE_VERSION}-bookworm-slim AS build\n"
+                "ARG NGINX_VERSION=1.30.7\n"
+                "FROM nginx:$NGINX_VERSION\n"
+                "FROM php:${PHP_VERSION}-fpm@sha256:deadbeef\n"
+                "FROM node:${UNRESOLVED}\n"
+                "FROM node:${MISSING:-24.19.0}\n"
+                "FROM node:\\${NODE_VERSION}\n"
+                "FROM custom/node:${NODE_VERSION}\n"
+            )
+            entries, limited = runtime.repository_evidence(root)
+        self.assertFalse(limited)
+        self.assertEqual(
+            [(e["product"], e["version"], e.get("arg_lines")) for e in entries],
+            [
+                ("node", "24.19.0", [1]),
+                ("nginx", "1.30.6", [2]),
+                ("php", None, [3]),
+                ("node", None, None),
+                ("node", None, None),
+                ("node", None, None),
+                ("image", None, None),
+            ],
+        )
+
+    def test_docker_default_participates_in_official_advisory_lookup(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Dockerfile").write_text(
+                "ARG NGINX_VERSION=1.30.6\nFROM nginx:$NGINX_VERSION\n"
+            )
+            with patch.object(runtime, "fetch", return_value=(NGINX, "checked-now")):
+                findings, result = runtime.scan_runtime_patches(root, lambda _: "root")
+        self.assertEqual(result["pins"]["nginx"]["1.30.6"]["status"], "checked")
+        self.assertIn("ARG default 1.30.6", findings[0]["desc_en"])
+        self.assertEqual(findings[1]["file"], "Dockerfile:2")
+        self.assertIn("build-time overrides", findings[1]["desc_en"])
+        self.assertEqual(findings[1]["runtime_patch"]["arg_lines"], [1])
 
     def test_node_uses_own_major_and_skips_future_releases(self):
         item = runtime.node_matches(NODE, SCHEDULE, (24, 21, 0), "2026-11-19")[0]
