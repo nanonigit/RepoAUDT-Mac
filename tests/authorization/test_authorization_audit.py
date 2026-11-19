@@ -99,3 +99,7 @@ class AuthorizationTests(TestCase):
             )
         self.assertEqual(findings, [])
         self.assertEqual(scope["status"], "requires_github_pin")
+
+    def test_current_local_server_has_no_request_to_shell_match(self):
+        backend = Path(__file__).resolve().parents[2] / "Resources/backend"
+        self.assertEqual(list(audit.trace((backend / "server.py").read_text())), [])
