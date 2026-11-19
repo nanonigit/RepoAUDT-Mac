@@ -81,6 +81,8 @@ GitHubリポジトリのURLから既定ブランチのコミットを確定し�
 
 GitHubの資格情報が見つかり、RepoAUDT Mac内でだけAPI疎通に失敗する場合は、アプリとそのアプリが起動するGitHub CLI（`gh`）の送信ルールを確認してください。ターミナルの `gh` が使えても、アプリ個別のルールが `github.com` への接続を遮断することがあります。対応する指摘では監査時の根拠を表示し、GitHubからの取得が成功するまでは現行ソースを取得できないことを示します。
 
+GitHub CLIでローカル資格情報を取得できてもHTTP通信に失敗する場合は、RepoAUDT Macを終了し、`open --env REPOAUDT_GITHUB_TRANSPORT=rest -a "/Applications/RepoAUDT Mac.app"` で起動できます。この起動中は同じ資格情報でGitHubの読み取り専用REST APIを使い、監査時はGitチェックアウトを別途検証します。
+
 コマンド案がある指摘では「コマンドをコピー」を選び、ご自身のターミナルで内容を確認できます。旧内蔵シェルのAPIはHTTP 410を返します。
 
 ## 検証と現在の実装範囲

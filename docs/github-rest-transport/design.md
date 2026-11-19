@@ -1,0 +1,3 @@
+# Design
+
+This is a backend-only change. Lazyweb is out of scope. The default remains the GitHub CLI. A process started with `REPOAUDT_GITHUB_TRANSPORT=rest` uses the existing local GitHub CLI credential and the macOS curl binary for GETs to the fixed HTTPS origin `api.github.com`. Pass the Authorization header over standard input. Disable curl configuration, redirects and URL globbing, bound response size and time, and summarize errors without the response body. The branch and commit-pinning workflow retains its existing Git fetch and verification. TLS verification uses macOS's curl defaults. See [GitHub REST authentication and repository contents](https://docs.github.com/en/rest/repos/contents).

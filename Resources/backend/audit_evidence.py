@@ -2,12 +2,12 @@
 
 import base64
 import binascii
-from datetime import datetime, timezone
 import json
 import os
 import re
 import subprocess
-from urllib.parse import quote, urlencode
+from datetime import datetime, timezone
+from urllib.parse import quote, unquote, urlencode
 
 from security_audit_engine import (
     SECRET_PATTERNS,
@@ -30,6 +30,12 @@ class EvidenceError(ValueError):
 
 GITHUB_CLI_PATHS = ("/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh")
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
+REST_ENDPOINT = re.compile(
+    r"repos/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+"
+    r"(?:/branches/[A-Za-z0-9_.%/-]+|/commits(?:/[0-9a-f]{7,40})?|/contents/[^?#]+)?"
+    r"(?:\?[^#]*)?"
+)
+REST_MAX_BYTES = 2 * 1024 * 1024
 
 
 def installed_github_cli():
@@ -107,7 +113,106 @@ def github_cli_credential_status():
     return "present" if result.returncode == 0 else "unavailable"
 
 
+def rest_credential():
+    cli = installed_github_cli()
+    if cli is None:
+        raise EvidenceError("GitHub REST access requires an authenticated GitHub CLI.")
+    try:
+        result = subprocess.run(
+            [cli, "auth", "token", "--hostname", "github.com"],
+            cwd=os.path.expanduser("~"),
+            env={**os.environ, "GH_PROMPT_DISABLED": "1"},
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=3,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise EvidenceError("The local GitHub credential is unavailable.") from None
+    token = result.stdout.strip()
+    if result.returncode or not re.fullmatch(rb"[A-Za-z0-9_]{20,255}", token):
+        raise EvidenceError("The local GitHub credential is unavailable.")
+    return token
+
+
+def github_rest(endpoint):
+    path = unquote(endpoint.partition("?")[0])
+    if (
+        not REST_ENDPOINT.fullmatch(endpoint)
+        or any(part in ("", ".", "..") for part in path.split("/"))
+        or any(character in endpoint for character in (" ", "\\"))
+        or any(ord(character) < 32 or ord(character) == 127 for character in endpoint)
+    ):
+        raise EvidenceError("Invalid GitHub repository endpoint.")
+    token = rest_credential()
+    headers = (
+        b"Authorization: Bearer "
+        + token
+        + b"\nAccept: application/vnd.github+json\nX-GitHub-Api-Version: 2022-11-28\n"
+    )
+    try:
+        result = subprocess.run(
+            [
+                "/usr/bin/curl",
+                "--disable",
+                "--silent",
+                "--globoff",
+                "--proto",
+                "=https",
+                "--connect-timeout",
+                "5",
+                "--max-time",
+                "12",
+                "--max-filesize",
+                str(REST_MAX_BYTES),
+                "--header",
+                "@-",
+                "--user-agent",
+                "RepoAUDT-Mac",
+                "--write-out",
+                "\n%{http_code} %{time_namelookup}",
+                "--url",
+                "https://api.github.com/" + endpoint,
+            ],
+            input=headers,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=13,
+        )
+    except subprocess.TimeoutExpired:
+        raise EvidenceError("GitHub REST timed out during the read.") from None
+    except OSError:
+        raise EvidenceError("GitHub REST could not be started.") from None
+    body, separator, trailer = result.stdout.rpartition(b"\n")
+    timing = re.fullmatch(rb"([0-9]{3}) ([0-9]+\.[0-9]{6})", trailer)
+    if result.returncode == 6 or (
+        result.returncode == 28 and timing and timing[2] == b"0.000000"
+    ):
+        raise EvidenceError("GitHub REST could not resolve api.github.com.")
+    if result.returncode == 28:
+        raise EvidenceError("GitHub REST timed out during the read.")
+    if result.returncode in (51, 58, 60, 77):
+        raise EvidenceError("GitHub REST could not verify the server certificate.")
+    if result.returncode == 63:
+        raise EvidenceError("GitHub REST response exceeded the size limit.")
+    if result.returncode:
+        raise EvidenceError("GitHub REST could not connect to GitHub.")
+    if not separator or not timing or len(body) > REST_MAX_BYTES:
+        raise EvidenceError("GitHub returned an unreadable response.")
+    status = timing[1]
+    if status != b"200":
+        raise EvidenceError(github_error(b"HTTP " + status, 1))
+    try:
+        return json.loads(body)
+    except ValueError:
+        raise EvidenceError("GitHub returned an unreadable response.") from None
+
+
 def github(endpoint):
+    if os.environ.get("REPOAUDT_GITHUB_TRANSPORT") == "rest":
+        return github_rest(endpoint)
     try:
         result = subprocess.run(
             [

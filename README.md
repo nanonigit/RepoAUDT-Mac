@@ -81,6 +81,8 @@ In a supported authorization finding, enter the full SHA of a descendant commit 
 
 If the GitHub diagnostic finds a local credential but the API connection fails only inside RepoAUDT Mac, inspect outbound rules for the app and the GitHub CLI (`gh`) it launches. An app-specific rule can block connections to `github.com` even when `gh` works from a terminal. Recorded audit evidence is still available on supported findings, and the UI marks the current GitHub source as unavailable until a live read succeeds.
 
+When the GitHub CLI can supply its local credential but its HTTP requests fail, quit RepoAUDT Mac and launch it with `open --env REPOAUDT_GITHUB_TRANSPORT=rest -a "/Applications/RepoAUDT Mac.app"`. This launch uses the same credential for read-only REST requests to GitHub and independently verifies the Git checkout when scanning.
+
 In a finding that has a suggested command, select **Copy command** and review it in your own Terminal. The old embedded shell endpoint returns HTTP 410.
 
 ## Verification and current scope
