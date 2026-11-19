@@ -70,6 +70,10 @@ RuffとGitleaksは、Gitの追跡対象ファイルを一時コピーして解�
 
 PHPはphp-srcの公開アドバイザリ直近50件とサポート終了情報、nginxとPostgreSQLはそれぞれの公式アドバイザリを参照します。Node.jsとGoは同系列のセキュリティリリースを案内します。PHPのアドバイザリが関数名を公開している場合、PHPファイル最大120件から名前が一致する行を探します。稼働版や実行経路、ディストリビューションのバックポート、イメージの中身、動的に解決される版には別途根拠が必要です。
 
+## 監査対象のコミット
+
+GitHubリポジトリのURLから既定ブランチのコミットを確定します。`/tree/<ブランチ名>` や `/commit/<完全なSHA>` も指定できます。ブランチ名のスラッシュは `%2F` に置き換えてください。検証済みのコミットとツリーを隔離された一時ディレクトリに取得して監査し、対象の情報はMCP監査レポートにも記録します。ローカルパスを明示した監査は、ローカル作業ツリーの解析として記録します。 バックグラウンド更新の対象は個別リポジトリの既定ブランチです。明示指定したコミット・ブランチの監査結果は保持します。
+
 ## 検証と現在の実装範囲
 
 ```bash
@@ -80,9 +84,10 @@ python3 -m unittest discover -s tests/audit -v
 python3 -m unittest discover -s tests/audit-tools -v
 python3 -m unittest discover -s tests/source-scanners -v
 python3 -m unittest discover -s tests/runtime-patches -v
+python3 -m unittest discover -s tests/source-revision -v
 ```
 
-既存テスト197件、接続テスト8件、配色テスト3件、監査証拠テスト5件、ワークフロー監査テスト4件、ソーススキャナーテスト5件、ランタイムパッチテスト6件が成功しました。配色テストはライト／ダーク合計46組の文字・背景色を対象とし、すべてコントラスト4.5:1以上です。これは配色定義の検証であり、全画面のアクセシビリティ適合を保証するものではありません。
+既存テスト197件、接続テスト8件、配色テスト3件、監査証拠テスト5件、ワークフロー監査テスト4件、ソーススキャナーテスト5件、ランタイムパッチテスト6件、監査対象コミットのテスト5件が成功しました。配色テストはライト／ダーク合計46組の文字・背景色を対象とし、すべてコントラスト4.5:1以上です。これは配色定義の検証であり、全画面のアクセシビリティ適合を保証するものではありません。
 
 ローカル LLM はモック HTTP サーバーへのリクエストで検証済みですが、Ollama / LM Studio の実モデルは未検証です。インストール済みアプリで MCP のツール取得とコード断片の監査も確認しています。PR 送信・進捗追跡・修正の解消確認までの一連の運用は、今回の完成範囲に含みません。
 
@@ -94,6 +99,7 @@ python3 -m unittest discover -s tests/runtime-patches -v
 - [UI 設計](docs/ui-redesign/design.md)
 - [配色の役割・参考資料・コントラスト検証](docs/ui-redesign/colors.md)
 - [検証記録](docs/ui-redesign/verification.md)
+- [コミット固定の設計](docs/commit-pinned-audit/design.md)
 - [ランタイムパッチの設計](docs/runtime-patches/design.md)
 - [ソーススキャナーの選定と対象範囲](docs/source-scanners/design.md)
 - [監査ツールの比較と設計](docs/audit-tools/design.md)

@@ -65,7 +65,7 @@ class SyncDaemon:
                 diagrams = state.get("diagrams", [])
                 processed = set()
                 for d in diagrams:
-                    url = d.get("github_url") or ""
+                    url = analyzer.automatic_refresh_url(d)
                     if url and url not in processed:
                         processed.add(url)
                         try:

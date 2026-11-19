@@ -21,7 +21,9 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import unquote
 import security_audit_engine
+import source_revision
 
 
 APP_SUPPORT_DIR = security_audit_engine.APP_SUPPORT_DIR
@@ -145,12 +147,21 @@ def parse_github_target(raw_input: str) -> Dict[str, Any]:
 
     owner = _validate_github_segment(parts[0], "owner")
     repo = _validate_github_segment(parts[1], "repo")
+    selection = {}
+    if len(parts) > 2:
+        if len(parts) == 4 and parts[2] == "commit" and source_revision.FULL_SHA.fullmatch(parts[3]):
+            selection["commit"] = parts[3]
+        elif len(parts) == 4 and parts[2] == "tree" and source_revision.valid_branch(unquote(parts[3])):
+            selection["branch"] = unquote(parts[3])
+        else:
+            raise ValueError("Use a GitHub repository URL, a branch URL, or a URL with a full commit SHA.")
     return {
         "mode": "repo",
         "owner": owner,
         "repo": repo,
         "github_url": f"https://github.com/{owner}/{repo}",
         "local_path": None,
+        **selection,
     }
 
 
@@ -259,38 +270,6 @@ def list_org_or_user_repositories(owner: str, limit: int = 35) -> List[Dict[str,
     return [r for r in repos if r.get("name")]
 
 
-def resolve_canonical_github_repo(owner: str, repo: str, github_url: str) -> Tuple[str, str, str, List[str]]:
-    """
-    Check GitHub via `gh repo view` to detect if a repository was renamed/redirected
-    (e.g. `nanonigit/artex-mac` -> `nanonigit/networkpntr-mac`).
-    Returns (canonical_owner, canonical_repo, canonical_url, replaced_diagram_ids).
-    """
-    replaced_ids: List[str] = []
-    if owner == "local":
-        return owner, repo, github_url, replaced_ids
-
-    gh_bin = "/opt/homebrew/bin/gh" if Path("/opt/homebrew/bin/gh").exists() else "gh"
-    raw = run_cmd([gh_bin, "repo", "view", f"{owner}/{repo}", "--json", "name,owner,url"], timeout=10)
-    if raw:
-        try:
-            data = json.loads(raw)
-            new_name = str(data.get("name") or "").strip()
-            owner_obj = data.get("owner") or {}
-            new_owner = str(owner_obj.get("login") if isinstance(owner_obj, dict) else owner).strip() or owner
-            new_url = str(data.get("url") or "").strip() or f"https://github.com/{new_owner}/{new_name}"
-            if new_name and (new_name.lower() != repo.lower() or new_owner.lower() != owner.lower()):
-                old_id = f"gh-{owner}-{repo}-overall".lower()
-                replaced_ids.append(old_id)
-                old_cache = REPOS_CACHE_DIR / f"{owner}__{repo}"
-                if old_cache.exists():
-                    shutil.rmtree(old_cache, ignore_errors=True)
-                return new_owner, new_name, new_url, replaced_ids
-        except Exception:
-            pass
-
-    return owner, repo, github_url, replaced_ids
-
-
 def find_existing_local_repo(owner: str, repo: str) -> Optional[Path]:
     candidates = [
         Path.home() / "Git" / owner / repo,
@@ -303,60 +282,13 @@ def find_existing_local_repo(owner: str, repo: str) -> Optional[Path]:
     return None
 
 
-def clone_or_update_repo(owner: str, repo: str, github_url: str, local_override: Optional[Path] = None) -> Path:
-    ensure_dirs()
-    if local_override and local_override.exists():
-        return local_override
-
-    existing_local = find_existing_local_repo(owner, repo)
-    if existing_local:
-        return existing_local
-
-    target_dir = REPOS_CACHE_DIR / f"{owner}__{repo}"
-    if target_dir.exists() and (target_dir / ".git").exists():
-        run_cmd(["git", "fetch", "--depth", "20", "origin"], cwd=target_dir, timeout=30)
-        run_cmd(["git", "reset", "--hard", "FETCH_HEAD"], cwd=target_dir, timeout=15)
-        return target_dir
-
-    if target_dir.exists():
-        import shutil
-        shutil.rmtree(target_dir, ignore_errors=True)
-
-    gh_bin = "/opt/homebrew/bin/gh" if Path("/opt/homebrew/bin/gh").exists() else "gh"
-    res = subprocess.run(
-        [gh_bin, "repo", "clone", f"{owner}/{repo}", str(target_dir), "--", "--depth=30"],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-    )
-    if res.returncode == 0 and target_dir.exists():
-        return target_dir
-
-    if target_dir.exists() and not (target_dir / ".git").exists():
-        shutil.rmtree(target_dir, ignore_errors=True)
-
-    res2 = subprocess.run(
-        ["git", "clone", "--depth", "30", f"{github_url}.git", str(target_dir)],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-    )
-    if res2.returncode != 0 or not target_dir.exists():
-        err_msg = (res.stderr or res2.stderr or "リポジトリの取得に失敗しました").strip()
-        raise RuntimeError(f"GitHubリポジトリ ({owner}/{repo}) を取得できませんでした: {err_msg}")
-
-    return target_dir
-
-
-def extract_git_metadata(repo_dir: Path, owner: str, repo: str, fallback_meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def extract_git_metadata(repo_dir: Path, owner: str, repo: str, fallback_meta: Optional[Dict[str, Any]] = None, *, lookup_remote: bool = True) -> Dict[str, Any]:
     created_at = (fallback_meta or {}).get("createdAt", "")
     updated_at = (fallback_meta or {}).get("updatedAt", "")
     pushed_at = (fallback_meta or {}).get("pushedAt", "")
     gh_desc = (fallback_meta or {}).get("description", "")
 
-    if not created_at or not pushed_at:
+    if lookup_remote and (not created_at or not pushed_at):
         gh_bin = "/opt/homebrew/bin/gh" if Path("/opt/homebrew/bin/gh").exists() else "gh"
         gh_json_raw = run_cmd([gh_bin, "api", f"repos/{owner}/{repo}"], timeout=10)
         if gh_json_raw:
@@ -369,7 +301,7 @@ def extract_git_metadata(repo_dir: Path, owner: str, repo: str, fallback_meta: O
             except Exception as exc:
                 print(f"Notice: gh api metadata lookup failed for {owner}/{repo}: {exc}", file=sys.stderr)
 
-    commit_hash = run_cmd(["git", "log", "-1", "--format=%h"], cwd=repo_dir) or "HEAD"
+    commit_hash = run_cmd(["git", "log", "-1", "--format=%H"], cwd=repo_dir) or "HEAD"
     commit_date = run_cmd(["git", "log", "-1", "--format=%cI"], cwd=repo_dir)
     first_date = run_cmd(["git", "log", "--reverse", "--format=%cI"], cwd=repo_dir).splitlines()
     first_commit_date = first_date[0] if first_date else commit_date
@@ -1150,12 +1082,34 @@ def analyze_repository(
     category_label: str = "GitHub Analyzed",
     fallback_meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    owner, repo, github_url, local_override = parse_github_input(raw_url_or_slug)
-    replaced_ids: List[str] = []
-    if not local_override and fallback_meta is None:
-        owner, repo, github_url, replaced_ids = resolve_canonical_github_repo(owner, repo, github_url)
-    repo_dir = clone_or_update_repo(owner, repo, github_url, local_override)
-    meta = extract_git_metadata(repo_dir, owner, repo, fallback_meta=fallback_meta)
+    parsed = parse_github_target(raw_url_or_slug)
+    if parsed["mode"] != "repo":
+        raise ValueError("Select a single repository.")
+    owner, repo = parsed["owner"], parsed["repo"]
+    if parsed["local_path"] is not None:
+        return analyze_checkout(parsed["local_path"], owner, repo, parsed["github_url"],
+                                category_label, {"kind": "local_worktree"}, {}, [])
+    revision, github_meta = source_revision.resolve(
+        owner, repo, branch=parsed.get("branch"), commit=parsed.get("commit")
+    )
+    canonical_owner, canonical_repo = revision["repository"].split("/")
+    replaced_ids = []
+    if (owner.lower(), repo.lower()) != (canonical_owner.lower(), canonical_repo.lower()):
+        replaced_ids.append(f"gh-{owner}-{repo}-overall".lower())
+    with source_revision.checkout(revision) as directory:
+        return analyze_checkout(
+            directory, canonical_owner, canonical_repo, "https://github.com/" + revision["repository"],
+            category_label, revision, {**(fallback_meta or {}), **github_meta}, replaced_ids,
+        )
+
+
+def analyze_checkout(
+    repo_dir: Path, owner: str, repo: str, github_url: str, category_label: str,
+    revision: Dict[str, Any], fallback_meta: Dict[str, Any], replaced_ids: List[str],
+) -> Dict[str, Any]:
+    meta = extract_git_metadata(repo_dir, owner, repo, fallback_meta=fallback_meta, lookup_remote=False)
+    if revision["kind"] == "github_commit" and meta["commit_hash"] != revision["commit_sha"]:
+        raise ValueError("Audit worktree is not at the verified commit")
     deps = detect_tech_stack_and_deps(repo_dir)
     components = discover_repo_components(repo_dir, repo)
 
@@ -1254,6 +1208,7 @@ def analyze_repository(
         "updatedAt": meta["updatedAt"],
         "pushedAt": meta["pushedAt"],
         "commit_hash": meta["commit_hash"],
+        "source_revision": revision,
         "commit_date": meta["commit_date"],
         "commit_subject": meta["commit_subject"],
         "commit_author": meta["commit_author"],
@@ -1612,7 +1567,21 @@ def analyze_any_github_target(raw_input: str) -> Dict[str, Any]:
     if parsed["mode"] == "org":
         return analyze_organization_or_user(parsed["owner"], parsed.get("local_path"))
     else:
-        return analyze_repository(f"{parsed['owner']}/{parsed['repo']}")
+        return analyze_repository(raw_input)
+
+
+def automatic_refresh_url(diagram: Dict[str, Any]) -> Optional[str]:
+    """Refresh saved repository defaults without replacing explicit audit targets."""
+    revision = diagram.get("source_revision") or {}
+    if (
+        diagram.get("is_root")
+        or revision.get("kind") == "local_worktree"
+        or revision.get("selection") in ("commit", "branch")
+    ):
+        return None
+    url = str(diagram.get("github_url") or "")
+    prefix = "https://github.com/"
+    return url if url.startswith(prefix) and source_revision.SLUG.fullmatch(url[len(prefix):]) else None
 
 
 def _load_saved_analyses_unlocked() -> Dict[str, Any]:

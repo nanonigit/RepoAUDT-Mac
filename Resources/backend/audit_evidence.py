@@ -273,6 +273,8 @@ def handle(payload, state, chat=False):
     if not url or url[1].split("/")[-1] in (".", ".."):
         raise EvidenceError("Select a saved GitHub repository first.")
     root = "repos/" + url[1]
+    if (repo.get("source_revision") or {}).get("kind") == "local_worktree":
+        raise EvidenceError("This analysis was of a local working tree. Scan the GitHub repository to compare committed evidence.")
     saved = str(repo.get("commit_hash", ""))
     path, number = payload.get("path"), payload.get("line")
     if path is not None and (

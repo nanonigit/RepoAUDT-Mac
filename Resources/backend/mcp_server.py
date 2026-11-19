@@ -340,6 +340,7 @@ def execute_mcp_tool(name: str, arguments: Optional[Dict[str, Any]] = None) -> D
             reports.append({
                 "repo": d.get("repo"),
                 "github_url": d.get("github_url"),
+                "source_revision": d.get("source_revision"),
                 "score": cr.get("score", 90),
                 "status": cr.get("status", "PASSED"),
                 "summary": cr.get("summary", ""),
