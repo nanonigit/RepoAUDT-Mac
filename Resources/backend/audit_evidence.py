@@ -118,19 +118,22 @@ def match_line(before, after, number, same_blob, path):
     return None
 
 
-def source_line(path, lines, number):
+def source_line(path, lines, number, *, redact_credential=False):
     if number is None or not 1 <= number <= len(lines):
         return None
     text = lines[number - 1]
     reference = is_terraform_secret_arn(path, text)
-    if not reference and any(
-        re.search(pattern, text) for _, pattern, _, _ in SECRET_PATTERNS
+    if redact_credential or (
+        not reference
+        and any(re.search(pattern, text) for _, pattern, _, _ in SECRET_PATTERNS)
     ):
         text = "[credential-like line redacted]"
     return {"number": number, "text": text[:2000], "secrets_manager_arn": reference}
 
 
-def finding_evidence(root, status, path, number, legacy_password_alert):
+def finding_evidence(
+    root, status, path, number, legacy_password_alert, *, redact_credential=False
+):
     head = status["head"]
     saved = status["saved_commit"]
     current_error = saved_error = file_history_error = None
@@ -168,8 +171,12 @@ def finding_evidence(root, status, path, number, legacy_password_alert):
     matched = match_line(
         before, after, number, bool(saved_blob and saved_blob == current_blob), path
     )
-    audited_line = source_line(path, before, number)
-    current_line = source_line(path, after, matched)
+    audited_line = source_line(
+        path, before, number, redact_credential=redact_credential
+    )
+    current_line = source_line(
+        path, after, matched, redact_credential=redact_credential
+    )
     return {
         **status,
         "path": path,
@@ -186,7 +193,9 @@ def finding_evidence(root, status, path, number, legacy_password_alert):
             and audited_line
             and audited_line["secrets_manager_arn"]
         ),
-        "current_line_at_old_number": source_line(path, after, number)
+        "current_line_at_old_number": source_line(
+            path, after, number, redact_credential=redact_credential
+        )
         if matched is None
         else None,
         "line_comparison": (
@@ -293,7 +302,16 @@ def handle(payload, state, chat=False):
             and "シークレット漏洩検知" in str(item.get("title", ""))
             for item in matching_items
         )
-        status = finding_evidence(root, status, path, number, legacy_alert)
+        status = finding_evidence(
+            root,
+            status,
+            path,
+            number,
+            legacy_alert,
+            redact_credential=any(
+                item.get("scanner") == "gitleaks" for item in matching_items
+            ),
+        )
         status["saved_severities"] = sorted(
             {
                 item.get("severity")

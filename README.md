@@ -10,6 +10,7 @@ Enter a GitHub repository URL or `owner/repo`, analyze the code, and inspect fin
 
 - **Repository workspace:** saved-repository dashboard, search, audit results, architecture diagrams, and execution flows.
 - **Code audits:** static-analysis findings, dependency vulnerability checks, evidence, affected components, and remediation suggestions where available. Copy fix prompts and save reports for review.
+- **Python quality and secret candidates:** Ruff checks selected Python rules for issues such as undefined names and unused imports. Gitleaks scans tracked files for potential credentials. Secret findings are redacted in source previews and reports.
 - **GitHub Actions audit:** optionally add [zizmor](https://docs.zizmor.sh/audits/). The app scans workflow copies offline and merges findings with its built-in checks. Open a finding for the file, line, and rule documentation.
 - **Current source and history:** open a finding to see its audited and current source lines with commit links, the default branch's latest commit, the repository's last push, and the file's last change. Live evidence uses authenticated GitHub CLI access.
 - **Audit chat:** start in the sidebar or from a finding. Each question checks GitHub again and sends the question, recent messages, and comparison metadata to the configured AI provider. Source lines stay in the workspace.
@@ -42,13 +43,15 @@ To build a bundle in the repository without installing it:
 ./build.sh --no-install
 ```
 
-## Optional workflow scanner
+## Optional local scanners
 
 ```bash
-brew install zizmor
+brew install zizmor ruff gitleaks
 ```
 
 Run **Re-scan** to add zizmor results to a saved audit. The app checks up to 25 local workflow files. zizmor receives no GitHub token or repository configuration. The app retains built-in checks when zizmor is missing, times out or cannot parse an input. The MCP audit report includes scan status.
+
+Ruff and Gitleaks run on temporary copies of tracked working-tree files. The combined source scan is limited to 3,000 files, 256 KiB per file and 32 MiB in total. Gitleaks checks the current snapshot. The MCP audit report includes coverage status for both tools.
 
 ## Getting started
 
@@ -68,9 +71,10 @@ python3 -m unittest discover -s tests/connections -v
 python3 -m unittest discover -s tests/ui -v
 python3 -m unittest discover -s tests/audit -v
 python3 -m unittest discover -s tests/audit-tools -v
+python3 -m unittest discover -s tests/source-scanners -v
 ```
 
-The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, 5 audit evidence tests, and 4 workflow-audit tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
+The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, 5 audit evidence tests, 4 workflow-audit tests, and 5 source-scanner tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
 
 Local LLM requests were verified with a mock HTTP server; a live Ollama / LM Studio model was not tested. MCP tool discovery and snippet scanning were also checked in the installed app. The complete PR submission, progress tracking, and fix-verification workflow remains outside this delivery's completed scope.
 
@@ -82,6 +86,7 @@ The following implementation documents are currently in Japanese:
 - [UI design](docs/ui-redesign/design.md)
 - [Color roles, references, and contrast checks](docs/ui-redesign/colors.md)
 - [Verification record](docs/ui-redesign/verification.md)
+- [Source scanner selection and scope](docs/source-scanners/design.md)
 - [Audit tool evaluation and design](docs/audit-tools/design.md)
 - [Audit evidence design](docs/audit-evidence/design.md) and [incident review](docs/audit-evidence/incident.md)
 

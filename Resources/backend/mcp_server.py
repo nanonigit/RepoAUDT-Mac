@@ -344,6 +344,7 @@ def execute_mcp_tool(name: str, arguments: Optional[Dict[str, Any]] = None) -> D
                 "status": cr.get("status", "PASSED"),
                 "summary": cr.get("summary", ""),
                 "workflow_scan": cr.get("workflow_scan"),
+                "source_scan": cr.get("source_scan"),
                 "security_advisories": deps.get("security_advisories") or [],
                 "action_items": cr.get("action_items") or [],
                 "findings": cr.get("findings") or [],

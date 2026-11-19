@@ -10,6 +10,7 @@ GitHub リポジトリの URL または `owner/repo` を入力し、解析結果
 
 - **リポジトリの作業画面：** 保存済みリポジトリのダッシュボード、検索、監査結果、構成図、実行フロー。
 - **コード監査：** 静的解析、依存パッケージの脆弱性チェック、根拠、対象コンポーネント、取得できた修正案を表示。修正プロンプトのコピーとレポート保存に対応。
+- **Pythonのコード品質と秘密情報候補：** Ruffが未定義名・未使用のimportなどを検出し、Gitleaksが追跡対象のファイルから認証情報の候補を検出します。秘密情報の候補はソース比較とレポートで伏せます。
 - **GitHub Actions 監査**は [zizmor](https://docs.zizmor.sh/audits/) で拡張できます。ワークフローのコピーをオフラインで解析し、内蔵ルールの結果に統合します。指摘からファイル、行番号、ルールの資料を確認できます。
 - **現行ソースと更新履歴：** 指摘を開くと、監査時と現在の行、コミットへのリンク、既定ブランチの最新コミット、リポジトリの最終 Push、ファイルの最終変更を確認できます。最新情報の取得には認証済みの GitHub CLI を使用します。
 - **監査チャット：** サイドバーまたは指摘から開始できます。質問ごとに GitHub を再確認し、質問・直近のメッセージ・比較のメタデータを設定済み AI に送信します。ソース行は作業画面に留めます。
@@ -42,13 +43,15 @@ GitHub リポジトリの URL または `owner/repo` を入力し、解析結果
 ./build.sh --no-install
 ```
 
-## 任意のワークフロースキャナー
+## 任意のローカルスキャナー
 
 ```bash
-brew install zizmor
+brew install zizmor ruff gitleaks
 ```
 
 「再スキャン」で保存済みの監査に結果を追加できます。対象はローカルのワークフローファイル最大25件です。GitHubトークンや監査対象の設定は zizmor に渡しません。未導入、タイムアウト、解析エラーの場合も内蔵チェックは動作し、MCPの監査レポートで実行状態を確認できます。
+
+RuffとGitleaksは、Gitの追跡対象ファイルを一時コピーして解析します。上限は3,000ファイル、各256 KiB、合計32 MiBです。Gitleaksの対象は現在のスナップショットです。両ツールの解析状態はMCPの監査レポートで確認できます。
 
 ## 使い始める
 
@@ -68,9 +71,10 @@ python3 -m unittest discover -s tests/connections -v
 python3 -m unittest discover -s tests/ui -v
 python3 -m unittest discover -s tests/audit -v
 python3 -m unittest discover -s tests/audit-tools -v
+python3 -m unittest discover -s tests/source-scanners -v
 ```
 
-既存テスト197件、接続テスト8件、配色テスト3件、監査証拠テスト5件、ワークフロー監査テスト4件が成功しました。配色テストはライト／ダーク合計46組の文字・背景色を対象とし、すべてコントラスト4.5:1以上です。これは配色定義の検証であり、全画面のアクセシビリティ適合を保証するものではありません。
+既存テスト197件、接続テスト8件、配色テスト3件、監査証拠テスト5件、ワークフロー監査テスト4件、ソーススキャナーテスト5件が成功しました。配色テストはライト／ダーク合計46組の文字・背景色を対象とし、すべてコントラスト4.5:1以上です。これは配色定義の検証であり、全画面のアクセシビリティ適合を保証するものではありません。
 
 ローカル LLM はモック HTTP サーバーへのリクエストで検証済みですが、Ollama / LM Studio の実モデルは未検証です。インストール済みアプリで MCP のツール取得とコード断片の監査も確認しています。PR 送信・進捗追跡・修正の解消確認までの一連の運用は、今回の完成範囲に含みません。
 
@@ -82,6 +86,7 @@ python3 -m unittest discover -s tests/audit-tools -v
 - [UI 設計](docs/ui-redesign/design.md)
 - [配色の役割・参考資料・コントラスト検証](docs/ui-redesign/colors.md)
 - [検証記録](docs/ui-redesign/verification.md)
+- [ソーススキャナーの選定と対象範囲](docs/source-scanners/design.md)
 - [監査ツールの比較と設計](docs/audit-tools/design.md)
 - [監査証拠の設計](docs/audit-evidence/design.md)と[誤検知の調査記録](docs/audit-evidence/incident.md)
 

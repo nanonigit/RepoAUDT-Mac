@@ -18,7 +18,8 @@ import sys
 import urllib.error
 import urllib.request
 from connection_utils import validate_endpoint, open_endpoint
-from workflow_audit import MAX_FILES, read_workflow, run_zizmor, workflow_files
+from workflow_audit import MAX_FILES, read_small_file, run_zizmor, workflow_files
+from source_scanners import scan_source
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -868,8 +869,11 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         scanner = "builtin+zizmor" if status == "complete" else "builtin" if files else None
         workflow_scan = {"scanner": scanner, "status": status}
 
+    source_findings, source_scan = scan_source(
+        Path(repo_dir), match_comp, include_quality=skills_cfg.get("owasp_sast_skill", True)
+    )
     secret_findings = scan_secrets_and_credentials(repo_dir, match_comp)
-    sast_findings = secret_findings + sast_findings
+    sast_findings = secret_findings + source_findings + sast_findings
     security_advisories = enrich_advisories_with_epss(security_advisories)
 
     return {
@@ -880,6 +884,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         "security_advisories": security_advisories,
         "sast_findings": sast_findings,
         "workflow_scan": workflow_scan,
+        "source_scan": source_scan,
     }
 
 
@@ -908,7 +913,7 @@ def scan_github_actions_workflows(
     for wf in workflow_files(Path(repo_dir))[:MAX_FILES]:
         rel_path = str(wf.relative_to(repo_dir))
         try:
-            raw = read_workflow(wf)
+            raw = read_small_file(wf)
             if raw is None:
                 continue
             content = raw.decode("utf-8", errors="ignore")

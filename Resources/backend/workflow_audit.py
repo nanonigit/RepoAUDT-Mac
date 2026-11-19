@@ -30,7 +30,7 @@ def workflow_files(repo):
     )
 
 
-def read_workflow(path):
+def read_small_file(path):
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(descriptor, "rb") as stream:
         if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
@@ -97,7 +97,7 @@ def run_zizmor(files, match_component):
             (directory / WORKFLOWS).mkdir(parents=True)
             staged = {}
             for path in files:
-                content = read_workflow(path)
+                content = read_small_file(path)
                 if content is None:
                     return None, "input_limit"
                 relative = (WORKFLOWS / path.name).as_posix()

@@ -1177,6 +1177,7 @@ def analyze_repository(
 
     # Merge PHP / Node.js / OWASP SAST findings
     coderabbit["workflow_scan"] = sec_scan.get("workflow_scan")
+    coderabbit["source_scan"] = sec_scan.get("source_scan")
     for sf in sec_scan.get("sast_findings", []):
         coderabbit["action_items"].insert(0, sf)
         coderabbit["findings"].insert(0, {**sf, "line": "SAST"})
