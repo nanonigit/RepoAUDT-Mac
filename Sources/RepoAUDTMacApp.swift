@@ -164,6 +164,7 @@ final class WebViewCoordinator: NSObject, ObservableObject, WKNavigationDelegate
             case "arch": page = .architecture
             case "seq": page = .sequence
             case "coderabbit": page = .audit
+            case "chat": page = .chat
             default: break
             }
         }

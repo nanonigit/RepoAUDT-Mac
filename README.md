@@ -10,6 +10,8 @@ Enter a GitHub repository URL or `owner/repo`, analyze the code, and inspect fin
 
 - **Repository workspace:** saved-repository dashboard, search, audit results, architecture diagrams, and execution flows.
 - **Code audits:** static-analysis findings, dependency vulnerability checks, evidence, affected components, and remediation suggestions where available. Copy fix prompts and save reports for review.
+- **Current source and history:** open a finding to see its audited and current source lines with commit links, the default branch's latest commit, the repository's last push, and the file's last change. Live evidence uses authenticated GitHub CLI access.
+- **Audit chat:** start in the sidebar or from a finding. Each question checks GitHub again and sends the question, recent messages, and comparison metadata to the configured AI provider. Source lines stay in the workspace.
 - **Native navigation:** a macOS sidebar and toolbar, optional detail inspector, and Japanese / English switching, aligned with NetworkPNTR Mac and NetworkISPR Mac.
 - **Consistent colors:** light and dark appearances share semantic roles. Blue identifies actions and selection, red marks serious findings or failures, amber indicates caution, and green denotes confirmed success. Labels and symbols accompany severity colors.
 - **Cloud AI:** settings and connection tests for OpenAI, Claude, Gemini, and Groq, using the existing audit integrations.
@@ -55,9 +57,10 @@ Saved analysis belongs to the recorded commit and can become outdated. Run analy
 python3 tests/e2e/run_all_tests.py
 python3 -m unittest discover -s tests/connections -v
 python3 -m unittest discover -s tests/ui -v
+python3 -m unittest discover -s tests/audit -v
 ```
 
-The documented verification run passed 197 existing tests, 8 connection tests, and 3 palette tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
+The verification run passed 197 existing tests, 8 connection tests, 3 palette tests, and 5 audit evidence tests. The palette tests cover 46 foreground/background pairs across light and dark themes, each with a contrast ratio of at least 4.5:1. This is token-level verification, not an accessibility certification of every screen.
 
 Local LLM requests were verified with a mock HTTP server; a live Ollama / LM Studio model was not tested. MCP tool discovery and snippet scanning were also checked in the installed app. The complete PR submission, progress tracking, and fix-verification workflow remains outside this delivery's completed scope.
 
@@ -69,5 +72,6 @@ The following implementation documents are currently in Japanese:
 - [UI design](docs/ui-redesign/design.md)
 - [Color roles, references, and contrast checks](docs/ui-redesign/colors.md)
 - [Verification record](docs/ui-redesign/verification.md)
+- [Audit evidence design](docs/audit-evidence/design.md) and [incident review](docs/audit-evidence/incident.md)
 
 When features, setup instructions, or verification scope change, update both this English README and [the Japanese README](README.ja.md) together.

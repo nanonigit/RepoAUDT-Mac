@@ -18,12 +18,13 @@ struct WorkspaceSnapshot: Decodable {
 }
 
 enum WorkspacePage: String, CaseIterable, Identifiable {
-    case dashboard, audit, architecture, sequence, ai, mcp
+    case dashboard, audit, chat, architecture, sequence, ai, mcp
 
     var id: String { rawValue }
     var command: String {
         switch self {
         case .dashboard, .audit: return "coderabbit"
+        case .chat: return "chat"
         case .architecture: return "arch"
         case .sequence: return "seq"
         case .ai, .mcp: return ""
@@ -33,6 +34,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         switch self {
         case .dashboard: return "square.grid.2x2"
         case .audit: return "checkmark.shield"
+        case .chat: return "bubble.left.and.bubble.right"
         case .architecture: return "square.3.layers.3d"
         case .sequence: return "point.3.connected.trianglepath.dotted"
         case .ai: return "brain"
@@ -43,6 +45,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         switch self {
         case .dashboard: return english ? "Dashboard" : "ダッシュボード"
         case .audit: return english ? "Audit results" : "監査結果"
+        case .chat: return english ? "Chat" : "チャット"
         case .architecture: return english ? "Architecture" : "構成図"
         case .sequence: return english ? "Execution flows" : "実行フロー"
         case .ai: return english ? "AI connections" : "AI 接続"
@@ -71,7 +74,7 @@ struct MainContentView: View {
         NavigationSplitView {
             List(selection: $selection) {
                 Section(english ? "Workspace" : "ワークスペース") {
-                    ForEach([WorkspacePage.dashboard, .audit, .architecture, .sequence]) { item in
+                    ForEach([WorkspacePage.dashboard, .audit, .chat, .architecture, .sequence]) { item in
                         Label(item.title(english: english), systemImage: item.symbol)
                             .tag(item.rawValue)
                     }
@@ -136,7 +139,7 @@ struct MainContentView: View {
             .navigationTitle(page.title(english: english))
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
-                    if !nativePage {
+                    if !nativePage && page != .chat {
                         Button {
                             coordinator.send("details")
                         } label: {

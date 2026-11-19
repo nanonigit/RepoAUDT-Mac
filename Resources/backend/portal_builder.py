@@ -7917,6 +7917,7 @@ def build_portal_html(data, is_shareable=False):
           <h2 class="hero-repo-title">${escapeHtml(item.repo)}</h2>
           <div class="hero-repo-desc">${escapeHtml(item.description || '')}</div>
           <div class="workspace-commit">${en ? 'Saved commit' : '解析対象コミット'} <code>${escapeHtml(item.commit_hash || (en ? 'Not recorded' : '未記録'))}</code></div>
+          <div class="workspace-commit" data-audit-repository-status></div>
         </div>
         <div class="hero-right-controls">
           <span class="workspace-findings">${en ? `${count} findings` : `指摘 ${count}件`}</span>
@@ -7927,6 +7928,7 @@ def build_portal_html(data, is_shareable=False):
             <button type="button" role="tab" aria-selected="${subView === 'diagram'}" class="subview-btn ${subView === 'diagram' ? 'active' : ''}" id="subview-btn-diagram" onclick="setArchSubView('diagram')">${en ? 'Diagram' : '構成図'}</button>
           </div>` : ''}
         </div>`;
+      updateAuditRepositoryStatus(hero, item);
     }
 
     let currentVisualCards = [];
@@ -9678,7 +9680,9 @@ def build_portal_html(data, is_shareable=False):
                   </div>
                 </summary>
                 <div class="issue-body">
-                  <h3>${en ? 'Evidence and reason' : '根拠と理由'}</h3>
+                  ${findingSourceControls(repo, issue, file)}
+                  <div class="saved-finding-description">
+                  <h3>${en ? 'Recorded evidence and reason' : '保存された根拠と理由'}</h3>
                   <p>${escapeHtml(issue.desc || issue.comment || issue.summary || (en ? 'No additional evidence recorded.' : '追加の根拠は記録されていません。'))}</p>
                   <h3>${en ? 'Potential impact' : '想定される影響'}</h3>
                   <p>${escapeHtml(explainWhatCouldHappen(issue, en))}</p>
@@ -9689,11 +9693,21 @@ def build_portal_html(data, is_shareable=False):
                     <button type="button" class="table-view-btn" onclick="downloadSingleActionReport('${report}', '${name}')">${en ? 'Save report' : 'レポートを保存'}</button>
                     ${sourceLink}
                   </div>
+                  </div>
                 </div>
               </details>`;
             }).join('') : `<div class="audit-empty">${en ? 'No findings recorded in this analysis. Review the scan scope before drawing conclusions.' : 'この解析に保存された指摘はありません。確認範囲は解析の詳細から確認してください。'}</div>`}
           </div>
         </section>`;
+      for (const finding of view.querySelectorAll('.audit-issue')) {
+        finding.addEventListener('toggle', () => {
+          const button = finding.querySelector('[data-load-finding-source]');
+          if (finding.open && button && !finding.dataset.loadedSource) {
+            finding.dataset.loadedSource = 'true';
+            loadFindingSource(button);
+          }
+        });
+      }
     }
 
     /* ==========================================================================
@@ -12593,7 +12607,10 @@ def build_portal_html(data, is_shareable=False):
                         for key, value in palette[theme].items())
     colors_css = ":root{" + palette_rules("dark") + "} @media(prefers-color-scheme:light){:root{" + palette_rules("light") + "}}"
     template = template.replace("__WORKSPACE_STYLES__", colors_css + (webui_dir / "workspace.css").read_text(encoding="utf-8"))
-    template = template.replace("__WORKSPACE_SCRIPT__", (webui_dir / "native-workspace.js").read_text(encoding="utf-8"))
+    template = template.replace("__WORKSPACE_SCRIPT__", "\n".join(
+        (webui_dir / filename).read_text(encoding="utf-8")
+        for filename in ("native-workspace.js", "audit-evidence.js")
+    ))
 
     # Safe literal replacement avoiding re.sub unescaping of newlines
     # Find positions between const diagrams = and const navContainer =

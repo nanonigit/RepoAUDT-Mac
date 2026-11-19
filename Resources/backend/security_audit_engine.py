@@ -387,6 +387,17 @@ SECRET_PATTERNS = [
 ]
 
 
+_TERRAFORM_SECRET_ARN = re.compile(
+    r'\s*[A-Za-z_][\w-]*\s*=\s*"\$\{(?:data\.)?aws_secretsmanager_secret'
+    r'\.[A-Za-z_][\w-]*(?:\["[A-Za-z0-9/_+=.@-]+"\])?\.arn\}'
+    r'(?::[A-Za-z0-9_./-]+::)?"\s*,?\s*(?:#.*|//.*)?'
+)
+
+
+def is_terraform_secret_arn(path: str, line: str) -> bool:
+    return Path(path).suffix == ".tf" and _TERRAFORM_SECRET_ARN.fullmatch(line) is not None
+
+
 def mask_detected_secret(secret: str) -> str:
     s = secret.strip()
     if len(s) <= 8:
@@ -469,7 +480,9 @@ def scan_secrets_and_credentials(
                     m = re.search(pattern, stripped)
                     if m:
                         raw_secret = m.group(1) if m.groups() else m.group(0)
-                        if secret_name == "Database / Hardcoded Password" and len(raw_secret) < 8:
+                        if secret_name == "Database / Hardcoded Password" and (
+                            len(raw_secret) < 8 or is_terraform_secret_arn(rel_path, stripped)
+                        ):
                             continue
                         masked = mask_detected_secret(raw_secret)
                         target_node = match_comp(rel_path)
@@ -479,7 +492,7 @@ def scan_secrets_and_credentials(
                             "file": f"{rel_path}:{line_no} (Target: {target_node})",
                             "target_node": target_node,
                             "desc": f"`{rel_path}` の {line_no}行目で、{desc_label}（`{masked}`）が平文で検出されました。ソースコード内に認証情報が存在すると、閲覧権限を持つ全員に漏洩し、不正利用やデータ侵害の原因となります。直ちに該当サービスでキーを無効化（Revoke/Rotate）し、環境変数または秘密情報マネージャーへ退避してください。",
-                            "diff": f"- {stripped}\n+ {fix_replacement}",
+                            "diff": f"- {stripped.replace(raw_secret, '[REDACTED]', 1)}\n+ {fix_replacement}",
                             "fix_cmd": f"sed -n '{max(1, line_no-2)},{line_no+2}p' {rel_path}",
                         })
                         if len(findings) >= 20:

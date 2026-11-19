@@ -26,8 +26,10 @@ async function nativeWorkspaceCommand(command, value) {
     case 'language':
       setLanguage(value === 'en' ? 'en' : 'ja');
       if (currentViewMode === 'coderabbit') renderCodeRabbitView();
+      if (auditChatVisible()) renderAuditChat();
       break;
     case 'repository': {
+      closeAuditChat();
       const index = diagrams.findIndex(item => String(item.id) === value);
       if (index >= 0) await selectDiagram(index);
       break;
@@ -37,6 +39,8 @@ async function nativeWorkspaceCommand(command, value) {
         const first = diagrams.findIndex(item => !item.is_root);
         if (first >= 0) await selectDiagram(first);
       }
+      if (value === 'chat') { openAuditChat(); break; }
+      closeAuditChat();
       if (['arch', 'seq', 'coderabbit'].includes(value)) switchViewMode(value);
       break;
     case 'analyze': openAnalyzeModal(); break;
