@@ -115,10 +115,36 @@ function findingSourceControls(repo, issue, file) {
         ${auditLabel('Compare current source', '現在のソースを照合')}</button>
       <button type="button" class="table-view-btn" onclick="chatAboutFinding(this)">
         ${auditLabel('Ask AI about this finding', 'この指摘をAIに相談')}</button>
+      ${issue.scanner === 'authorization-evidence' && issue.diff && repo.source_revision?.kind === 'github_commit'
+        ? `<button type="button" class="table-view-btn" onclick="verifyFindingDiff(this)">
+          ${auditLabel('Verify diff locally', '修正差分をローカル検証')}</button>` : ''}
     </div>
+    <div data-diff-verification role="status"></div>
     ${recordedAuthorizationChain(repo, issue)}
     <div data-evidence-result aria-live="polite"></div>
   </div>`;
+}
+
+async function verifyFindingDiff(button) {
+  const panel = button.closest('.finding-source');
+  const output = panel.querySelector('[data-diff-verification]');
+  const {repository, path, line} = JSON.parse(panel.dataset.context);
+  button.disabled = true;
+  output.textContent = auditLabel('Verifying in a disposable copy…', '隔離コピーで検証中…');
+  try {
+    const result = await auditRequest('verify-diff', {repository, path, line});
+    const outcome = result.after === 'not_detected'
+      ? auditLabel('Before: detected. After: not detected by the same static rule.', '適用前：検出。適用後：同じ静的ルールでは未検出。')
+      : auditLabel('Before: detected. After: still detected.', '適用前：検出。適用後：引き続き検出。');
+    const source = result.source === 'local_git'
+      ? auditLabel('Local Git object', 'ローカルのGitオブジェクト')
+      : auditLabel('Verified GitHub checkout', '検証済みのGitHubコピー');
+    output.textContent = outcome + ' ' + source + ' · ' + result.commit.slice(0, 9);
+  } catch (error) {
+    output.textContent = auditLabel('Verification unavailable: ', '検証未実施：') + error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function sourceComparison(info) {

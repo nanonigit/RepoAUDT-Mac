@@ -31,6 +31,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 import analyzer  # noqa: E402
 import audit_evidence  # noqa: E402
+import diff_verification  # noqa: E402
 import mcp_server  # noqa: E402
 import mcp_client  # noqa: E402
 import security_audit_engine  # noqa: E402
@@ -327,18 +328,24 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
             return
         body_raw = self.rfile.read(length).decode("utf-8", errors="ignore") if length > 0 else "{}"
 
-        if self.path in ("/api/audit/evidence", "/api/audit/chat"):
+        if self.path in ("/api/audit/evidence", "/api/audit/chat", "/api/audit/verify-diff"):
+            verify_diff = self.path == "/api/audit/verify-diff"
             host = self.headers.get("Host")
             allowed_hosts = {f"127.0.0.1:{self.server_port}", f"localhost:{self.server_port}"}
             if (host not in allowed_hosts or (origin and origin != f"http://{host}")
+                    or (verify_diff and not origin)
                     or self.headers.get_content_type() != "application/json"):
                 self._send_json(403, {"error": "This request must come from the local audit workspace."})
                 return
             try:
-                data = audit_evidence.handle(json.loads(body_raw), analyzer.load_saved_analyses(),
-                                             chat=self.path.endswith("/chat"))
+                payload = json.loads(body_raw)
+                state = analyzer.load_saved_analyses()
+                if verify_diff:
+                    data = diff_verification.handle(payload, state, analyzer.find_existing_local_repo)
+                else:
+                    data = audit_evidence.handle(payload, state, chat=self.path.endswith("/chat"))
                 self._send_json(200, data)
-            except (audit_evidence.EvidenceError, json.JSONDecodeError) as exc:
+            except (audit_evidence.EvidenceError, diff_verification.VerificationError, json.JSONDecodeError) as exc:
                 self._send_json(400, {"error": str(exc)})
             except (KeyError, TypeError, ValueError):
                 self._send_json(502, {"error": "GitHub returned an unexpected response."})
