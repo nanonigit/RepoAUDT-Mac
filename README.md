@@ -75,6 +75,8 @@ PHP checks the latest 50 public php-src advisories and the upstream unsupported-
 
 A GitHub repository URL resolves to the default branch's current commit. You can also specify `/tree/<branch>` or `/commit/<full-sha>`. Encode slashes in branch names as `%2F`. The audit checks out the verified commit and tree in an isolated temporary directory. The MCP audit report includes the source revision. Explicit local paths are recorded as local working-tree scans. Background refresh applies to single-repository default-branch scans. Explicit commit and branch scans remain pinned. A branch scan compares against that branch. GitHub diagnostics report local credential availability and API connectivity separately. Use **Verify diff locally** in a supported authorization finding to compare the same static rule before and after applying the recorded patch in a disposable directory.
 
+If the GitHub diagnostic finds a local credential but the API connection fails only inside RepoAUDT Mac, inspect outbound rules for the app and the GitHub CLI (`gh`) it launches. An app-specific rule can block connections to `github.com` even when `gh` works from a terminal. Recorded audit evidence is still available on supported findings, and the UI marks the current GitHub source as unavailable until a live read succeeds.
+
 ## Verification and current scope
 
 ```bash
