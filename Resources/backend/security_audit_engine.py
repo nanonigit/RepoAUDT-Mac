@@ -18,6 +18,7 @@ import sys
 import urllib.error
 import urllib.request
 from connection_utils import validate_endpoint, open_endpoint
+import copilot_bridge
 from workflow_audit import MAX_FILES, read_small_file, run_zizmor, workflow_files
 from source_scanners import scan_source
 from runtime_patches import scan_runtime_patches
@@ -53,13 +54,14 @@ SETTINGS_FILE = APP_SUPPORT_DIR / "settings.json"
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "local_base_url": "http://127.0.0.1:11434/v1",
-    "active_provider": "auto",  # auto | openai | claude | gemini | groq | local
+    "active_provider": "auto",  # auto | openai | claude | gemini | groq | local | copilot
     "keys": {
         "local": "",
         "openai": "",
         "claude": "",
         "gemini": "",
         "groq": "",
+        "copilot": "",
     },
     "models": {
         "local": "",
@@ -67,6 +69,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "claude": "claude-3-7-sonnet-latest",
         "gemini": "gemini-2.5-flash",
         "groq": "llama-3.3-70b-versatile",
+        "copilot": "auto",
     },
     "skills": {
         "osv_mcp": True,
@@ -139,12 +142,12 @@ def save_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
     current = load_settings()
     if "active_provider" in payload:
         prov_val = str(payload["active_provider"]).strip()
-        if prov_val in ("auto", "openai", "claude", "gemini", "groq", "local"):
+        if prov_val in ("auto", "openai", "claude", "gemini", "groq", "local", "copilot"):
             current["active_provider"] = prov_val
     if "local_base_url" in payload:
         current["local_base_url"] = validate_endpoint(payload["local_base_url"], local_only=True)
     if isinstance(payload.get("keys"), dict):
-        for k in ("openai", "claude", "gemini", "groq", "local"):
+        for k in ("openai", "claude", "gemini", "groq", "local", "copilot"):
             if k in payload["keys"]:
                 val = str(payload["keys"][k]).strip()
                 # Keep existing key if input was left blank or still contains masked ellipsis
@@ -180,12 +183,13 @@ def get_masked_settings(settings: Optional[Dict[str, Any]] = None) -> Dict[str, 
     s = settings or load_settings()
     masked_keys = {}
     configured_status = {}
-    for k in ("openai", "claude", "gemini", "groq", "local"):
+    for k in ("openai", "claude", "gemini", "groq", "local", "copilot"):
         raw = s["keys"].get(k, "")
         masked_keys[k] = mask_key(raw)
         configured_status[k] = bool(raw and len(raw) >= 8)
 
     configured_status["local"] = bool(s.get("models", {}).get("local"))
+    configured_status["copilot"] = configured_status["copilot"] or copilot_bridge.is_copilot_ready()
 
     return {
         "local_base_url": s.get("local_base_url", DEFAULT_SETTINGS["local_base_url"]),
@@ -1164,6 +1168,13 @@ def choose_active_llm(settings: Dict[str, Any]) -> Optional[Tuple[str, str, str]
         model = str(models.get("local", "")).strip()
         return ("local", keys.get("local", ""), model) if model else None
 
+    if pref == "copilot":
+        model = str(models.get("copilot") or DEFAULT_SETTINGS["models"]["copilot"]).strip()
+        token = (keys.get("copilot") or "").strip()
+        if token or copilot_bridge.is_copilot_ready():
+            return ("copilot", token, model)
+        return None
+
     order = [pref] if pref in ("openai", "claude", "gemini", "groq") else ["openai", "claude", "gemini", "groq"]
     for prov in order:
         k = (keys.get(prov) or "").strip()
@@ -1187,6 +1198,14 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
     Supports next-gen / reasoning models (`gpt-6-luna`, `gpt-5.6-luna`, `gpt-6.1-sol`, `o3-mini`, etc.)
     which reject non-default `temperature` and require `max_completion_tokens` or `/v1/responses`.
     """
+    if provider == "copilot":
+        return copilot_bridge.call_copilot_sync(
+            model=model or DEFAULT_SETTINGS["models"]["copilot"],
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            github_token=api_key,
+        )
+
     if provider == "local":
         settings = load_settings()
         base = validate_endpoint(settings.get("local_base_url", DEFAULT_SETTINGS["local_base_url"]), local_only=True)
@@ -1328,7 +1347,7 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
         idx = api_key.rfind("sk-")
         if idx > 0:
             api_key = api_key[idx:]
-    if not api_key and provider != "local":
+    if not api_key and provider not in ("local", "copilot"):
         return {"ok": False, "provider": provider, "error": f"{provider.upper()} の APIキーが未入力です。"}
 
     model = settings["models"].get(provider, DEFAULT_SETTINGS["models"].get(provider, ""))

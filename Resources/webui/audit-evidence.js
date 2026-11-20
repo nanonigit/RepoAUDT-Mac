@@ -1,6 +1,32 @@
 /* Read-only GitHub evidence and contextual conversation in the native workspace. */
 const auditRepositoryStatuses = new Map();
 let auditConversation = null;
+let auditLLMConfig = null;
+
+const AUDIT_PROVIDER_LABELS = {
+  openai: 'OpenAI',
+  claude: 'Claude',
+  gemini: 'Gemini',
+  groq: 'Groq',
+  copilot: 'GitHub Copilot',
+  local: 'Local LLM'
+};
+
+async function loadAuditLLMConfig(force = false) {
+  if (auditLLMConfig && !force) return auditLLMConfig;
+  try {
+    const resp = await fetch('/api/settings');
+    if (resp.ok) {
+      auditLLMConfig = await resp.json();
+    }
+  } catch (_) {}
+  return auditLLMConfig;
+}
+
+function getConfiguredAuditProviders(cfg) {
+  if (!cfg || !cfg.configured) return [];
+  return Object.keys(AUDIT_PROVIDER_LABELS).filter(key => Boolean(cfg.configured[key]));
+}
 
 function auditLabel(english, japanese) {
   return currentLang === 'en' ? english : japanese;
@@ -38,6 +64,55 @@ function repositoryFacts(info) {
     · ${auditDate(info.head_date)}</div>
     <div>${auditLabel('Repository last pushed', 'リポジトリの最終 Push')}: ${auditDate(info.pushed_at)}</div>
     <div>${auditLabel('Checked', '取得日時')}: ${auditDate(info.checked_at)}</div>`;
+}
+
+function pullRequestControl(repo) {
+  if (!document.documentElement.classList.contains('native-host') || repo.is_root ||
+      !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(repo.github_url || '')) return '';
+  return `<details class="audit-comparison">
+    <summary>${auditLabel('Pull request status', 'PRの進捗')}</summary>
+    <form class="issue-actions" data-repository="${escapeHtml(String(repo.id))}"
+      onsubmit="event.preventDefault(); loadPullRequestStatus(this)">
+      <label>${auditLabel('PR number or GitHub URL', 'PR番号またはGitHub URL')}
+        <input name="pull" type="text" maxlength="240" required>
+      </label>
+      <button type="submit" class="table-view-btn">${auditLabel('Check status', '状態を確認')}</button>
+    </form>
+    <div data-pull-status role="status"></div>
+  </details>`;
+}
+
+async function loadPullRequestStatus(form) {
+  const output = form.parentElement.querySelector('[data-pull-status]');
+  const button = form.querySelector('button');
+  button.disabled = true;
+  output.textContent = auditLabel('Checking GitHub…', 'GitHubを確認中…');
+  try {
+    const info = await auditRequest('pull-request', {
+      repository: form.dataset.repository, pull: form.elements.pull.value.trim()
+    });
+    const states = {
+      open: auditLabel('Open', '進行中'),
+      draft: auditLabel('Draft', '下書き'),
+      closed: auditLabel('Closed', 'クローズ済み'),
+      merged: auditLabel('Merged', 'マージ済み')
+    };
+    const head = info.head_repository || auditLabel('Source repository unavailable', '変更元のリポジトリを取得できません');
+    const branch = (repo, ref) => escapeHtml(repo + ':' + ref);
+    const merge = info.merge_commit
+      ? `<p>${auditLabel('Integrated commit for re-audit', '再監査に使う取り込みコミット')}
+        ${auditLink('https://github.com/' + info.base_repository + '/commit/' + info.merge_commit, info.merge_commit.slice(0, 9))}
+        <button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${escapeHtml(info.merge_commit)}">
+          ${auditLabel('Copy SHA', 'SHAをコピー')}
+        </button></p>` : '';
+    output.innerHTML = `<p>${auditLink(info.url, '#' + info.number)} · ${states[info.status]}
+      · ${auditDate(info.merged_at || info.updated_at)}</p>
+      <p><code>${branch(head, info.head_ref)} → ${branch(info.base_repository, info.base_ref)}</code></p>${merge}`;
+  } catch (error) {
+    output.textContent = auditLabel('PR status unavailable: ', 'PRの状態を取得できません：') + error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function updateAuditRepositoryStatus(hero, repo, force = false) {
@@ -171,16 +246,21 @@ function findingSourceControls(repo, issue, file) {
   };
   const canVerify = issue.scanner === 'authorization-evidence' && issue.diff
     && repo.source_revision?.kind === 'github_commit';
-  return `<div class="finding-source" data-context="${escapeHtml(JSON.stringify(context))}">
+  const canCopilotIssue = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(repo.github_url || '');
+  return `<div class="finding-source" data-context="${escapeHtml(JSON.stringify(context))}" data-finding-title="${escapeHtml(String(issue.title || ''))}" data-finding-severity="${escapeHtml(String(issue.severity || ''))}" data-finding-desc="${escapeHtml(String(issue.description || issue.fix || ''))}">
     <div class="issue-actions">
       <button type="button" class="table-view-btn" data-load-finding-source onclick="loadFindingSource(this)">
         ${auditLabel('Compare current source', '現在のソースを照合')}</button>
       <button type="button" class="table-view-btn" onclick="chatAboutFinding(this)">
         ${auditLabel('Ask AI about this finding', 'この指摘をAIに相談')}</button>
+      ${canCopilotIssue
+        ? `<button type="button" class="table-view-btn" onclick="createCopilotIssueForFinding(this)">
+          ${auditLabel('Assign to Copilot', 'Copilot に修正 Issue を依頼')}</button>` : ''}
       ${canVerify
         ? `<button type="button" class="table-view-btn" onclick="verifyFindingDiff(this)">
           ${auditLabel('Verify diff locally', '修正差分をローカル検証')}</button>` : ''}
     </div>
+    <div data-copilot-issue role="status"></div>
     <div data-diff-verification role="status"></div>
     ${canVerify ? `<form class="issue-actions" onsubmit="event.preventDefault(); verifyRemediationCommit(this)">
       <label>${auditLabel('Remediation commit SHA', '修正コミットのSHA')}
@@ -194,6 +274,40 @@ function findingSourceControls(repo, issue, file) {
     ${disclosureEditor(repo, issue)}
     <div data-evidence-result aria-live="polite"></div>
   </div>`;
+}
+
+async function createCopilotIssueForFinding(button) {
+  const panel = button.closest('.finding-source');
+  const output = panel.querySelector('[data-copilot-issue]');
+  const {repository, path, line} = JSON.parse(panel.dataset.context);
+  const findingTitle = panel.dataset.findingTitle || 'Security/Audit Finding';
+  const severity = panel.dataset.findingSeverity || 'medium';
+  const desc = panel.dataset.findingDesc || '';
+  const title = `[RepoAUDT] Fix ${findingTitle} (${path}:${line})`;
+  const body = [
+    `## Audit Finding`,
+    `- **Title**: ${findingTitle}`,
+    `- **Severity**: ${severity}`,
+    `- **Location**: \`${path}:${line}\``,
+    desc ? `\n## Details\n${desc}` : '',
+    `\n## Request\nPlease investigate and open a PR to fix this issue safely.`
+  ].filter(Boolean).join('\n');
+
+  button.disabled = true;
+  output.textContent = auditLabel('Creating GitHub Issue for Copilot…', 'Copilot 用 GitHub Issue を作成中…');
+  try {
+    const result = await auditRequest('copilot-issue', {
+      repository, title, body, assign_copilot: true
+    });
+    const badge = result.copilot_assigned
+      ? auditLabel('Assigned to @copilot', '@copilot にアサイン済み')
+      : auditLabel('Issue created (assign @copilot manually if needed)', 'Issue を作成しました（必要に応じて @copilot をアサインしてください）');
+    output.innerHTML = `${auditLink(result.issue_url, '#' + (result.issue_number || 'Issue'))} · ${escapeHtml(badge)}`;
+  } catch (error) {
+    output.textContent = auditLabel('Failed to create Issue: ', 'Issue 作成に失敗：') + error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function verifyRemediationCommit(form) {
@@ -302,18 +416,212 @@ function closeAuditChat() {
   document.getElementById('app-workspace')?.removeAttribute('inert');
 }
 
-function openAuditChat(context = null) {
-  const id = String(selectedDiagram?.id || '');
-  if (!auditConversation || auditConversation.repository !== id || context) {
-    auditConversation = {repository: id, context, messages: [], pending: false, draft: '', path: '', line: ''};
+function buildAuditStarter(repo, context) {
+  if (!repo || repo.is_root) return {greeting: '', suggestions: []};
+  const issues = typeof getWorkspaceIssues === 'function' ? getWorkspaceIssues(repo) : [];
+  if (context && (context.title || context.path)) {
+    const sev = context.severity ? `[${String(context.severity).toUpperCase()}] ` : '';
+    const loc = context.path ? `${context.path}${context.line ? ':' + context.line : ''}` : '';
+    const desc = context.desc ? `\n${context.desc}` : '';
+    const greeting = auditLabel(
+      `Loaded finding for ${repo.repo}:\n${sev}${context.title || loc}${loc && context.title ? ' (' + loc + ')' : ''}${desc}\n\nWhat would you like to do with this finding?`,
+      `「${repo.repo}」の指摘を読み込みました：\n${sev}${context.title || loc}${loc && context.title ? ' (' + loc + ')' : ''}${desc}\n\nこの指摘について何をしますか？`
+    );
+    const targetLabel = context.title || loc || 'this finding';
+    return {
+      greeting,
+      suggestions: [
+        {
+          label: auditLabel('🛠️ Propose a safe code fix', '🛠️ 安全な修正案を提案して'),
+          prompt: auditLabel(
+            `Propose a concrete, defensive code fix for "${targetLabel}"${loc ? ' at ' + loc : ''}.`,
+            `「${targetLabel}」${loc ? '（' + loc + '）' : ''}に対する具体的で安全な修正案（コード例）を提案してください。`
+          )
+        },
+        {
+          label: auditLabel('🔎 Check if still present on GitHub', '🔎 最新コードでまだ発生しているか確認'),
+          prompt: auditLabel(
+            `Check the latest GitHub commit for "${targetLabel}"${loc ? ' at ' + loc : ''} and tell me if it is still present.`,
+            `最新の GitHub コミットを確認して、「${targetLabel}」${loc ? '（' + loc + '）' : ''}が現在も残っているか教えてください。`
+          )
+        },
+        {
+          label: auditLabel('🧪 Check false positive likelihood', '🧪 誤検知の可能性を確認'),
+          prompt: auditLabel(
+            `Evaluate whether "${targetLabel}" could be a false positive and what I should verify.`,
+            `「${targetLabel}」が誤検知である可能性と、確認すべきポイントを教えてください。`
+          )
+        }
+      ]
+    };
   }
-  renderAuditChat();
+
+  const topList = issues.slice(0, 3).map(i => `• [${String(i.severity || 'info').toUpperCase()}] ${i.title || ''}`).join('\n');
+  const greeting = issues.length > 0
+    ? auditLabel(
+        `Loaded "${repo.repo}" (${issues.length} saved findings):\n${topList}\n\nWhat would you like to ask or check?`,
+        `「${repo.repo}」を読み込みました（保存済みの指摘 ${issues.length}件）：\n${topList}\n\nこのリポジトリについて何を確認・相談しますか？`
+      )
+    : auditLabel(
+        `Loaded "${repo.repo}". What would you like to ask or check?`,
+        `「${repo.repo}」を読み込みました。このリポジトリについて何を確認・相談しますか？`
+      );
+
+  const suggestions = [
+    ...(issues.length > 0 ? [{
+      label: auditLabel(`🔍 Prioritize ${issues.length} saved findings`, `🔍 指摘（${issues.length}件）の修正方針を相談`),
+      prompt: auditLabel(
+        `Summarize the ${issues.length} saved findings in ${repo.repo} (${issues.slice(0, 3).map(i => i.title).join('; ')}) and suggest a prioritized fix plan.`,
+        `${repo.repo} の保存済み指摘 ${issues.length}件（${issues.slice(0, 3).map(i => i.title).join('、')} など）について、優先度と修正方針を提案してください。`
+      )
+    }] : []),
+    {
+      label: auditLabel('🔄 What changed since the audit?', '🔄 監査時点から何が変わった？'),
+      prompt: auditLabel(
+        `What changed in ${repo.repo} since the audited commit?`,
+        `${repo.repo} について、監査時点のコミットから何が変わったか教えてください。`
+      )
+    },
+    {
+      label: auditLabel('🏗️ Summarize architecture & risks', '🏗️ 構成と主なリスクを要約'),
+      prompt: auditLabel(
+        `Summarize the architecture and key security/quality risks of ${repo.repo}.`,
+        `${repo.repo} の構成と主なセキュリティ・品質リスクを要約してください。`
+      )
+    }
+  ];
+  return {greeting, suggestions};
 }
 
-function chatAboutFinding(button) {
-  const context = JSON.parse(button.closest('.finding-source').dataset.context);
-  openAuditChat(context);
+function openAuditChat(context = null, preferredProvider = '') {
+  const id = String(selectedDiagram?.id || '');
+  if (!auditConversation || auditConversation.repository !== id || context || preferredProvider) {
+    const starter = buildAuditStarter(selectedDiagram, context);
+    auditConversation = {
+      repository: id,
+      context,
+      messages: [],
+      greeting: starter.greeting,
+      suggestions: starter.suggestions,
+      pending: false,
+      draft: '',
+      path: context?.path || '',
+      line: context?.line ? String(context.line) : '',
+      selectedProvider: preferredProvider || ''
+    };
+  }
+  renderAuditChat();
+  loadAuditLLMConfig(true).then(() => {
+    if (auditChatVisible()) renderAuditChat();
+  });
+}
+
+function chatAboutFinding(button, preferredProvider = '') {
+  const panel = button.closest('.finding-source') || button.closest('.audit-issue')?.querySelector('.finding-source');
+  const issueEl = button.closest('.audit-issue');
+  const baseContext = panel ? JSON.parse(panel.dataset.context) : {};
+  const context = {
+    ...baseContext,
+    title: panel?.dataset.findingTitle || issueEl?.querySelector('.issue-title')?.textContent?.trim() || '',
+    severity: panel?.dataset.findingSeverity || issueEl?.querySelector('.issue-severity')?.textContent?.trim() || '',
+    desc: panel?.dataset.findingDesc || issueEl?.querySelector('.saved-finding-description')?.textContent?.trim() || ''
+  };
+  openAuditChat(context, preferredProvider);
   publishNativeWorkspace('chat');
+}
+
+function closeFindingContextMenu() {
+  document.getElementById('finding-context-menu')?.remove();
+}
+
+function showFindingContextMenu(event, issueEl) {
+  event.preventDefault();
+  closeFindingContextMenu();
+
+  const panel = issueEl.querySelector('.finding-source');
+  const baseContext = panel ? JSON.parse(panel.dataset.context) : {};
+  const titleText = panel?.dataset.findingTitle || issueEl.querySelector('.issue-title')?.textContent?.trim() || '';
+  const severityText = panel?.dataset.findingSeverity || issueEl.querySelector('.issue-severity')?.textContent?.trim() || '';
+  const metaText = issueEl.querySelector('.issue-file')?.textContent?.trim() || '';
+  const descText = panel?.dataset.findingDesc || issueEl.querySelector('.saved-finding-description')?.textContent?.trim() || '';
+  const context = {...baseContext, title: titleText, severity: severityText, desc: descText};
+
+  const menu = document.createElement('div');
+  menu.id = 'finding-context-menu';
+  menu.setAttribute('role', 'menu');
+  Object.assign(menu.style, {
+    position: 'fixed',
+    left: `${Math.min(event.clientX, window.innerWidth - 240)}px`,
+    top: `${Math.min(event.clientY, window.innerHeight - 140)}px`,
+    zIndex: '10000',
+    minWidth: '210px',
+    padding: '6px',
+    borderRadius: '10px',
+    background: 'rgba(30, 32, 40, 0.96)',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.45)',
+    backdropFilter: 'blur(12px)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px'
+  });
+
+  const makeItem = (label, onClick) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('role', 'menuitem');
+    btn.textContent = label;
+    Object.assign(btn.style, {
+      textAlign: 'left',
+      padding: '7px 10px',
+      borderRadius: '6px',
+      border: 'none',
+      background: 'transparent',
+      color: '#f8fafc',
+      fontSize: '0.84rem',
+      cursor: 'pointer'
+    });
+    btn.onmouseenter = () => { btn.style.background = 'rgba(56, 189, 248, 0.22)'; };
+    btn.onmouseleave = () => { btn.style.background = 'transparent'; };
+    btn.onclick = () => {
+      closeFindingContextMenu();
+      onClick();
+    };
+    return btn;
+  };
+
+  menu.append(
+    makeItem(auditLabel('🤖 Ask Copilot about this finding', '🤖 Copilot にこの指摘を相談'), () => {
+      openAuditChat(context, 'copilot');
+      publishNativeWorkspace('chat');
+    }),
+    makeItem(auditLabel('💬 Ask AI Chat', '💬 監査チャットに相談'), () => {
+      openAuditChat(context, '');
+      publishNativeWorkspace('chat');
+    }),
+    makeItem(auditLabel('📋 Copy finding details', '📋 指摘内容をコピー'), () => {
+      const text = [titleText, metaText, descText].filter(Boolean).join('\n');
+      navigator.clipboard?.writeText(text).catch(() => {});
+    })
+  );
+
+  document.body.append(menu);
+}
+
+if (!window.__repoaudtFindingMenuBound) {
+  window.__repoaudtFindingMenuBound = true;
+  document.addEventListener('contextmenu', event => {
+    const issueEl = event.target?.closest?.('.audit-issue');
+    if (issueEl) {
+      showFindingContextMenu(event, issueEl);
+    } else {
+      closeFindingContextMenu();
+    }
+  });
+  document.addEventListener('click', closeFindingContextMenu);
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeFindingContextMenu();
+  });
 }
 
 function renderAuditChat() {
@@ -327,9 +635,43 @@ function renderAuditChat() {
     document.getElementById('app-workspace')?.setAttribute('inert', '');
   }
   const context = state.context;
+  const cfg = auditLLMConfig;
+  const configured = getConfiguredAuditProviders(cfg);
+  const activeProv = cfg?.active_provider && configured.includes(cfg.active_provider)
+    ? cfg.active_provider
+    : (configured[0] || '');
+  if (!state.selectedProvider || !configured.includes(state.selectedProvider)) {
+    state.selectedProvider = activeProv;
+  }
+  const formatProvider = prov => {
+    const label = AUDIT_PROVIDER_LABELS[prov] || prov;
+    const model = cfg?.models?.[prov] || '';
+    return model ? `${label} (${model})` : label;
+  };
+  const aiStatusHtml = !cfg
+    ? `<p class="audit-note">${auditLabel('Checking configured AI providers…', '接続済みAIを確認中…')}</p>`
+    : configured.length === 0
+      ? `<div class="audit-chat-error" role="status" style="padding: 8px 12px; border-radius: 8px; border: 1px solid currentColor; margin-top: 8px;">
+          ${auditLabel(
+            'No AI provider is connected yet. Open "Connections > AI connections" in the left sidebar to configure OpenAI, Claude, Gemini, Groq, GitHub Copilot, or a Local LLM.',
+            'AI がまだ1つも接続されていません。左サイドバーの「接続 ＞ AI 接続」から OpenAI / Claude / Gemini / Groq / GitHub Copilot / ローカル LLM のいずれかを接続してください。'
+          )}
+        </div>`
+      : configured.length === 1
+        ? `<p class="audit-note" style="margin-top: 6px;">🤖 ${auditLabel('Active AI', '使用中のAI')}: <strong>${escapeHtml(formatProvider(configured[0]))}</strong></p>`
+        : `<div class="issue-actions" style="margin-top: 8px; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
+              <span>🤖 ${auditLabel('AI model', '使用AI')}</span>
+              <select id="audit-chat-provider">
+                ${configured.map(prov => `<option value="${escapeHtml(prov)}" ${prov === state.selectedProvider ? 'selected' : ''}>${escapeHtml(formatProvider(prov))}</option>`).join('')}
+              </select>
+            </label>
+          </div>`;
+
   section.innerHTML = `<div class="audit-chat-inner">
     <header><h2>${auditLabel('Audit chat', '監査チャット')}</h2>
       <p>${escapeHtml(selectedDiagram?.is_root ? '' : (selectedDiagram?.repo || ''))}</p>
+      ${aiStatusHtml}
     </header>
     ${!selectedDiagram || selectedDiagram.is_root ? `<p>${auditLabel('Select a saved repository from the sidebar.', 'サイドバーから保存済みのリポジトリを選択してください。')}</p>` : `
     ${context ? `<code>${escapeHtml(context.path)}:${context.line}</code>` : `
@@ -340,24 +682,50 @@ function renderAuditChat() {
           <input name="line" type="number" min="1" max="1000000" value="${escapeHtml(state.line)}"></label>
       </div>`}
     <div class="audit-chat-messages" aria-live="polite">
+      ${state.greeting ? `<article>
+        <strong>${escapeHtml(state.selectedProvider === 'copilot' ? 'GitHub Copilot' : 'AI')}</strong>
+        <p style="white-space: pre-line;">${escapeHtml(state.greeting)}</p>
+      </article>` : ''}
       ${state.latest ? `<details><summary>${auditLabel('Latest GitHub evidence', '最新のGitHub確認結果')}</summary>
         ${state.latest.path ? sourceComparison(state.latest) : repositoryFacts(state.latest)}</details>` : ''}
       ${state.messages.map(message => `<article>
-        <strong>${message.role === 'user' ? auditLabel('You', 'あなた') : 'AI'}</strong>
+        <strong>${message.role === 'user'
+          ? auditLabel('You', 'あなた')
+          : escapeHtml(message.provider ? `AI (${AUDIT_PROVIDER_LABELS[message.provider] || message.provider}${message.model ? ' · ' + message.model : ''})` : 'AI')}</strong>
         <p>${escapeHtml(message.text)}</p>
       </article>`).join('')}
-      ${state.pending ? `<p role="status">${auditLabel('Checking GitHub and waiting for AI…', 'GitHub を確認し、AI の回答を待っています…')}</p>` : ''}
+      ${state.pending ? `<p class="audit-chat-pending" role="status"><span class="audit-spinner" aria-hidden="true"></span><span>${auditLabel('Checking GitHub and waiting for AI…', 'GitHub を確認し、AI の回答を待っています…')}</span></p>` : ''}
       ${state.error ? `<p class="audit-chat-error" role="alert">${escapeHtml(state.error)}</p>` : ''}
     </div>
+    ${state.suggestions && state.suggestions.length && !state.pending ? `<div class="issue-actions" style="margin-bottom: 8px; flex-wrap: wrap;">
+      ${state.suggestions.map((item, idx) => `<button type="button" class="table-view-btn" data-audit-suggestion="${idx}">${escapeHtml(item.label)}</button>`).join('')}
+    </div>` : ''}
     <form>
       <label for="audit-question">${auditLabel('Question', '質問')}</label>
       <textarea id="audit-question" required maxlength="4000" rows="3" placeholder="${auditLabel('What changed since the audit?', '監査時点から何が変わった？')}">${escapeHtml(state.draft)}</textarea>
       <div class="issue-actions">
-        <button class="table-view-btn workspace-primary" type="submit" ${state.pending ? 'disabled' : ''}>${auditLabel('Check GitHub and ask AI', 'GitHubを確認してAIに聞く')}</button>
+        <button class="table-view-btn workspace-primary" type="submit" ${state.pending ? 'disabled' : ''}>
+          ${state.pending
+            ? `<span class="audit-spinner" aria-hidden="true"></span> ${auditLabel('Waiting for AI…', 'AI 応答待ち…')}`
+            : auditLabel('Check GitHub and ask AI', 'GitHubを確認してAIに聞く')}
+        </button>
       </div>
       <p class="audit-note">${auditLabel('Your question, recent conversation and evidence metadata are sent to the configured AI provider.', '質問・直近の会話・監査の比較結果を設定済みAIに送ります。')}</p>
     </form>`}
   </div>`;
+  const providerSelect = section.querySelector('#audit-chat-provider');
+  if (providerSelect) {
+    providerSelect.onchange = () => { state.selectedProvider = providerSelect.value; };
+  }
+  for (const btn of section.querySelectorAll('[data-audit-suggestion]')) {
+    btn.onclick = () => {
+      const idx = Number(btn.dataset.auditSuggestion);
+      const item = state.suggestions?.[idx];
+      if (!item) return;
+      state.draft = item.prompt;
+      sendAuditQuestion(state);
+    };
+  }
   const input = section.querySelector('textarea');
   if (!input) return;
   input.oninput = () => { state.draft = input.value; };
@@ -389,11 +757,18 @@ async function sendAuditQuestion(state) {
   renderAuditChat();
   try {
     const response = await auditRequest('chat', {
-      repository: state.repository, ...location, question, history, language: currentLang
+      repository: state.repository, ...location, question, history, language: currentLang,
+      ...(state.selectedProvider ? {provider: state.selectedProvider} : {})
     });
     state.latest = response;
-    if (response.answer) state.messages.push({role: 'assistant', text: response.answer});
-    else state.error = response.ai_error;
+    if (response.answer) {
+      state.messages.push({
+        role: 'assistant',
+        text: response.answer,
+        provider: response.provider,
+        model: response.model
+      });
+    } else state.error = response.ai_error;
   } catch (error) {
     state.error = error.message;
     if (!state.draft) state.draft = question;

@@ -126,8 +126,11 @@ final class WebViewCoordinator: NSObject, ObservableObject, WKNavigationDelegate
     var language = "ja"
     private var pageLoaded = false
 
-    func send(_ command: String, value: String = "") {
-        guard pageLoaded else { return }
+    func send(_ command: String, value: String = "", completion: (() -> Void)? = nil) {
+        guard pageLoaded else {
+            completion?()
+            return
+        }
         let script = """
         const previous = window.nativeWorkspaceQueue || Promise.resolve();
         const task = previous.catch(() => {}).then(() => nativeWorkspaceCommand(command, value));
@@ -141,6 +144,7 @@ final class WebViewCoordinator: NSObject, ObservableObject, WKNavigationDelegate
                 self?.loadError = (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription
                 self?.ready = false
             }
+            completion?()
         }
     }
 

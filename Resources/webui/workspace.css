@@ -239,3 +239,6 @@
 .audit-chat-messages article { border-top: 1px solid var(--workspace-border); padding: 12px 0; }
 .audit-chat-messages article p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .audit-chat-error { color: var(--workspace-danger-text); }
+.audit-chat-pending { display: inline-flex; align-items: center; gap: 8px; padding: 10px 0; color: var(--workspace-muted); font-size: 0.9rem; }
+.audit-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(148, 163, 184, 0.35); border-top-color: currentColor; border-radius: 50%; animation: audit-spin 0.75s linear infinite; flex-shrink: 0; }
+@keyframes audit-spin { to { transform: rotate(360deg); } }

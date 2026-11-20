@@ -9,134 +9,7 @@ from pathlib import Path
 
 BASE_DIR = Path(os.environ.get("REPOCHEX_SCAN_DIR") or Path.cwd())
 
-TABLE_SCHEMAS = {
-    'companies': {
-        'name': 'companies',
-        'logical_name': '企業・組織マスタ',
-        'category': '組織・アカウント管理',
-        'desc': 'MAICEを利用する契約企業の基本アカウント情報、契約プラン（Enterprise/Standard）、請求状態、ロケール・タイムゾーン設定を統括管理する最上位エンティティです。',
-        'pk': 'id (UUID)',
-        'columns': [
-            {'name': 'id', 'type': 'UUID', 'constraints': 'PK, NOT NULL', 'desc': '企業一意識別子 (v4 UUID)'},
-            {'name': 'name', 'type': 'VARCHAR(255)', 'constraints': 'NOT NULL', 'desc': '企業正式名称'},
-            {'name': 'code', 'type': 'VARCHAR(64)', 'constraints': 'UNIQUE, NOT NULL', 'desc': '企業識別コード (URLスラッグ・招待コード)'},
-            {'name': 'plan_tier', 'type': 'VARCHAR(32)', 'constraints': "DEFAULT 'standard'", 'desc': '契約プラン [starter, standard, enterprise]'},
-            {'name': 'billing_status', 'type': 'VARCHAR(32)', 'constraints': "DEFAULT 'active'", 'desc': '請求状態 [trial, active, past_due, canceled]'},
-            {'name': 'country_code', 'type': 'VARCHAR(8)', 'constraints': "DEFAULT 'JP'", 'desc': 'ISO国コード (JP, US, MM, etc.)'},
-            {'name': 'timezone', 'type': 'VARCHAR(64)', 'constraints': "DEFAULT 'Asia/Tokyo'", 'desc': '企業標準タイムゾーン'},
-            {'name': 'created_at', 'type': 'TIMESTAMPTZ', 'constraints': 'DEFAULT NOW()', 'desc': 'アカウント作成日時'},
-            {'name': 'updated_at', 'type': 'TIMESTAMPTZ', 'constraints': 'DEFAULT NOW()', 'desc': '最終更新日時'}
-        ],
-        'relations': [
-            {'type': '1:N', 'target': 'positions.company_id', 'desc': '企業に紐づく募集求人枠'},
-            {'type': '1:N', 'target': 'company_memberships.company_id', 'desc': '企業に所属する人事・面接官ユーザー'},
-            {'type': '1:N', 'target': 'assessments.company_id', 'desc': '企業が実施するAI面接定義'}
-        ],
-        'indexes': ['PRIMARY KEY (id)', 'UNIQUE INDEX (code)', 'INDEX (billing_status, plan_tier)'],
-        'sample_query': "SELECT id, name, plan_tier, billing_status FROM companies WHERE billing_status = 'active';"
-    },
-    'positions': {
-        'name': 'positions',
-        'logical_name': '募集求人・ポジション枠',
-        'category': '採用求人管理',
-        'desc': '採用企業が募集する職種・求人枠情報。配属部署、応募要件、選考ステータス、必須スキル要件をJSONBで保持します。',
-        'pk': 'id (UUID)',
-        'columns': [
-            {'name': 'id', 'type': 'UUID', 'constraints': 'PK, NOT NULL', 'desc': '求人枠一意識別子'},
-            {'name': 'company_id', 'type': 'UUID', 'constraints': 'FK -> companies.id, NOT NULL', 'desc': '所属企業のUUID'},
-            {'name': 'title', 'type': 'VARCHAR(255)', 'constraints': 'NOT NULL', 'desc': '職種・求人タイトル (例: シニアバックエンドエンジニア)'},
-            {'name': 'department_id', 'type': 'UUID', 'constraints': 'FK -> departments.id', 'desc': '配属部署UUID'},
-            {'name': 'employment_type', 'type': 'VARCHAR(32)', 'constraints': 'NOT NULL', 'desc': '雇用形態 [full_time, contract, part_time, internship]'},
-            {'name': 'status', 'type': 'VARCHAR(32)', 'constraints': "DEFAULT 'open'", 'desc': '募集ステータス [draft, open, paused, closed]'},
-            {'name': 'experience_level', 'type': 'VARCHAR(32)', 'constraints': 'NULLABLE', 'desc': '必要経験年数・レベル'},
-            {'name': 'required_skills', 'type': 'JSONB', 'constraints': "DEFAULT '[]'", 'desc': '必須スキル・職歴キーワード配列'},
-            {'name': 'created_at', 'type': 'TIMESTAMPTZ', 'constraints': 'DEFAULT NOW()', 'desc': '求人作成日時'},
-            {'name': 'updated_at', 'type': 'TIMESTAMPTZ', 'constraints': 'DEFAULT NOW()', 'desc': '最終更新日時'}
-        ],
-        'relations': [
-            {'type': 'N:1', 'target': 'companies.id', 'desc': '所属元企業'},
-            {'type': '1:N', 'target': 'assessments.position_id', 'desc': '求人に紐づくAI面接・適性検査'}
-        ],
-        'indexes': ['PRIMARY KEY (id)', 'INDEX (company_id, status)', 'INDEX (department_id)'],
-        'sample_query': "SELECT id, title, status, employment_type FROM positions WHERE company_id = :companyId AND status = 'open';"
-    },
-    'assessments': {
-        'name': 'assessments',
-        'logical_name': 'AI面接・選考アセスメント定義',
-        'category': '面接選考定義',
-        'desc': '求人に対して実施されるAI面接の選考フェーズ定義。設問設計、採点Rubric、受検有効期限、AI音声モデル設定を統括します。',
-        'pk': 'id (UUID)',
-        'columns': [
-            {'name': 'id', 'type': 'UUID', 'constraints': 'PK, NOT NULL', 'desc': '面接定義一意識別子'},
-            {'name': 'company_id', 'type': 'UUID', 'constraints': 'FK -> companies.id, NOT NULL', 'desc': '所属企業UUID'},
-            {'name': 'position_id', 'type': 'UUID', 'constraints': 'FK -> positions.id, NOT NULL', 'desc': '対象求人UUID'},
-            {'name': 'title', 'type': 'VARCHAR(255)', 'constraints': 'NOT NULL', 'desc': '面接タイトル (例: 1次AI技術面接)'},
-            {'name': 'interview_type', 'type': 'VARCHAR(32)', 'constraints': "DEFAULT 'ai_voice_v2'", 'desc': '面接形式 [ai_voice_v2, asynchronous_video, screening_survey]'},
-            {'name': 'time_limit_mins', 'type': 'INTEGER', 'constraints': 'DEFAULT 30', 'desc': '最大受検制限時間 (分)'},
-            {'name': 'rubric_template_id', 'type': 'UUID', 'constraints': 'NULLABLE', 'desc': '適用評価ルーブリックID'},
-            {'name': 'status', 'type': 'VARCHAR(32)', 'constraints': "DEFAULT 'active'", 'desc': 'ステータス [draft, active, archived]'},
-            {'name': 'created_at', 'type': 'TIMESTAMPTZ', 'constraints': 'DEFAULT NOW()', 'desc': '作成日時'},
-            {'name': 'updated_at', 'type': 'TIMESTAMPTZ', 'constraints': 'DEFAULT NOW()', 'desc': '最終更新日時'}
-        ],
-        'relations': [
-            {'type': 'N:1', 'target': 'positions.id', 'desc': '対象募集求人'},
-            {'type': '1:N', 'target': 'ai_interview_active_sessions.assessment_id', 'desc': '受検中セッション'},
-            {'type': '1:N', 'target': 'ai_interview_evaluations.assessment_id', 'desc': '面接評価レポート'}
-        ],
-        'indexes': ['PRIMARY KEY (id)', 'INDEX (company_id, position_id)', 'INDEX (status)'],
-        'sample_query': "SELECT id, title, interview_type, time_limit_mins FROM assessments WHERE position_id = :positionId AND status = 'active';"
-    },
-    'ai_interview_active_sessions': {
-        'name': 'ai_interview_active_sessions',
-        'logical_name': 'リアルタイム受検セッション情報',
-        'category': 'リアルタイム面接管理',
-        'desc': 'WebRTC/WebSocket接続状態、質問進行インデックス、一時的音声回答バッファを管理し、面接の中断復帰やリアルタイムAI判定を支える高頻度更新テーブルです。',
-        'pk': 'id (UUID)',
-        'columns': [
-            {'name': 'id', 'type': 'UUID', 'constraints': 'PK, NOT NULL', 'desc': 'セッション一意識別子'},
-            {'name': 'assessment_id', 'type': 'UUID', 'constraints': 'FK -> assessments.id, NOT NULL', 'desc': '受検アセスメントID'},
-            {'name': 'candidate_id', 'type': 'UUID', 'constraints': 'FK -> candidates.id, NOT NULL', 'desc': '受検候補者ID'},
-            {'name': 'socket_id', 'type': 'VARCHAR(128)', 'constraints': 'NULLABLE', 'desc': '現在接続中のWebSocket接続ID'},
-            {'name': 'current_step', 'type': 'INTEGER', 'constraints': 'DEFAULT 1', 'desc': '現在進行中の設問番号 (1〜N)'},
-            {'name': 'status', 'type': 'VARCHAR(32)', 'constraints': "DEFAULT 'in_progress'", 'desc': '受検状態 [waiting, in_progress, completed, terminated]'},
-            {'name': 'started_at', 'type': 'TIMESTAMPTZ', 'constraints': 'DEFAULT NOW()', 'desc': '受検開始時刻'},
-            {'name': 'expires_at', 'type': 'TIMESTAMPTZ', 'constraints': 'NOT NULL', 'desc': 'セッション失効制限時刻'},
-            {'name': 'heartbeat_at', 'type': 'TIMESTAMPTZ', 'constraints': 'DEFAULT NOW()', 'desc': '直近クライアント生存確認時刻'},
-            {'name': 'context_payload', 'type': 'JSONB', 'constraints': "DEFAULT '{}'", 'desc': 'AI対話コンテキスト一時キャッシュ'}
-        ],
-        'relations': [
-            {'type': 'N:1', 'target': 'assessments.id', 'desc': '受検面接定義'},
-            {'type': '1:1', 'target': 'ai_interview_evaluations.session_id', 'desc': '完了後AI採点レポート'}
-        ],
-        'indexes': ['PRIMARY KEY (id)', 'INDEX (assessment_id, candidate_id)', 'INDEX (socket_id)', 'INDEX (status, expires_at)'],
-        'sample_query': "SELECT id, candidate_id, current_step, status, heartbeat_at FROM ai_interview_active_sessions WHERE status = 'in_progress' AND expires_at > NOW();"
-    },
-    'ai_interview_evaluations': {
-        'name': 'ai_interview_evaluations',
-        'logical_name': 'AI評価スコア・面接分析サマリー',
-        'category': 'AI採点・選考分析',
-        'desc': '面接完了後にLLMが生成した総合スコア、ルーブリック別評価点、強み・懸念点の要約、発話トランスクリプトを格納する評価レコードです。',
-        'pk': 'id (UUID)',
-        'columns': [
-            {'name': 'id', 'type': 'UUID', 'constraints': 'PK, NOT NULL', 'desc': '評価レコード一意識別子'},
-            {'name': 'session_id', 'type': 'UUID', 'constraints': 'FK -> ai_interview_active_sessions.id, UNIQUE', 'desc': '受検セッションID'},
-            {'name': 'assessment_id', 'type': 'UUID', 'constraints': 'FK -> assessments.id, NOT NULL', 'desc': 'アセスメント定義ID'},
-            {'name': 'candidate_id', 'type': 'UUID', 'constraints': 'FK -> candidates.id, NOT NULL', 'desc': '候補者ID'},
-            {'name': 'overall_score', 'type': 'NUMERIC(4,2)', 'constraints': 'CHECK (0-100)', 'desc': '総合評価スコア (0.00〜100.00)'},
-            {'name': 'rubric_scores', 'type': 'JSONB', 'constraints': 'NOT NULL', 'desc': '各評価項目別スコア及び根拠'},
-            {'name': 'summary_text', 'type': 'TEXT', 'constraints': 'NOT NULL', 'desc': '面接官向けAI要約サマリー (強み/弱み/懸念点)'},
-            {'name': 'full_transcript', 'type': 'JSONB', 'constraints': "DEFAULT '[]'", 'desc': '質問・回答の全発話テキスト・タイムスタンプ配列'},
-            {'name': 'ai_model_version', 'type': 'VARCHAR(64)', 'constraints': 'NOT NULL', 'desc': '採点に使用したAIモデル識別子'},
-            {'name': 'created_at', 'type': 'TIMESTAMPTZ', 'constraints': 'DEFAULT NOW()', 'desc': '評価生成完了日時'}
-        ],
-        'relations': [
-            {'type': '1:1', 'target': 'ai_interview_active_sessions.id', 'desc': '受検セッション'},
-            {'type': 'N:1', 'target': 'assessments.id', 'desc': '評価基準面接定義'}
-        ],
-        'indexes': ['PRIMARY KEY (id)', 'UNIQUE INDEX (session_id)', 'INDEX (candidate_id)', 'INDEX (assessment_id, overall_score)'],
-        'sample_query': "SELECT id, candidate_id, overall_score, summary_text, created_at FROM ai_interview_evaluations WHERE assessment_id = :assessmentId ORDER BY overall_score DESC;"
-    }
-}
+TABLE_SCHEMAS = {}
 
 TECH_SPECS = {
     "client": {
@@ -219,227 +92,17 @@ TECH_SPECS = {
 
 def get_coderabbit_review_for_repo(repo_slug, repo_name, commit_hash, advisories):
     has_cve = len(advisories) > 0
-    if repo_slug == 'plusimpact':
-        return {
-            "score": 88,
-            "status": "NEEDS_ATTENTION",
-            "summary": "全エコシステム統括レビュー: Next.js 15.3 および Express 5 への移行はおおむね良好ですが、4つのサブサービスに古いAxios（SSRF脆弱性）およびNext.js 13/14系のCVE脆弱性が残存しています。マイクロサービス間のJWT伝播において署名キャッシュの有効化を推奨します。",
-            "stats": { "critical": 4, "warning": 7, "info": 12 },
-            "walkthrough": [
-                {"title": "マイクロサービス基盤同期", "desc": "全リポジトリの最新コミット統合とDocker/Kubernetes構成の最新化"},
-                {"title": "CVEセキュリティ監視", "desc": "Axios CVE-2024-39338 および Next.js CVE-2024-34351 の修正優先度を提示"},
-                {"title": "BullMQ & Redis 分散キュー監視", "desc": "長時間推論ジョブ（音声・採点）のバックグラウンド分散処理の整合性を確認"}
-            ],
-            "action_items": [
-                {
-                    "id": "act-cve-axios",
-                    "severity": "CRITICAL",
-                    "title": "Corporate-Website & API-Service: Axios v1.7.4+ への緊急バンプ",
-                    "repo": "Corporate-Website",
-                    "cve": "CVE-2024-39338",
-                    "file": "package.json",
-                    "desc": "相対パス解釈の不備によるSSRFバイパスの脆弱性が報告されています。直ちに v1.7.4 以降へアップグレードしてください。",
-                    "fix_cmd": "npm i axios@^1.7.7",
-                    "official_source": "https://nvd.nist.gov/vuln/detail/CVE-2024-39338"
-                },
-                {
-                    "id": "act-cve-nextjs",
-                    "severity": "CRITICAL",
-                    "title": "Admin-Service & Client-App: Next.js v14.2.15+ への緊急バンプ",
-                    "repo": "Plus-Impact-Website-Admin-Service",
-                    "cve": "CVE-2024-34351",
-                    "file": "package.json",
-                    "desc": "Server Actions SSR におけるホストヘッダー偽装によるキャッシュ汚染脆弱性が報告されています。",
-                    "fix_cmd": "npm i next@^14.2.15",
-                    "official_source": "https://nvd.nist.gov/vuln/detail/CVE-2024-34351"
-                }
-            ],
-            "findings": [
-                {
-                    "type": "Security / Dependency",
-                    "severity": "CRITICAL",
-                    "file": "Corporate-Website/package.json",
-                    "title": "Axios SSRF バイパス脆弱性 (CVE-2024-39338)",
-                    "comment": "axios ^1.11.0（または古い1.x）において、相対パス処理の欠陥によりSSRFバイパスが可能です。直ちにパッチ適用済みバージョンへ固定してください。",
-                    "diff": '- "axios": "^1.1.2"\n+ "axios": "^1.7.7"'
-                },
-                {
-                    "type": "Architecture / Performance",
-                    "severity": "WARNING",
-                    "file": "maice-backend/src/middlewares/oauth-jwt.ts",
-                    "title": "Auth0 JWKS公開鍵のキャッシュTTL設定",
-                    "comment": "高トラフィック時にAuth0 JWKSエンドポイントへのリクエストがスパイクするリスクがあります。cacheMaxAge を 10 時間に設定してください。",
-                    "diff": '- jwksRequestsPerMinute: 5\n+ jwksRequestsPerMinute: 10,\n+ cache: true,\n+ cacheMaxAge: 36000000'
-                }
-            ]
-        }
-    elif repo_slug == 'maice-backend':
-        return {
-            "score": 93,
-            "status": "PASSED_WITH_WARNINGS",
-            "summary": "Core Backend レビュー: Express 5 + Knex + BullMQ の構成は高信頼性です。CORSオリジン制限とHelmetヘッダーは適切に設定されています。WebSocket切断時のRedisセッションクリーンアップ処理にタイムアウトガードの追加を推奨します。",
-            "stats": { "critical": 0, "warning": 2, "info": 5 },
-            "walkthrough": [
-                {"title": "HTTP API & セキュリティミドルウェア", "desc": "Helmet / CORS によるヘッダー保護と、Zodを用いたリクエスト入力バリデーションの強化"},
-                {"title": "WebSocket AI面接セッション管理", "desc": "リアルタイム音声ストリーム受検中のRedisセッション管理とステータス追跡"},
-                {"title": "BullMQ 非同期採点キュー", "desc": "LLM推論および音声文字起こしタスクの非同期オフロード"}
-            ],
-            "action_items": [
-                {
-                    "id": "mb-act-1",
-                    "severity": "WARNING",
-                    "title": "WebSocket切断ハンドラーにおけるゾンビセッション対策",
-                    "repo": "maice-backend",
-                    "file": "src/websocket/interview-session.ts",
-                    "desc": "ネットワーク瞬断時にRedisセッションキーがTTL切れまで残留する可能性があります。on('close') 時に明示的なクリーンアップを発行してください。",
-                    "fix_cmd": "await redisClient.del(`session:${sessionId}`);",
-                    "official_source": "https://redis.io/commands/del/"
-                }
-            ],
-            "findings": [
-                {
-                    "type": "Code Quality / Memory",
-                    "severity": "WARNING",
-                    "file": "src/websocket/interview-session.ts:84",
-                    "title": "Redisセッションの確実な解放",
-                    "comment": "クライアント切断時にRedisキーのTTL依存で破棄されています。明示的削除を追加することでRedisメモリ圧迫を防止できます。",
-                    "diff": '- // session expires via TTL\n+ await redisClient.del(`session:${sessionId}`);\n+ logger.info(`Cleaned up session ${sessionId}`);'
-                },
-                {
-                    "type": "Performance",
-                    "severity": "INFO",
-                    "file": "src/controllers/member.controller.ts:45",
-                    "title": "Knexクエリのインデックス最適化",
-                    "comment": "company_id による絞り込みに適切な複合インデックス (company_id, created_at) が利用されているか確認してください。",
-                    "diff": '+ // Ensure composite index on (company_id, created_at)\n+ query.orderBy("created_at", "desc");'
-                }
-            ]
-        }
-    elif repo_slug == 'maice-corporate':
-        return {
-            "score": 96,
-            "status": "PASSED",
-            "summary": "Next.js 15.3 App Router レビュー: React 19 / Server Components の活用が適切に行われており、Auth0セッション検証も強固です。TanStack Queryのキャッシュ無効化タイミングの統一が推奨されます。",
-            "stats": { "critical": 0, "warning": 1, "info": 4 },
-            "walkthrough": [
-                {"title": "法人ダッシュボード画面", "desc": "Next.js 15 App Router によるSSRレンダリングと企業データ表示"},
-                {"title": "候補者一覧・評価閲覧", "desc": "TanStack Query による高速ページネーションとフィルタリング"},
-                {"title": "Auth0 Enterprise SSO", "desc": "クッキーベースのセッション保護とRBACロールガード"}
-            ],
-            "action_items": [],
-            "findings": [
-                {
-                    "type": "Best Practice",
-                    "severity": "INFO",
-                    "file": "src/hooks/useCandidates.ts:28",
-                    "title": "TanStack Query staleTime の定数化",
-                    "comment": "各フックで個別にミリ秒を指定する代わりに、queryClientDefaults でグローバル定義することを推奨します。",
-                    "diff": '- staleTime: 60 * 1000\n+ staleTime: QUERY_CACHE_TIME.SHORT'
-                }
-            ]
-        }
-    elif repo_slug == 'AI_Interview_xcore':
-        return {
-            "score": 91,
-            "status": "PASSED_WITH_WARNINGS",
-            "summary": "AI_Interview_xcore レビュー: Express 5 + WebSocket (ws) + TypeScript によるパーソナリティ適応型AI面接システム（SimpleOrchestrator / 10モジュール DeepAssessment / MCP Server :8788 / PDF生成）です。WebSocket切断時のオーケストレーターインスタンス解放とOpenAI Realtime API例外時のフォールバックは適切に実装されています。",
-            "stats": { "critical": 0, "warning": 2, "info": 5 },
-            "walkthrough": [
-                {"title": "WebSocket 音声対話 & SimpleOrchestrator", "desc": "src/index.ts (:8787) と src/simple-orchestrator.ts による性格プロファイル連動型の深掘り10問生成・音声ストリーム処理"},
-                {"title": "DeepAssessment 10モジュール & 一貫性解析", "desc": "src/services/deep-assessment-service.ts および src/modules/module-1..10 による回答一貫性検証（personality-consistency-analyzer.ts）"},
-                {"title": "MCP Agent Server & Dual PDF レポート出力", "desc": "src/mcp-server.ts (:8788) による標準化AI呼び出しと、src/xcore-pdf-generator.ts / maice-pdf-generator.ts によるPDF生成"}
-            ],
-            "action_items": [
-                {
-                    "id": "xcore-act-1",
-                    "severity": "WARNING",
-                    "title": "SimpleOrchestrator セッションMapのアイドルタイムアウト解放",
-                    "repo": "AI_Interview_xcore",
-                    "file": "src/index.ts",
-                    "desc": "ブラウザ異常終了時に ws.on('close') が遅延した場合に備え、orchestrators Map にセッションTTLスイーパーを設定することを推奨します。",
-                    "fix_cmd": "setInterval(() => cleanupExpiredOrchestrators(orchestrators), 300000)",
-                    "official_source": "https://github.com/websockets/ws#how-to-detect-and-close-broken-connections"
-                }
-            ],
-            "findings": [
-                {
-                    "type": "Reliability / Session Cleanup",
-                    "severity": "WARNING",
-                    "file": "src/index.ts:50",
-                    "title": "orchestrators Map のハートビート監視",
-                    "comment": "長時間アイドル状態の WebSocket 接続に対して ping/pong タイムアウトを設定し、SimpleOrchestrator インスタンスを確実に解放してください。",
-                    "diff": '- const orchestrators = new Map<string, SimpleOrchestrator>();\n+ const orchestrators = new Map<string, SimpleOrchestrator>();\n+ // Ping/Pong heartbeat cleanup for stale sessions'
-                }
-            ]
-        }
-    elif repo_slug == 'xcore-personality':
-        return {
-            "score": 96,
-            "status": "PASSED",
-            "summary": "xcore-personality レビュー: HEXACO 6因子（QuadFC 30クアッド）と AI対話型SJT（3シナリオ・双方向フォローアップ FU1/FU2）の統合アセスメント仕様およびマルチLLMアンサンブル採点検証（xcore-ensemble-test/ensemble_test.py）、8言語レポートテンプレート（v12）が体系的に整備されています。",
-            "stats": { "critical": 0, "warning": 0, "info": 3 },
-            "walkthrough": [
-                {"title": "HEXACO 6因子 QuadFC 設問設計", "desc": "H-H（誠実・謙虚性）を含む6因子・30クアッド強制選択式による社会的望ましさバイアス耐性の確保"},
-                {"title": "AI対話型SJT & 双方向フォローアップ採点", "desc": "品質vs納期・部下の成果vs正直さ・安全性vsコストの3シナリオにおける T1/FU1/FU2 内容ベース Level 1〜4 採点"},
-                {"title": "Ideal Profile Match Rate & 8言語レポート v12", "desc": "ポジション理想プロファイル適合度（信号機判定）と P-E Fit カード・多言語 INSIGHT 出力"}
-            ],
-            "action_items": [],
-            "findings": [
-                {
-                    "type": "Verification / AI Scoring",
-                    "severity": "INFO",
-                    "file": "xcore-ensemble-test/ensemble_test.py:49",
-                    "title": "プロンプトインジェクション防御ルールの本番同期",
-                    "comment": "ensemble_test.py で検証済みの自己申告レベル無視ルールおよび文化的配慮ガイドラインが maice-backend 側プロンプトと完全一致していることを継続確認してください。"
-                }
-            ]
-        }
-    elif repo_slug == 'xCORE-Talk':
-        return {
-            "score": 94,
-            "status": "PASSED",
-            "summary": "xCORE-Talk レビュー: AI 1-on-1 定期面談の固定5設問・動的深掘りターン制御、3層レポート可視性制御（Personal / Manager / Administrator）、および内部告発・ハラスメントの痕跡完全分離（ESC-002 / COMP専用 Compliance Dashboard）が厳密に設計されています。",
-            "stats": { "critical": 0, "warning": 1, "info": 4 },
-            "walkthrough": [
-                {"title": "固定5設問 & 質問別フォローアップターン予算", "desc": "①成果と前回アクション ②KPI進捗 ③課題・業務改善提案 ④エンゲージメント(0-10) ⑤次回アクションの対話設計"},
-                {"title": "3層権限別レポート描画 (Three-Tier Visibility)", "desc": "SELF / Manager(OWN・ALL: Q3/Q4生データ非表示) / Admin(COMP) の厳格な情報分離"},
-                {"title": "ESC-002 コンプライアンス分離 & 専用ダッシュボード", "desc": "内部告発・ハラスメント検知時のManager/HR非通知・痕跡ゼロ分離と /talk/compliance 集約"}
-            ],
-            "action_items": [],
-            "findings": [
-                {
-                    "type": "Security / Access Control",
-                    "severity": "INFO",
-                    "file": "Talk/ia/capability-matrix.md",
-                    "title": "ESC-002 痕跡除去ルールのE2Eテスト維持",
-                    "comment": "maice-backend/src/features/corporate/talk/__tests__/esc002-read-surface-exclusion.test.ts と仕様書 v2.8 の同期を維持してください。"
-                }
-            ]
-        }
-    elif has_cve:
+    if has_cve:
         adv = advisories[0]
         return {
-            "score": 74,
-            "status": "NEEDS_ATTENTION",
-            "summary": f"重大な要対応セキュリティ脆弱性（{adv.get('cve', 'CVE')}）が検出されました。{adv.get('title', '')} に対する緊急パッチ適用が必要です。",
-            "stats": { "critical": len(advisories), "warning": 2, "info": 3 },
+            "score": 68,
+            "status": "ACTION_REQUIRED",
+            "summary": f"{repo_name} レビュー: 依存関係にセキュリティ脆弱性 ({adv.get('cve', 'CVE')}) が検出されました。",
+            "stats": {"critical": len(advisories), "warning": 0, "info": 1},
             "walkthrough": [
-                {"title": "依存パッケージ脆弱性監査", "desc": f"{adv.get('pkg', 'Package')} に既知のCVEが報告されています。"},
-                {"title": "最新コミット検証", "desc": f"コミット {commit_hash} における設定ファイル変更の整合性確認"}
+                {"title": "依存ライブラリ監査", "desc": f"{adv.get('pkg', 'package')} に脆弱性が報告されています"}
             ],
-            "action_items": [
-                {
-                    "id": f"act-{adv.get('cve', 'cve')}",
-                    "severity": "CRITICAL",
-                    "title": f"{adv.get('cve', 'CVE')}: {adv.get('title', '')}",
-                    "repo": repo_name,
-                    "cve": adv.get('cve', 'CVE'),
-                    "file": "package.json",
-                    "desc": adv.get('summary', adv.get('msg', '脆弱性情報')),
-                    "fix_cmd": f"npm update {adv.get('pkg', '')}",
-                    "official_source": adv.get('sources', [{}])[0].get('url', 'https://nvd.nist.gov/') if adv.get('sources') else 'https://nvd.nist.gov/'
-                }
-            ],
+            "action_items": [],
             "findings": [
                 {
                     "type": "Security / CVE",
@@ -451,7 +114,7 @@ def get_coderabbit_review_for_repo(repo_slug, repo_name, commit_hash, advisories
                 }
             ]
         }
-    else:
+    if True:
         return {
             "score": 95,
             "status": "PASSED",
@@ -474,486 +137,7 @@ def get_coderabbit_review_for_repo(repo_slug, repo_name, commit_hash, advisories
         }
 
 def get_sequences_for_repo(repo_slug, repo_name):
-    """Generate repository-specific sequence diagrams with real source file anchors."""
-    if repo_slug == 'plusimpact' or '全体エコシステム' in repo_name:
-        return [
-            {
-                "id": "seq-eco-core",
-                "title": "全体エコシステム①：MAICE AI面接 V2 & Smart Filter 統合処理フロー",
-                "short_title": "MAICE AI面接 & Smart Filter",
-                "desc": "企業人事（maice-corporate）・受検候補者（maice-individual）・maice-backend・PostgreSQL・Redis(BullMQ)・Gemini/OpenAIが協調動作する採用選考エンドツーエンド処理フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor Recruiter as 企業人事 (Browser)
-    participant CorpApp as maice-corporate<br/>src/app/dashboard/page.tsx
-    participant Auth0 as Auth0 Identity<br/>(OAuth2 / RS256 JWT)
-    participant Backend as maice-backend<br/>src/features/corporate/smart-filter/
-    participant WSRuntime as maice-backend<br/>src/features/individual/ai-interview-v2-runtime/
-    participant DB as PostgreSQL 16<br/>src/db/db.ts
-    participant Queue as Redis 7 (BullMQ)<br/>src/jobs/ai-interview-v2-scoring.worker.ts
-    participant AI as Gemini / OpenAI<br/>src/services/ai-scoring.service.ts
-    actor Candidate as 受検候補者<br/>maice-individual
-
-    Recruiter->>CorpApp: 1. 法人ポータルへログイン & 求人・Smart Filter設定
-    CorpApp->>Auth0: 2. OAuth2/PKCE 認証リクエスト
-    Auth0-->>CorpApp: 3. RS256 署名付き JWT アクセストークン発行
-    CorpApp->>Backend: 4. POST /api/corporate/smart-filter/invitations (候補者招待)
-    Backend->>DB: 5. INSERT INTO assessments & ai_interview_active_sessions
-    DB-->>Backend: 6. セッションUUID & 招待トークン確定
-    Backend-->>Candidate: 7. 受検招待メール送信 (src/queues/email-queue.ts)
-
-    Candidate->>WSRuntime: 8. 招待URLから入室 & WSS接続 (/ws/interview-v2)
-    WSRuntime->>DB: 9. enter-room & conversation-checkpoint 状態初期化
-    WSRuntime->>AI: 10. JEV発話区間・意図・十分性判定 & 深掘り質問生成
-    AI-->>WSRuntime: 11. 質問テキスト & ストリーミング音声合成 (TTS)
-    WSRuntime-->>Candidate: 12. リアルタイム音声対話 (Icebreak -> 本質問 -> Follow-up)
-
-    Candidate->>WSRuntime: 13. 全設問回答完了 (finalize-interview.ts)
-    WSRuntime->>Queue: 14. ai-interview-v2-scoring & pdf-generation ジョブ投入
-    Queue->>AI: 15. ルーブリック採点・文字起こしクリーニング・多言語翻訳
-    AI-->>Queue: 16. 構造化評価スコア & 根拠サマリー JSON
-    Queue->>DB: 17. INSERT INTO ai_interview_evaluations & PDFレポート保存
-    Backend-->>CorpApp: 18. Smart Filter 候補者一覧・適合度スコア・PDF即時反映
-"""
-            },
-            {
-                "id": "seq-eco-xcore-personality",
-                "title": "全体エコシステム②：xCORE 適性検査 (HEXACO 6因子 + AI対話型SJT アンサンブル採点)",
-                "short_title": "xCORE 適性検査 (HEXACO+SJT)",
-                "desc": "xcore-personality 仕様および maice-backend に基づく、HEXACO QuadFC（30クアッド）と AI対話型SJT（3シナリオ・双方向深掘り・マルチLLMアンサンブル採点・Ideal Profile Match Rate算出）の実行フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor Candidate as 受検候補者<br/>(maice-individual)
-    participant ExamUI as 受検クライアント<br/>HEXACO & SJT UI
-    participant Backend as maice-backend<br/>src/features/individual/exam-v2/
-    participant QuadFC as HEXACO QuadFC 算出<br/>6因子×30クアッド強制選択
-    participant SJTAgent as AI対話型 SJT 制御<br/>(S1品質vs納期 / S2部下 / S3安全)
-    participant Ensemble as マルチLLM アンサンブル採点<br/>(Claude / GPT-4o / Gemini)
-    participant MatchEngine as Match Rate & 一貫性統合<br/>position-ideal-profile
-    participant ReportV12 as レポート生成エンジン<br/>xcore-report-v12-full.html
-    actor Recruiter as 企業人事<br/>(maice-corporate)
-
-    Candidate->>ExamUI: 1. xCORE アセスメント開始 (8言語UI対応)
-    ExamUI->>Backend: 2. Part 1: HEXACO QuadFC (30クアッド・120項目) 回答送信
-    Backend->>QuadFC: 3. 6因子スコア算出 (H-H誠実謙虚性 / E / X / A / C / O)
-    QuadFC-->>Backend: 4. 6因子パーセンタイル & 18パターン INSIGHT 確定
-
-    rect rgb(15, 23, 42)
-        Note over Candidate,SJTAgent: Part 2: AI対話型 SJT (3シナリオ × 双方向フォローアップ)
-        Backend->>SJTAgent: 5. シナリオ提示 & T1 (初期回答) 受付
-        SJTAgent->>Candidate: 6. FU1 (双方向深掘り: 選んだ立場に対する反対側からの圧力提示)
-        Candidate->>SJTAgent: 7. FU1 回答 (自律性・トレードオフ認識の表明)
-        SJTAgent->>Candidate: 8. FU2 (追加ジレンマ提示・現実的な代替案/両立策の確認)
-        Candidate->>SJTAgent: 9. FU2 最終回答送信
-    end
-
-    SJTAgent->>Ensemble: 10. 文化的文脈注釈付き翻訳 & ルーブリック採点要求 (Level 1〜4)
-    Note over Ensemble: 内容ベース採点 (流暢さ非依存)<br/>①トレードオフ認識 ②推論の深さ ③一貫性<br/>L2/L3境界2要件チェック & アンサンブル合意
-    Ensemble-->>MatchEngine: 11. SJT シナリオ別スコア (L1〜L4) & 行動アンカー根拠
-    MatchEngine->>MatchEngine: 12. SJT ↔ HEXACO 一貫性チェック & 求人 Ideal Profile 適合度(Match Rate)算出
-    MatchEngine->>ReportV12: 13. テンプレート変数マッピング & P-E Fit カード生成
-    ReportV12-->>Recruiter: 14. xCORE 適性検査レポート v12 (信号機判定・面接官向け深掘り質問) 表示
-"""
-            },
-            {
-                "id": "seq-eco-xcore-talk",
-                "title": "全体エコシステム③：xCORE Talk (AI 1on1 定期面談 & 3層権限・コンプライアンス分離)",
-                "short_title": "xCORE Talk (AI 1on1 & 3層権限)",
-                "desc": "xCORE-Talk 設計仕様および maice-backend/src/features/*/talk/ に基づく、固定5設問AI 1on1面談、内部告発の痕跡完全分離（ESC-002）、および3層権限別レポート描画（Self / Manager / Admin）の実行フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor Staff as 従業員 (SELF)<br/>my-xcore-talk
-    participant TalkWS as xCORE Talk Runtime<br/>src/features/individual/xcore-talk/ws/
-    participant QPlan as 5設問 & ターン予算制御<br/>talk-question-plan.ts
-    participant CompGuard as コンプライアンス・ESC-002判定<br/>src/features/corporate/talk/talk-compliance/
-    participant CompDash as Compliance Dashboard<br/>(/talk/compliance COMP専用)
-    participant Visibility as 3層可視性フィルタ<br/>talk-utterance-visibility.ts
-    participant ReportV44 as 3層レポート生成 (v44)<br/>talk-report/ (Self / Mgr / Admin)
-    actor Manager as 上長 (OWN/ALL) & 管理者 (COMP)
-
-    Staff->>TalkWS: 1. 定期 AI 1-on-1 セッション開始 (/ws/xcore-talk)
-    TalkWS->>QPlan: 2. 前回アクション履歴・個人KPI・辞書コンテキスト読込 (talk-previous-context.ts)
-    QPlan-->>Staff: 3. 固定5設問対話 (①成果・前回行動 ②KPI進捗 ③課題・改善提案 ④エンゲージメント0-10 ⑤次回行動)
-    Staff->>TalkWS: 4. 音声/テキスト回答 & 質問別ターン予算に応じた深掘り対話
-
-    TalkWS->>CompGuard: 5. 発話内容のハラスメント・内部告発 (Whistleblowing) 検知
-    alt 内部告発・ESC-002 事案を検知した場合
-        CompGuard->>CompDash: 6. COMP権限専用 Compliance Dashboard へ分離転送 (ESC-002時はHRも完全除外)
-        Note over CompGuard,Visibility: Manager/Personalレポートからは「何もなかった通常回」と<br/>一切見分けがつかない形で痕跡を完全除去 (Trace-Free Redaction)
-    end
-
-    TalkWS->>Visibility: 7. 閲覧者ロール別の発話・分析データフィルタリング要求
-    Note over Visibility: ・Manager(OWN/ALL): Q3/Q4の生音声・生テキストを固定非表示、<br/>エンゲージメントはスコア推移のみ表示<br/>・Personal(SELF): 本人振り返り用AIコメント(免責表記付)を表示<br/>・Admin(COMP): 全体AIサマリーを表示(告発案件はCompliance画面へ分離)
-    Visibility->>ReportV44: 8. 3層別レポート (xcore-talk-report-v44-{admin,manager,self}) 生成
-    ReportV44-->>Staff: 9. Personal (SELF) レポート & 次回アクション確認
-    ReportV44-->>Manager: 10. 権限に応じた Manager / Admin レポート & KPI変更申請承認画面表示
-"""
-            }
-        ]
-
-    elif repo_slug == 'maice-backend':
-        return [
-            {
-                "id": "seq-backend-api",
-                "title": "maice-backend: HTTP API リクエスト処理 & 認可フロー",
-                "short_title": "HTTP API 処理フロー",
-                "desc": "クライアントからのHTTPリクエスト受付、Helmet/CORSセキュリティ保護、Auth0 JWT検証、ドメインルーターディスパッチ、Knexトランザクション実行とレスポンスシリアライズ。",
-                "diagram": """sequenceDiagram
-    autonumber
-    participant Client as クライアント (Browser / Next.js)
-    participant App as src/app.ts<br/>(CORS & Helmet)
-    participant Auth as src/middlewares/oauth-jwt.ts<br/>(JWT & RBAC)
-    participant Router as src/routes.ts<br/>(Route Dispatch)
-    participant Controller as src/features/corporate/member/<br/>member.controller.ts
-    participant DB as src/db/db.ts<br/>(Knex.js)
-    participant Logger as src/middlewares/request-logger.ts<br/>(Audit Logger)
-
-    Client->>App: 1. POST /api/corporate/members (Authorization: Bearer <token>)
-    App->>Auth: 2. JWT署名・有効期限検証 (RS256)
-    Auth->>Auth: 3. req.user に company_id, roles をバインド
-    Auth->>Router: 4. 認可済みリクエスト転送
-    Router->>Controller: 5. createMember(req, res) ディスパッチ
-    Controller->>DB: 6. BEGIN トランザクション
-    Controller->>DB: 7. INSERT INTO company_memberships
-    DB-->>Controller: 8. 登録完了レコード (UUID)
-    Controller->>DB: 9. COMMIT トランザクション
-    Controller-->>App: 10. HTTP 201 Created (JSON Response)
-    App->>Logger: 11. リクエスト/レスポンス監査ログ記録
-    App-->>Client: 12. 登録完了レスポンス返却
-"""
-            },
-            {
-                "id": "seq-backend-ws",
-                "title": "maice-backend: AI Interview V2 WebSocket & JEV 対話制御フロー",
-                "short_title": "WebSocket AI面接V2フロー",
-                "desc": "src/ws/ws-upgrade-router.ts から src/features/individual/ai-interview-v2-runtime/ への接続ディスパッチ、STT文字起こし、JEV（発話ターン・意図・十分性）判定、深掘り・TTS配信の時系列フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor Candidate as 受検候補者 (Web/Mobile)
-    participant Upgrade as src/ws/ws-upgrade-router.ts<br/>(WS Handshake & Auth)
-    participant Handler as src/features/individual/ai-interview-v2-runtime/ws/<br/>(WS Session Handler)
-    participant Checkpoint as repositories/<br/>conversation-checkpoint.repository.ts
-    participant STT as src/features/individual/ai-interview-v2-runtime/stt/<br/>(Streaming STT)
-    participant JEV as ai-interview-v2-runtime/jev/<br/>conversation-decision.ts
-    participant LLM as ai-interview-v2-runtime/llm/<br/>chat-with-chain.ts
-    participant TTS as ai-interview-v2-runtime/tts/<br/>(Speech Rendering)
-
-    Candidate->>Upgrade: 1. WSS 接続要求 (/ws/interview-v2)
-    Upgrade->>Upgrade: 2. ws-auth.ts によるトークン・セッション検証
-    Upgrade->>Handler: 3. 認証済み WebSocket セッションをディスパッチ
-    Handler->>Checkpoint: 4. セッション状態・設問チェックポイント復元 (enter-room)
-    Handler->>TTS: 5. 導入(Icebreak) / 設問プロンプトの音声合成
-    TTS-->>Candidate: 6. 面接官音声ストリーム配信
-
-    Candidate->>Handler: 7. 候補者音声チャンク送信 (Binary Audio)
-    Handler->>STT: 8. リアルタイム音声認識 & トランスクリプト生成
-    STT-->>Handler: 9. 発話テキスト & 音響特徴量確定
-    Handler->>JEV: 10. evaluate(): turn(wait/yield), intent, sufficiency 確率判定
-    JEV-->>Handler: 11. JevConversationDecision (回答十分性・ターン遷移決定)
-    Handler->>LLM: 12. 回答に応じた共感(empathy) / 明確化(clarification) / 深掘り(follow-up)生成
-    LLM-->>Handler: 13. 次ターン発話テキスト確定 & チェックポイント保存
-    Handler->>TTS: 14. 応答テキストの音声合成リクエスト
-    TTS-->>Candidate: 15. 次の面接官発話ストリーム再生
-"""
-            },
-            {
-                "id": "seq-backend-queue",
-                "title": "maice-backend: BullMQ 非同期AI採点・CV解析・PDF生成ワーカーフロー",
-                "short_title": "BullMQ 非同期採点・PDFフロー",
-                "desc": "面接完了後の finalize-interview.ts から BullMQ キューへの投入、ai-interview-v2-scoring.worker.ts および pdf-generation.worker.ts による非同期採点・レポート出力フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    participant Finalize as ai-interview-v2-runtime/completion/<br/>finalize-interview.ts
-    participant RedisQ as src/queues/<br/>(BullMQ / Redis 7.2)
-    participant ScoreWorker as src/jobs/<br/>ai-interview-v2-scoring.worker.ts
-    participant CleanSvc as src/services/<br/>interview-v2-answer-cleanup.service.ts
-    participant AIScorer as src/services/<br/>ai-scoring.service.ts
-    participant PDFWorker as src/jobs/<br/>pdf-generation.worker.ts
-    participant DB as src/db/db.ts<br/>(PostgreSQL 16)
-
-    Finalize->>Finalize: 1. transcript-gate.ts & recording-coverage-watchdog 検証
-    Finalize->>RedisQ: 2. 採点ジョブ (ai-interview-v2-scoring) エンキュー
-    RedisQ->>ScoreWorker: 3. ワーカーがジョブをデキュー
-    ScoreWorker->>DB: 4. 全発話ターン & 設問ルーブリック定義を取得
-    ScoreWorker->>CleanSvc: 5. 音声認識フィラー除去・発話テキスト整形
-    CleanSvc-->>ScoreWorker: 6. クリーニング済み回答トランスクリプト
-    ScoreWorker->>AIScorer: 7. 評価軸別ルーブリック採点 & 多言語サマリー推論
-    AIScorer-->>ScoreWorker: 8. 構造化スコア・強み/懸念点・根拠JSON
-    ScoreWorker->>DB: 9. 評価結果レコード永続化 & トークン消費量記録 (billable-usage)
-    ScoreWorker->>RedisQ: 10. PDF生成ジョブ (pdf-generation) エンキュー
-    RedisQ->>PDFWorker: 11. pdf-renderer.service.ts により評価レポートPDF生成
-    PDFWorker->>DB: 12. S3アップロード & レポートURL更新完了
-"""
-            }
-        ]
-
-    elif repo_slug == 'maice-corporate':
-        return [
-            {
-                "id": "seq-corporate-dash",
-                "title": "maice-corporate: ダッシュボード表示 & 候補者一覧取得フロー",
-                "short_title": "ダッシュボード一覧フロー",
-                "desc": "Next.js 15 App Routerによるダッシュボード画面レンダリング、TanStack QueryによるAPIキャッシュ、maice-backendからのデータ取得フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor User as 企業人事 (Browser)
-    participant Layout as src/app/layout.tsx<br/>(Root Layout)
-    participant Page as src/app/corporate/dashboard/page.tsx<br/>(Dashboard View)
-    participant Hook as src/hooks/useCandidates.ts<br/>(TanStack Query)
-    participant Client as src/lib/api-client.ts<br/>(Axios / Fetch)
-    participant Backend as maice-backend<br/>(/api/corporate/candidates)
-
-    User->>Layout: 1. /dashboard にアクセス
-    Layout->>Layout: 2. セッションCookie検証 (NextAuth/Auth0)
-    Layout->>Page: 3. ダッシュボードコンポーネント初期化
-    Page->>Hook: 4. useCandidates({ page: 1, filter: 'all' }) 呼び出し
-    Hook->>Client: 5. キャッシュ確認 (QueryCache)
-    Client->>Backend: 6. GET /api/corporate/candidates (Bearer Token)
-    Backend-->>Client: 7. 候補者一覧 & 選考ステータス JSON
-    Client-->>Hook: 8. レスポンスデータをキャッシュ保存
-    Hook-->>Page: 9. 画面用ステート更新 (data, isLoading: false)
-    Page-->>User: 10. 候補者一覧テーブル表示
-"""
-            },
-            {
-                "id": "seq-corporate-create-assessment",
-                "title": "maice-corporate: AI面接枠（Assessment）作成 & 招待送信フロー",
-                "short_title": "面接作成・招待フロー",
-                "desc": "企業人事による新規AI面接設定（設問作成、合格ライン設定、受検期限設定）および候補者への招待発行フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor User as 企業人事 (Browser)
-    participant Modal as src/components/assessments/CreateModal.tsx<br/>(作成UI)
-    participant Action as src/app/actions/assessment.ts<br/>(Server Action)
-    participant Backend as maice-backend<br/>(/api/assessments)
-    participant DB as PostgreSQL 16<br/>(assessments テーブル)
-
-    User->>Modal: 1. 面接タイトル・設問・制限時間を入力
-    User->>Modal: 2. 「面接を作成して公開」ボタンをクリック
-    Modal->>Action: 3. createAssessmentAction(formData) 呼び出し
-    Action->>Action: 4. Zod スキーマバリデーション
-    Action->>Backend: 5. POST /api/assessments (Payload)
-    Backend->>DB: 6. INSERT INTO assessments
-    DB-->>Backend: 7. 作成レコード (UUID)
-    Backend-->>Action: 8. HTTP 201 Created
-    Action-->>Modal: 9. 成功トースト表示 & 一覧自動リフレッシュ
-    Modal-->>User: 10. 受検用招待URL表示
-"""
-            }
-        ]
-
-    elif repo_slug == 'maice-individual':
-        return [
-            {
-                "id": "seq-individual-exam",
-                "title": "maice-individual: リアルタイムAI面接 受検実行フロー",
-                "short_title": "リアルタイム受検フロー",
-                "desc": "受検者が招待URLから入室し、マイク・カメラ許可、WebSocket接続、AIアバターとのリアルタイム音声対話を行う時系列フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor Candidate as 受検候補者 (Browser)
-    participant ExamPage as src/app/exam/[sessionId]/page.tsx<br/>(受検画面)
-    participant MediaHook as src/hooks/useMediaStream.ts<br/>(マイク・カメラ)
-    participant WSHook as src/hooks/useInterviewWebSocket.ts<br/>(WebSocket Hook)
-    participant BackendWS as maice-backend<br/>(/ws/interview-v2)
-    participant AudioPlayer as src/components/AudioPlayer.tsx<br/>(音声再生)
-
-    Candidate->>ExamPage: 1. 招待リンクを開く
-    ExamPage->>MediaHook: 2. startMediaCapture() マイク・カメラ初期化
-    MediaHook-->>Candidate: 3. ブラウザ権限許可ダイアログ
-    Candidate->>MediaHook: 4. マイク使用を許可
-    ExamPage->>WSHook: 5. connect(sessionToken) 呼び出し
-    WSHook->>BackendWS: 6. WebSocket 接続リクエスト
-    BackendWS-->>WSHook: 7. 接続確立 (SESSION_STARTED)
-    BackendWS->>AudioPlayer: 8. 最初の面接質問音声ストリーム受信
-    AudioPlayer-->>Candidate: 9. 面接官の質問音声を再生
-    
-    Candidate->>MediaHook: 10. 音声で回答
-    MediaHook->>WSHook: 11. PCM 音声チャンク送信
-    WSHook->>BackendWS: 12. WebSocket メッセージ送信 (AUDIO_CHUNK)
-    BackendWS-->>WSHook: 13. 回答受信確認 (ACK)
-    BackendWS->>AudioPlayer: 14. 次の質問音声
-    AudioPlayer-->>Candidate: 15. 次の質問を再生
-"""
-            }
-        ]
-
-    elif repo_slug == 'AI_Interview_xcore':
-        return [
-            {
-                "id": "seq-xcore-ws-orchestrator",
-                "title": "AI_Interview_xcore①：WebSocket 音声対話 & SimpleOrchestrator 診断・PDF生成フロー",
-                "short_title": "WebSocket 面接 & PDF生成フロー",
-                "desc": "public/index.html から src/index.ts (:8787) へのWebSocket接続、SimpleOrchestrator による性格タイプ別10問深掘り生成、MAICEパラメータ算出、xCORE/MAICE PDFレポート出力までの実コード処理フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor Candidate as 受検者ブラウザ<br/>public/index.html & avatar-interview.js
-    participant Server as Express & WS Server<br/>src/index.ts (:8787)
-    participant Orch as SimpleOrchestrator<br/>src/simple-orchestrator.ts
-    participant PsychGen as 心理検証質問生成<br/>src/services/psychologist-interview-generator.ts
-    participant LangQ as 多言語設問・文脈制御<br/>src/language-questions.ts
-    participant PDFGen as PDFレポート生成<br/>src/xcore-pdf-generator.ts & maice-pdf-generator.ts
-    participant Store as 診断結果ストレージ<br/>assessment-results/ (JSON & PDF)
-
-    Candidate->>Server: 1. POST /api/personality/analyze (事前設問回答 responses[])
-    Server-->>Candidate: 2. interviewerGuidance 返却 (profile, probingAreas, strategy)
-    Candidate->>Server: 3. WS "startInterview" 送信 (userProfile, testResponses, language)
-    Server->>Orch: 4. new SimpleOrchestrator(config) & setPersonalityProfile()
-    Orch->>PsychGen: 5. generateValidationQuestions(personalityProfile)
-    PsychGen-->>Orch: 6. 性格タイプ別の深掘り検証質問リスト (10問) 生成
-    Orch->>Server: 7. emit("question.new") & emit("avatar.speak", voice: "nova")
-    Server-->>Candidate: 8. AIアバター音声発話 & 質問テキスト表示
-
-    Candidate->>Server: 9. WS 音声ストリーム ("AUDIO:" Binary) / "user.speech" (transcript)
-    Server->>Orch: 10. handleEvent("user.response") -> processUserResponse(text)
-    Orch->>LangQ: 11. 回答キーワード解析 & 次の適応型質問選択 (generateDynamicQuestion)
-    LangQ-->>Orch: 12. 次の質問テキスト返却 (最大10問まで反復)
-
-    Orch->>Orch: 13. completeAssessment(): generateMAICEParameters() & generateAIJudgment()
-    Orch->>PDFGen: 14. generateXCoreReport(xCoreData) & generateMAICEReports(maiceData)
-    PDFGen->>Store: 15. assessment-results/xCORE_*.pdf & MAICE_personality_*.pdf 保存
-    Orch-->>Server: 16. emit("assessment.complete", results) & emit("pdf.generated")
-    Server-->>Candidate: 17. 最終診断サマリー & PDFダウンロードリンク表示
-"""
-            },
-            {
-                "id": "seq-xcore-mcp-deep",
-                "title": "AI_Interview_xcore②：DeepAssessment 10モジュール & MCP Server (:8788) 連携フロー",
-                "short_title": "DeepAssessment 10モジュール & MCP",
-                "desc": "src/mcp-server.ts (:8788) および src/api/assessment-api.ts から呼び出される DeepAssessmentService（Module 1〜10：データ取込・KMeansクラスタリング・OpenAI Realtime API・一貫性解析・HTMLレポート生成）の実行フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    participant Client as MCP / API クライアント<br/>src/client/xcore-mcp-client.ts
-    participant MCP as MCP Server (:8788)<br/>src/mcp-server.ts
-    participant API as Assessment REST API<br/>src/api/assessment-api.ts
-    participant DeepSvc as DeepAssessmentService<br/>src/services/deep-assessment-service.ts
-    participant Mod1_3 as Module 1〜3 (取込・分析・設問)<br/>src/modules/module-1..3 & kmeans.ts
-    participant Mod4_7 as Module 4〜7 (対話・Realtime音声)<br/>src/modules/module-4..7
-    participant Consistency as Module 9 一貫性解析<br/>src/modules/personality-consistency-analyzer.ts
-    participant ReportGen as Module 10 レポート生成<br/>src/modules/personality-report-generator.ts
-
-    Client->>MCP: 1. POST /mcp/session/create & POST /mcp/invoke (action: "analyze_personality")
-    MCP-->>Client: 2. 初期次元スコア (dimensions, confidence) 返却
-    Client->>API: 3. POST /api/assessment/initialize (candidateName, personalityTestResult)
-    API->>DeepSvc: 4. initializeSession(sessionId, candidateName, testResult, config)
-    DeepSvc->>Mod1_3: 5. 90問データ正規化・KMeansクラスタリング・矛盾/不確実性領域の抽出
-    Mod1_3-->>DeepSvc: 6. coreQuestions / probingQuestions / validationQuestions 構築
-    DeepSvc-->>API: 7. セッション初期化完了 (phase, questionCount)
-
-    Client->>API: 8. POST /api/assessment/response (questionId, response, responseTime)
-    API->>DeepSvc: 9. processResponse() & analyzeResponseRealTime()
-    DeepSvc->>Mod4_7: 10. 回答十分性評価 & 適応型フォローアップ質問選択 (getAdaptiveNextQuestion)
-    Mod4_7-->>API: 11. リアルタイム分析結果 & 次の質問データ返却
-
-    Client->>API: 12. POST /api/assessment/:sessionId/generate-report
-    API->>DeepSvc: 13. generateReport(sessionId) 呼び出し
-    DeepSvc->>Consistency: 14. 自己申告スコアと面接発話の一貫性検証 (consistencyAnalysis)
-    Consistency-->>DeepSvc: 15. 組織適合度 (organizationalFit) & 強み・懸念点算出
-    DeepSvc->>ReportGen: 16. generateReport(reportData) HTMLレポートレンダリング
-    ReportGen-->>API: 17. reports/{candidate}_{type}.html 保存 & レポートデータ返却
-"""
-            }
-        ]
-
-    elif repo_slug == 'xcore-personality':
-        return [
-            {
-                "id": "seq-xcore-pers-scoring",
-                "title": "xcore-personality: HEXACO QuadFC + AI対話型SJT アンサンブル採点 & Match Rate 算出フロー",
-                "short_title": "HEXACO+SJT 採点 & Match Rate",
-                "desc": "docs/design/xCORE_最終設計_HEXACO+SJT.md および xcore-ensemble-test/ensemble_test.py に基づく、6因子QuadFC算出、3シナリオ双方向SJT採点、SJT↔HEXACO統合、8言語レポートv12生成までの詳細フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor Candidate as 受検候補者
-    participant QuadFC as HEXACO QuadFC モジュール<br/>docs/design/xCORE_HEXACO_QuadFC設問セット.md
-    participant SJT as AI対話型 SJT (3シナリオ)<br/>docs/design/xCORE_SJTスコアリング設計.md
-    participant Trans as 文化的配慮翻訳パイプライン<br/>xcore-ensemble-test/ensemble_test.py
-    participant Models as マルチLLM アンサンブル採点<br/>(Claude / GPT-4o / Gemini / DeepSeek)
-    participant Matrix as SJT ↔ HEXACO 統合・適合度<br/>docs/reports/xcore-match-rate-logic.md
-    participant Tmpl as 8言語 HTML レポート v12<br/>xcore-report-v12-full.html
-
-    Candidate->>QuadFC: 1. 30クアッド (簡易版) / 追加クアッド (詳細版) 強制選択回答
-    QuadFC->>QuadFC: 2. 6因子 (H-H, E, X, A, C, O) スコア & 3レンジ分類算出
-    Candidate->>SJT: 3. シナリオ回答 T1 (S1:品質vs納期 / S2:部下の成果vs正直さ / S3:安全vsコスト)
-    SJT->>Candidate: 4. 双方向フォローアップ FU1 (選択と逆方向の圧力・上司/品質懸念提示)
-    Candidate->>SJT: 5. FU1 回答 -> FU2 (雇用リスク・取引先信頼との両立策確認) 回答
-    SJT->>Trans: 6. 多言語回答の英語正規化 (敬語・婉曲表現を [Cultural note] として保持)
-    Trans->>Models: 7. ルーブリック行動アンカーに基づく独立採点 (Level 1〜4, プロンプト注入防御)
-    Note over Models: L2/L3境界判定: (a)選ばなかった側のコスト言及<br/>(b)実行可能な具体策の2要件充足チェック
-    Models-->>Matrix: 8. アンサンブル合意レベル (L1〜L4) & 採点根拠テキスト
-    Matrix->>Matrix: 9. HEXACO自己申告とSJT行動判断の一貫性検証 & ポジション Match Rate 算出
-    Matrix->>Tmpl: 10. xcore-template-variable-mapping.md に基づき P-E Fit カード & 8言語INSIGHT描画
-"""
-            }
-        ]
-
-    elif repo_slug == 'xCORE-Talk':
-        return [
-            {
-                "id": "seq-xcore-talk-flow",
-                "title": "xCORE-Talk: 固定5設問 AI 1-on-1 面談 & 3層レポート可視性・ESC-002分離フロー",
-                "short_title": "AI 1on1 & 3層可視性・ESC-002フロー",
-                "desc": "README.en.md, Talk/ia/capability-matrix.md, escalation-rules.md に基づく、従業員招待・初期設定、固定5設問AI面談、内部告発の痕跡完全分離(ESC-002)、3層レポートv44描画の時系列フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor Admin as 管理者 / 上長<br/>dashboard-tailwind.html
-    actor Staff as 従業員 (SELF)<br/>my-xcore-talk.html
-    participant Invite as 招待 & 初期設定モーダル<br/>/talk/staff/new
-    participant Session as AI 1-on-1 対話エンジン<br/>固定5設問 & ターン予算制御
-    participant EscRule as ESC-002 判定 & 権限マトリクス<br/>Talk/ia/escalation-rules.md
-    participant CompUI as Compliance Dashboard<br/>compliance-dashboard.html (COMP専用)
-    participant RenderV44 as 3層レポートレンダラー (v44)<br/>xcore-talk-report-v44-{self,manager,admin}
-
-    Admin->>Invite: 1. メールアドレスのみで従業員を招待 (/talk/staff/new)
-    Invite-->>Staff: 2. 初回ログイン時2ステップ設定 (プロフィール・開始日・個人KPI・辞書登録)
-    Staff->>Session: 3. 定期 AI 1-on-1 開始 (画面上カウントダウン非表示・進捗バーのみ表示)
-    Session->>Staff: 4. 設問① 成果と前回アクション・設問② KPI進捗の対話確認
-    Session->>Staff: 5. 設問③ 課題と業務改善提案・設問④ エンゲージメント(0-10)・設問⑤ 次回アクション
-    Session->>EscRule: 6. 発話のコンプライアンス/ハラスメント検知 & 記名/匿名オプトイン確認
-    alt ハラスメント・内部告発 (ESC-002) を検知
-        EscRule->>CompUI: 7. COMP権限専用の Compliance Dashboard へ事案集約 (HR・上長から隔離)
-        Note over EscRule,RenderV44: 設問④課題セクションは「特になし」の通常回と同一描画にし、<br/>Manager/Personal ビューに告発の痕跡を一切残さない
-    end
-    EscRule->>RenderV44: 8. 閲覧権限別 (SELF / Manager[OWN,ALL] / Admin[COMP]) レポート生成
-    Note over RenderV44: Managerビューでは Q3/Q4 生音声・生テキストを固定非表示、<br/>エンゲージメントはスコア・推移のみ表示
-    RenderV44-->>Staff: 9. Personal (SELF) レポート閲覧 & KPI変更申請 (staff-detail.html で上長承認)
-    RenderV44-->>Admin: 10. Manager / Administrator レポート閲覧
-"""
-            }
-        ]
-
-    elif repo_slug == 'maice-prompt-tuning':
-        return [
-            {
-                "id": "seq-prompt-tuning-flow",
-                "title": "maice-prompt-tuning: 評価プロンプト編集・バッチ検証・開発DB同期フロー",
-                "short_title": "プロンプト編集 & バッチ検証フロー",
-                "desc": "PromptEditor.tsx による評価軸プロンプト編集、BatchTestModal.tsx による一括テスト実行、Prisma PostgreSQL 永続化および sync-from-dev.sh 同期フロー。",
-                "diagram": """sequenceDiagram
-    autonumber
-    actor Engineer as プロンプトエンジニア
-    participant UI as PromptEditor & EvaluationAxisCard<br/>src/components/PromptEditor.tsx
-    participant BatchModal as BatchTestModal<br/>src/components/BatchTestModal.tsx
-    participant API as Next.js API Routes<br/>src/app/api/prompts/
-    participant Prisma as Prisma Client<br/>src/lib/prisma.ts (schema.prisma)
-    participant LLM as Gemini / OpenAI API<br/>(テスト推論実行)
-
-    Engineer->>UI: 1. カテゴリ・評価軸を選択 (CategoryFilter.tsx)
-    UI->>API: 2. GET /api/prompts (評価プロンプト・ルーブリック取得)
-    API->>Prisma: 3. findMany() プロンプト定義・バージョンの読込
-    Prisma-->>UI: 4. 現行システムプロンプト & 評価基準表示
-    Engineer->>UI: 5. プロンプト文面・採点アンカーを編集
-    Engineer->>BatchModal: 6. バッチテスト実行 (サンプル回答データセットで検証)
-    BatchModal->>API: 7. POST /api/prompts/test (プロンプト案 + テストケース)
-    API->>LLM: 8. 複数テストケースに対する並行採点推論
-    LLM-->>BatchModal: 9. 採点スコア分布・一貫性・推論レイテンシ比較表示
-    Engineer->>UI: 10. 検証合格プロンプトを保存 (PUT /api/prompts/:id)
-    UI->>Prisma: 11. プロンプト新バージョン永続化
-"""
-            }
-        ]
-
-    else:
+    if True:
         return [
             {
                 "id": f"seq-{repo_slug}-flow",
@@ -1044,7 +228,7 @@ def collect_all_data():
     repos_data = []
     git_meta = get_repo_git_meta()
 
-    # 1. Root plusimpact
+    # 1. Root workspace
     root_omm = BASE_DIR / ".omm"
     if root_omm.exists():
         for p in sorted(root_omm.iterdir()):
@@ -1081,8 +265,8 @@ def collect_all_data():
 
                 repos_data.append({
                     "id": f"root-{p.name}",
-                    "repo": "plusimpact (全体エコシステム)",
-                    "repo_slug": "plusimpact",
+                    "repo": "Workspace Ecosystem",
+                    "repo_slug": "example-org",
                     "category": "Ecosystem",
                     "perspective": p.name,
                     "diagram": diag,
@@ -1096,12 +280,12 @@ def collect_all_data():
                     "commit_subject": "全体エコシステム統括・最新インフラコミット",
                     "commit_author": "Core Engineering Team",
                     "commit_stat": "29 repositories integrated",
-                    "commit_body": ["PLUS IMPACT 全リポジトリのマイクロサービス・フロントエンド・AIモデル最新スナップショット"],
+                    "commit_body": ["All repository microservices, frontends, and AI components snapshot"],
                     "commit_files": [],
                     "deps": root_deps,
-                    "github_url": "https://github.com/plusimpact",
-                    "sequences": get_sequences_for_repo('plusimpact', 'plusimpact (全体エコシステム)'),
-                    "coderabbit": get_coderabbit_review_for_repo('plusimpact', 'plusimpact (全体エコシステム)', 'e7719af', root_deps.get('security_advisories', []))
+                    "github_url": "https://github.com/example-org",
+                    "sequences": get_sequences_for_repo('example-org', 'Workspace Ecosystem'),
+                    "coderabbit": get_coderabbit_review_for_repo('example-org', 'Workspace Ecosystem', 'e7719af', root_deps.get('security_advisories', []))
                 })
 
     # 2. Sub-repos
@@ -1119,8 +303,8 @@ def collect_all_data():
                     rname_lower = repo_dir.name.lower()
                     if "marketing" in rname_lower or "corporate" in rname_lower or "website" in rname_lower:
                         category = "Corporate & Web"
-                    elif "xcore" in rname_lower or "talk" in rname_lower or "video" in rname_lower:
-                        category = "xCORE Engine"
+                    elif "talk" in rname_lower or "video" in rname_lower or "ai" in rname_lower:
+                        category = "AI & Media"
                     elif "job" in rname_lower or "candidate" in rname_lower:
                         category = "Job & Candidate"
                     elif "admin" in rname_lower:
@@ -1159,7 +343,7 @@ def collect_all_data():
                             },
                             "security_advisories": []
                         },
-                        "github_url": f"https://github.com/plusimpact/{repo_dir.name}",
+                        "github_url": f"https://github.com/example-org/{repo_dir.name}",
                         "sequences": get_sequences_for_repo(repo_dir.name, repo_dir.name),
                             "coderabbit": get_coderabbit_review_for_repo(repo_dir.name, repo_dir.name, meta.get("commit_hash", "HEAD"), [])
                     })
@@ -6703,10 +5887,10 @@ def build_portal_html(data, is_shareable=False):
       });
     }
 
-    const diagrams = [{"id": "root-overall-architecture", "repo": "plusimpact (全体エコシステム)", "repo_slug": "plusimpact", "category": "Ecosystem", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    corporate-web[\\"Corporate Website\\\\nCorporate-Website/\\"]:::entry\\n    maice-lp[\\"Public LP & Marketing\\\\nmaice-frontend/\\"]:::entry\\n    corporate-portal[\\"Corporate Recruiter Portal\\\\nmaice-corporate/\\"]:::entry\\n    individual-portal[\\"Candidate AI Interview\\\\nmaice-individual/\\"]:::entry\\n\\n    backend-api[\\"Core API & WebSocket\\\\nmaice-backend/\\"]\\n    db[\\"PostgreSQL (Knex)\\\\nDatabase Layer\\"]:::store\\n    redis[\\"Redis (BullMQ & Cache)\\\\nQueue & Session\\"]:::store\\n\\n    auth0[\\"Auth0 Identity\\\\nSSO / User Auth\\"]:::external\\n    ai-services[\\"AI Models (Gemini / OpenAI)\\\\nSTT, TTS, Scoring\\"]:::external\\n    aws-cloud[\\"AWS Cloud (S3 / ECS)\\\\nMedia & Hosting\\"]:::external\\n\\n    corporate-web -->|\\"Redirect / Information\\"| maice-lp\\n    maice-lp -->|\\"Lead & Demo Request\\"| backend-api\\n    corporate-portal -->|\\"Auth0 Login\\"| auth0\\n    individual-portal -->|\\"Auth0 / Invite Token\\"| auth0\\n\\n    corporate-portal -->|\\"REST API (Jobs, Filter, Eval)\\"| backend-api\\n    individual-portal -->|\\"REST API (Profile, Resume)\\"| backend-api\\n    individual-portal -->|\\"WebSocket (Realtime Audio / Interview)\\"| backend-api\\n\\n    backend-api -->|\\"Transactional SQL\\"| db\\n    backend-api -->|\\"Async Jobs & Caching\\"| redis\\n    backend-api -->|\\"LLM & Speech Inference\\"| ai-services\\n    backend-api -->|\\"Audio/Video Storage\\"| aws-cloud\\n", "description": "PLUS IMPACT / MAICE システム全体のマルチリポジトリ統合アーキテクチャ。企業HP（Corporate-Website）、プロダクトLP（maice-frontend）、法人向け採用管理ダッシュボード（maice-corporate）、候補者向けAI面接受検クライアント（maice-individual）の各フロントエンドが、中核となるExpress/WebSocketバックエンド（maice-backend）、PostgreSQL、Redis、AWS、Auth0、AIプロバイダー（Gemini/OpenAI）とシームレスに連携しています。\\n", "is_root": true, "createdAt": "2022-11-30T08:51:02Z", "updatedAt": "2026-11-06T12:42:43Z", "pushedAt": "2026-11-06T12:42:43Z", "commit_hash": "e7719af", "commit_date": "2026-11-06", "commit_subject": "全体エコシステム統括・最新インフラコミット", "commit_author": "Core Engineering Team", "commit_stat": "29 repositories integrated", "commit_body": ["PLUS IMPACT 全リポジトリのマイクロサービス・フロントエンド・AIモデル最新スナップショット"], "commit_files": [], "deps": {"frameworks": [{"name": "Next.js", "version": "15.3.6 (Core App)", "status": "latest", "desc": "法人・受検者ポータルでNext.js 15採用"}, {"name": "Express", "version": "5.1.0 (Core API)", "status": "latest", "desc": "バックエンド中核でExpress 5採用"}], "databases": [{"name": "PostgreSQL", "version": "16.3 (RDS Multi-AZ)", "type": "Primary RDBMS", "desc": "全業務データ保存"}, {"name": "Redis", "version": "7.2 (ElastiCache)", "type": "Queue & Cache", "desc": "BullMQ分散キュー & セッション"}], "ai_sdks": [{"name": "@google/genai", "version": "^1.38.0", "desc": "Gemini 1.5 Pro / Flash 推論"}, {"name": "openai", "version": "^6.7.0", "desc": "OpenAI API"}], "auth": [{"name": "Auth0 by Okta", "version": "Enterprise SSO", "desc": "企業人事向けOAuth2 / JWT認証"}], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact"}, {"id": "AI_Interview_xcore-overall-architecture", "repo": "AI_Interview_xcore", "repo_slug": "AI_Interview_xcore", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    clients[\\"API Clients\\\\nWeb / Mobile\\"]:::entry\\n    server[\\"Express Server\\\\nsrc/server.ts, app.ts\\"]:::entry\\n    routes[\\"Route Handlers\\\\nsrc/routes/\\"]\\n    services[\\"Service Business Logic\\\\nsrc/services/\\"]\\n    db[\\"Database Layer\\\\nPostgreSQL / Knex\\"]:::store\\n    external-apis[\\"External Services\\\\nAI / AWS APIs\\"]:::external\\n\\n    clients -->|\\"REST API Call\\"| server\\n    server -->|\\"Dispatch\\"| routes\\n    routes -->|\\"Execute Logic\\"| services\\n    services -->|\\"Query / Persist\\"| db\\n    services -->|\\"Integrate\\"| external-apis", "description": "AI_Interview_xcore はExpress.js + TypeScriptによるAPIバックエンドサービスです。PLUS IMPACT AI_Interview_xcore component", "is_root": false, "createdAt": "2025-09-23T09:59:42Z", "updatedAt": "2025-09-25T09:56:20Z", "pushedAt": "2025-09-25T09:56:15Z", "commit_hash": "37bc0f7", "commit_date": "2025-09-25", "commit_subject": "Merge pull request #1 from plusimpact/feature/video_speaking", "commit_author": "Phyo Pyae Pyae Lwin", "commit_stat": "306 files changed, 70802 insertions(+)", "commit_body": ["finished video editing but some enhancements still needed"], "commit_files": ["A\\t.DS_Store", "A\\t.env.example", "A\\t.gitignore", "A\\tAVATAR_SYSTEM.md", "A\\tBACK_BUTTON_ADDED.md", "A\\tCOMPLETION_UI_FIXES.md", "A\\tCONVERSATIONAL_FEATURES.md", "A\\tFINAL_UI_CLEANUP.md"], "deps": {"frameworks": [{"name": "Express", "version": "^5.1.0", "status": "latest", "desc": "v5系 最新メジャー (非同期エラーハンドリング標準化・プロトタイプ汚染対策)", "security_link": "https://github.com/expressjs/express/security/advisories"}, {"name": "TypeScript", "version": "^5.9.2", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}], "databases": [{"name": "pg (PostgreSQL Client)", "version": "^8.16.3", "type": "Database Driver", "desc": "PostgreSQL 16接続クライアントドライバ", "security_link": "https://github.com/brianc/node-postgres/security/advisories"}], "ai_sdks": [{"name": "openai", "version": "^5.19.1", "desc": "OpenAI 公式APIクライアント"}], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/AI_Interview_xcore"}, {"id": "Corporate-Website-overall-architecture", "repo": "Corporate-Website", "repo_slug": "Corporate-Website", "category": "Corporate HP", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    visitor[\\"Website Visitor\\\\nBrowser Client\\"]:::entry\\n    pages-router[\\"Next.js Pages Router\\\\nsrc/pages/\\"]:::entry\\n    i18n-layer[\\"next-i18next Engine\\\\nnext-i18next.config.js\\"]\\n    locales-dir[\\"Translation Locales\\\\nsrc/locales/\\"]:::store\\n    page-sections[\\"Component Sections\\\\nsrc/components/\\"]\\n    contact-service[\\"Contact & Form Handler\\\\nsrc/pages/contact-us.tsx\\"]\\n    maice-links[\\"MAICE Ecosystem Links\\\\nmaice-frontend, etc.\\"]:::external\\n\\n    visitor -->|\\"HTTP Request\\"| pages-router\\n    pages-router -->|\\"Locale Routing (SSR/SSG)\\"| i18n-layer\\n    i18n-layer -->|\\"Read Messages (ja/en)\\"| locales-dir\\n    pages-router -->|\\"Render Views\\"| page-sections\\n    page-sections -->|\\"Submit Inquiries\\"| contact-service\\n    page-sections -->|\\"Navigate Services\\"| maice-links\\n", "description": "株式会社PLUS IMPACTの公式コーポレートサイト。Next.js（Pages Router）、TypeScript、Tailwind CSS、next-i18next（日本語・英語）により構築。会社概要、事業・サービス紹介（CrossNest、AI Training、HR Agent BD、MAICE等のサービス群への誘導）、採用情報（Careers）、ニュースリリース、お問い合わせ受付（Contact Us）を提供します。\\n", "is_root": false, "createdAt": "2025-01-20T06:35:29Z", "updatedAt": "2026-10-30T07:21:28Z", "pushedAt": "2026-10-30T07:46:34Z", "commit_hash": "a280424", "commit_date": "2026-10-30", "commit_subject": "Merge pull request #129 from plusimpact/fix/retire-crossnest-w-gkxfqk", "commit_author": "tk-the-greatest-in-plus-impact", "commit_stat": "491 files changed, 56980 insertions(+)", "commit_body": ["fix: close CrossNest pages with script-free HTTP 410 notices"], "commit_files": ["A\\t.gitignore", "A\\tCLAUDE.md", "A\\tI18N_IMPLEMENTATION_GUIDE.md", "A\\tREADME.md", "A\\tcomponent_analysis.txt", "A\\tcomponents.json", "A\\tdocs/README.md", "A\\tdocs/reports/corporate-site-xcore-public-copy-audit-2026-07-05.md"], "deps": {"frameworks": [{"name": "Next.js", "version": "14.2.5", "status": "safe", "desc": "セキュリティパッチ適用済 (最新安定)", "cve": null, "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "^18", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "axios", "version": "^1.11.0", "status": "warn", "desc": "⚠️ CVE-2024-39338 SSRF脆弱性影響 (v1.7.4以上への更新推奨)", "cve": "CVE-2024-39338", "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "^5.5.3", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^3.4.17", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": [{"id": "CVE-2024-39338", "cve": "CVE-2024-39338", "title": "Axios Server-Side Request Forgery (SSRF) bypass in relative URLs", "pkg": "axios", "installed": "^1.11.0", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)", "affected": "axios < 1.7.4", "fixed_in": "1.7.4 以上", "summary": "Axiosにおいて相対URL（/path）を用いてリクエストを送信する際、baseURLやプロキシ設定の厳格なサニタイズが迂回され、内部ネットワークや不正エンドポイントへのリクエストが発生するSSRF脆弱性。", "impact": "クラウド環境内のメタデータサービス（AWS IMDS等）や内部プライベートAPIが不正に呼び出される危険性があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-39338", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-8hc4-vh64-cxmj)", "url": "https://github.com/advisories/GHSA-8hc4-vh64-cxmj", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-39338", "type": "MITRE"}, {"name": "Axios Official Release Notes", "url": "https://github.com/axios/axios/releases/tag/v1.7.4", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/Corporate-Website && npm install axios@latest"}]}, "github_url": "https://github.com/plusimpact/Corporate-Website"}, {"id": "ERD-overall-architecture", "repo": "ERD", "repo_slug": "ERD", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    source[\\"Source Assets\\\\nSpecifications / Configs\\"]:::entry\\n    core-modules[\\"Core Modules\\\\nProject Files\\"]\\n    distribution[\\"Distribution / Exports\\\\nGenerated Assets\\"]:::store\\n    consumers[\\"Dependent Services\\\\nMAICE / PLUS IMPACT Apps\\"]:::external\\n\\n    source -->|\\"Process & Build\\"| core-modules\\n    core-modules -->|\\"Export\\"| distribution\\n    consumers -->|\\"Consume Package\\"| distribution", "description": "ERD: PLUS IMPACT ERD component。", "is_root": false, "createdAt": "2022-11-30T08:51:02Z", "updatedAt": "2022-11-30T08:51:02Z", "pushedAt": "2023-02-28T13:15:32Z", "commit_hash": "4674173", "commit_date": "2023-02-28", "commit_subject": "Merge pull request #1 from studyforproject/feature/rekognition-flow", "commit_author": "ywzx", "commit_stat": "8 files changed, 1223 insertions(+)", "commit_body": ["Feature/rekognition flow"], "commit_files": ["A\\tREADME.md", "A\\terd/erd.v0.1.drawio.svg", "A\\terd/erd.v0.2.drawio.svg", "A\\terd/raw/erd.v0.2.drawio", "A\\tflowChart/README.md", "A\\tflowChart/creditCardDonation.drawio.svg", "A\\tflowChart/faceDetectionFlow.drawio", "A\\tflowChart/faceDetectionFlow.drawio.pdf"], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/ERD"}, {"id": "Plus-Impact-Website-API-Service-overall-architecture", "repo": "Plus-Impact-Website-API-Service", "repo_slug": "Plus-Impact-Website-API-Service", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    source[\\"Source Assets\\\\nSpecifications / Configs\\"]:::entry\\n    core-modules[\\"Core Modules\\\\nProject Files\\"]\\n    distribution[\\"Distribution / Exports\\\\nGenerated Assets\\"]:::store\\n    consumers[\\"Dependent Services\\\\nMAICE / PLUS IMPACT Apps\\"]:::external\\n\\n    source -->|\\"Process & Build\\"| core-modules\\n    core-modules -->|\\"Export\\"| distribution\\n    consumers -->|\\"Consume Package\\"| distribution", "description": "Plus-Impact-Website-API-Service: PLUS IMPACT Plus-Impact-Website-API-Service component。", "is_root": false, "createdAt": "2024-02-22T04:53:59Z", "updatedAt": "2026-10-30T07:33:26Z", "pushedAt": "2026-10-30T07:45:18Z", "commit_hash": "67c0ba9", "commit_date": "2026-10-30", "commit_subject": "Merge pull request #88 from plusimpact/chore/sync-main-into-develop", "commit_author": "paingphyo", "commit_stat": "254 files changed, 31450 insertions(+)", "commit_body": ["chore: sync main (incl. production HelloDesk changes) into develop"], "commit_files": ["A\\t.env.production", "A\\t.eslintrc.js", "A\\t.github/workflows/contact-auth-security.yml", "A\\t.gitignore", "A\\t.prettierrc", "A\\tCLAUDE.md", "A\\tREADME.md", "A\\t\\"assets/GLOBAL IMPACT CHALLENGE_\\\\343\\\\202\\\\244\\\\343\\\\203\\\\263\\\\343\\\\202\\\\277\\\\343\\\\203\\\\274\\\\343\\\\203\\\\263\\\\343\\\\202\\\\267\\\\343\\\\203\\\\203\\\\343\\\\203\\\\227\\\\346\\\\246\\\\202\\\\350\\\\246\\\\201\\\\350\\\\263\\\\207\\\\346\\\\226\\\\2312026.pdf\\""], "deps": {"frameworks": [{"name": "axios", "version": "^1.4.0", "status": "warn", "desc": "⚠️ CVE-2024-39338 SSRF脆弱性影響 (v1.7.4以上への更新推奨)", "cve": "CVE-2024-39338", "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "^4.3.5", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}], "databases": [{"name": "Prisma ORM", "version": "^5.3.1", "type": "Type-safe ORM", "desc": "スキーマ定義 & 型安全データベースアクセス", "security_link": "https://github.com/prisma/prisma/security/advisories"}], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": [{"id": "CVE-2024-39338", "cve": "CVE-2024-39338", "title": "Axios Server-Side Request Forgery (SSRF) bypass in relative URLs", "pkg": "axios", "installed": "^1.4.0", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)", "affected": "axios < 1.7.4", "fixed_in": "1.7.4 以上", "summary": "Axiosにおいて相対URL（/path）を用いてリクエストを送信する際、baseURLやプロキシ設定の厳格なサニタイズが迂回され、内部ネットワークや不正エンドポイントへのリクエストが発生するSSRF脆弱性。", "impact": "クラウド環境内のメタデータサービス（AWS IMDS等）や内部プライベートAPIが不正に呼び出される危険性があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-39338", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-8hc4-vh64-cxmj)", "url": "https://github.com/advisories/GHSA-8hc4-vh64-cxmj", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-39338", "type": "MITRE"}, {"name": "Axios Official Release Notes", "url": "https://github.com/axios/axios/releases/tag/v1.7.4", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/Plus-Impact-Website-API-Service && npm install axios@latest"}]}, "github_url": "https://github.com/plusimpact/Plus-Impact-Website-API-Service"}, {"id": "Plus-Impact-Website-Admin-Portal-overall-architecture", "repo": "Plus-Impact-Website-Admin-Portal", "repo_slug": "Plus-Impact-Website-Admin-Portal", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    client[\\"Web Client\\\\nBrowser\\"]:::entry\\n    router[\\"Page Router\\\\nsrc/pages/\\"]:::entry\\n    ui-components[\\"UI Components\\\\nsrc/components/\\"]\\n    state-mgmt[\\"State & Hooks\\\\nsrc/hooks/, src/stores/\\"]\\n    api-layer[\\"API & Services\\\\nsrc/lib/, src/api/\\"]\\n    backend[\\"MAICE Backend API\\\\nmaice-backend\\"]:::external\\n\\n    client -->|\\"HTTP Request\\"| router\\n    router -->|\\"Render Views\\"| ui-components\\n    ui-components -->|\\"User Actions\\"| state-mgmt\\n    state-mgmt -->|\\"Data Fetching\\"| api-layer\\n    api-layer -->|\\"REST / GraphQL\\"| backend", "description": "Plus-Impact-Website-Admin-Portal はNext.jsベースのWebフロントエンドアプリケーションです。PLUS IMPACT Plus-Impact-Website-Admin-Portal component", "is_root": false, "createdAt": "2025-03-07T08:03:42Z", "updatedAt": "2026-10-30T07:33:38Z", "pushedAt": "2026-10-30T07:47:17Z", "commit_hash": "9aedad2", "commit_date": "2026-10-30", "commit_subject": "Merge pull request #22 from plusimpact/chore/sync-main-into-develop", "commit_author": "paingphyo", "commit_stat": "645 files changed, 47750 insertions(+)", "commit_body": ["chore: sync main into develop before production promotion"], "commit_files": ["A\\t.env", "A\\t.env.development", "A\\t.eslintrc.json", "A\\t.gitignore", "A\\t.husky/pre-commit", "A\\t.lintstagedrc.json", "A\\t.prettierignore", "A\\t.prettierrc"], "deps": {"frameworks": [{"name": "Next.js", "version": "13.5.8", "status": "warn", "desc": "⚠️ CVE-2024-34351 SSRキャッシュポイズニング影響 (v14.2.4以上への更新推奨)", "cve": "CVE-2024-34351", "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "^18", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "axios", "version": "^1.8.3", "status": "safe", "desc": "HTTPクライアントライブラリ", "cve": null, "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "^5", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": [{"id": "CVE-2024-34351", "cve": "CVE-2024-34351", "title": "Next.js Server Actions SSR Cache Poisoning (ホストヘッダー偽装によるキャッシュ汚染)", "pkg": "Next.js", "installed": "13.5.8", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N)", "affected": "Next.js >= 13.0.0, < 14.2.4", "fixed_in": "14.2.4 以上 または 15.x", "summary": "Next.jsのServer Actionsリクエストにおいて、Hostヘッダーの検証が不十分なため、細工されたリクエストによりSSRキャッシュがポイズニングされ、正規ユーザーが意図しない外部URLへリダイレクトされたり内部情報が漏洩する脆弱性。", "impact": "悪意のあるキャッシュが配信され、フィッシングサイトへの誘導やSSRFの踏み台にされる危険があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-34351", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-79g7-3prr-559v)", "url": "https://github.com/advisories/GHSA-79g7-3prr-559v", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-34351", "type": "MITRE"}, {"name": "Vercel / Next.js Security Advisory", "url": "https://github.com/vercel/next.js/security/advisories/GHSA-79g7-3prr-559v", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/Plus-Impact-Website-Admin-Portal && npm install next@latest react@latest react-dom@latest"}]}, "github_url": "https://github.com/plusimpact/Plus-Impact-Website-Admin-Portal"}, {"id": "Plus-Impact-Website-Job-Portal-overall-architecture", "repo": "Plus-Impact-Website-Job-Portal", "repo_slug": "Plus-Impact-Website-Job-Portal", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    client[\\"Web Client\\\\nBrowser\\"]:::entry\\n    router[\\"Page Router\\\\nsrc/app/\\"]:::entry\\n    ui-components[\\"UI Components\\\\nsrc/components/\\"]\\n    state-mgmt[\\"State & Hooks\\\\nsrc/hooks/, src/stores/\\"]\\n    api-layer[\\"API & Services\\\\nsrc/lib/, src/api/\\"]\\n    backend[\\"MAICE Backend API\\\\nmaice-backend\\"]:::external\\n\\n    client -->|\\"HTTP Request\\"| router\\n    router -->|\\"Render Views\\"| ui-components\\n    ui-components -->|\\"User Actions\\"| state-mgmt\\n    state-mgmt -->|\\"Data Fetching\\"| api-layer\\n    api-layer -->|\\"REST / GraphQL\\"| backend", "description": "Plus-Impact-Website-Job-Portal はNext.jsベースのWebフロントエンドアプリケーションです。Website/Job Portal of Plus Impact. Developed using Island Architecture.", "is_root": false, "createdAt": "2024-01-04T15:11:53Z", "updatedAt": "2026-05-05T09:11:20Z", "pushedAt": "2026-05-05T09:18:24Z", "commit_hash": "fdbc1d7a", "commit_date": "2026-05-05", "commit_subject": "Merge pull request #544 from plusimpact/feature/analytics-improvements", "commit_author": "Shogo Nishino", "commit_stat": "1087 files changed, 85314 insertions(+)", "commit_body": ["feat(analytics): add GSC verification and contact form conversion tracking"], "commit_files": ["A\\t.claude/settings.local.json", "A\\t.env.development", "A\\t.eslintrc.json", "A\\t.github/workflows/deploy.yml", "A\\t.gitignore", "A\\t.prettierignore", "A\\t.prettierrc", "A\\tCLAUDE.md"], "deps": {"frameworks": [{"name": "Next.js", "version": "^14.0.1", "status": "warn", "desc": "⚠️ CVE-2024-34351 SSRキャッシュポイズニング影響 (v14.2.4以上への更新推奨)", "cve": "CVE-2024-34351", "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "^18.2.0", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "axios", "version": "^1.4.0", "status": "warn", "desc": "⚠️ CVE-2024-39338 SSRF脆弱性影響 (v1.7.4以上への更新推奨)", "cve": "CVE-2024-39338", "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "^5.3.3", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": [{"id": "CVE-2024-34351", "cve": "CVE-2024-34351", "title": "Next.js Server Actions SSR Cache Poisoning (ホストヘッダー偽装によるキャッシュ汚染)", "pkg": "Next.js", "installed": "^14.0.1", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N)", "affected": "Next.js >= 13.0.0, < 14.2.4", "fixed_in": "14.2.4 以上 または 15.x", "summary": "Next.jsのServer Actionsリクエストにおいて、Hostヘッダーの検証が不十分なため、細工されたリクエストによりSSRキャッシュがポイズニングされ、正規ユーザーが意図しない外部URLへリダイレクトされたり内部情報が漏洩する脆弱性。", "impact": "悪意のあるキャッシュが配信され、フィッシングサイトへの誘導やSSRFの踏み台にされる危険があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-34351", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-79g7-3prr-559v)", "url": "https://github.com/advisories/GHSA-79g7-3prr-559v", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-34351", "type": "MITRE"}, {"name": "Vercel / Next.js Security Advisory", "url": "https://github.com/vercel/next.js/security/advisories/GHSA-79g7-3prr-559v", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/Plus-Impact-Website-Job-Portal && npm install next@latest react@latest react-dom@latest"}, {"id": "CVE-2024-39338", "cve": "CVE-2024-39338", "title": "Axios Server-Side Request Forgery (SSRF) bypass in relative URLs", "pkg": "axios", "installed": "^1.4.0", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)", "affected": "axios < 1.7.4", "fixed_in": "1.7.4 以上", "summary": "Axiosにおいて相対URL（/path）を用いてリクエストを送信する際、baseURLやプロキシ設定の厳格なサニタイズが迂回され、内部ネットワークや不正エンドポイントへのリクエストが発生するSSRF脆弱性。", "impact": "クラウド環境内のメタデータサービス（AWS IMDS等）や内部プライベートAPIが不正に呼び出される危険性があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-39338", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-8hc4-vh64-cxmj)", "url": "https://github.com/advisories/GHSA-8hc4-vh64-cxmj", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-39338", "type": "MITRE"}, {"name": "Axios Official Release Notes", "url": "https://github.com/axios/axios/releases/tag/v1.7.4", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/Plus-Impact-Website-Job-Portal && npm install axios@latest"}]}, "github_url": "https://github.com/plusimpact/Plus-Impact-Website-Job-Portal"}, {"id": "claude-code-setup-overall-architecture", "repo": "claude-code-setup", "repo_slug": "claude-code-setup", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    source[\\"Source Assets\\\\nSpecifications / Configs\\"]:::entry\\n    core-modules[\\"Core Modules\\\\nProject Files\\"]\\n    distribution[\\"Distribution / Exports\\\\nGenerated Assets\\"]:::store\\n    consumers[\\"Dependent Services\\\\nMAICE / PLUS IMPACT Apps\\"]:::external\\n\\n    source -->|\\"Process & Build\\"| core-modules\\n    core-modules -->|\\"Export\\"| distribution\\n    consumers -->|\\"Consume Package\\"| distribution", "description": "claude-code-setup: Claude Code setup templates and skills for PLUS IMPACT team。", "is_root": false, "createdAt": "2026-02-20T05:42:19Z", "updatedAt": "2026-08-16T17:09:45Z", "pushedAt": "2026-07-27T06:13:38Z", "commit_hash": "0403223", "commit_date": "2026-07-27", "commit_subject": "fix: global/skills/code-verification を正本（199行）と同期 (#4)", "commit_author": "Kenta Takada", "commit_stat": "136 files changed, 22522 insertions(+)", "commit_body": ["Co-authored-by: Claude Fable 5 <noreply@anthropic.com>"], "commit_files": ["A\\t.gitignore", "A\\tREADME-en.md", "A\\tREADME.md", "A\\tclaude-code-guide-en.md", "A\\tclaude-code-guide.md", "A\\tcompany/.claude/skills/agent-teams-company/SKILL.md", "A\\tcompany/.claude/skills/business-analysis/SKILL.md", "A\\tcompany/.claude/skills/hiring-workflow/SKILL.md"], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/claude-code-setup"}, {"id": "email-sender-overall-architecture", "repo": "email-sender", "repo_slug": "email-sender", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    client[\\"Web Client\\\\nBrowser\\"]:::entry\\n    router[\\"Page Router\\\\nsrc/app/\\"]:::entry\\n    ui-components[\\"UI Components\\\\nsrc/components/\\"]\\n    state-mgmt[\\"State & Hooks\\\\nsrc/hooks/, src/stores/\\"]\\n    api-layer[\\"API & Services\\\\nsrc/lib/, src/api/\\"]\\n    backend[\\"MAICE Backend API\\\\nmaice-backend\\"]:::external\\n\\n    client -->|\\"HTTP Request\\"| router\\n    router -->|\\"Render Views\\"| ui-components\\n    ui-components -->|\\"User Actions\\"| state-mgmt\\n    state-mgmt -->|\\"Data Fetching\\"| api-layer\\n    api-layer -->|\\"REST / GraphQL\\"| backend", "description": "email-sender はNext.jsベースのWebフロントエンドアプリケーションです。PLUS IMPACT email-sender component", "is_root": false, "createdAt": "2026-02-24T06:13:05Z", "updatedAt": "2026-02-24T16:49:17Z", "pushedAt": "2026-02-24T16:49:14Z", "commit_hash": "2582254", "commit_date": "2026-02-24", "commit_subject": "fix: move @types/papaparse to dependencies for production build", "commit_author": "24noss", "commit_stat": "124 files changed, 28529 insertions(+)", "commit_body": ["TypeScript build fails without papaparse type definitions.", "Verified with `npm ci --omit=dev && npm run build` - all clear."], "commit_files": ["A\\t.env.example", "A\\t.gitignore", "A\\tCLAUDE.md", "A\\tREADME.md", "A\\tcomponents.json", "A\\tdocs/specs/campaigns.md", "A\\tdocs/specs/contacts-tags.md", "A\\tdocs/specs/dashboard-settings.md"], "deps": {"frameworks": [{"name": "Next.js", "version": "16.1.6", "status": "safe", "desc": "セキュリティパッチ適用済 (最新安定)", "cve": null, "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "19.2.3", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "TypeScript", "version": "^5", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^4", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [{"name": "Prisma ORM", "version": "^6.19.2", "type": "Type-safe ORM", "desc": "スキーマ定義 & 型安全データベースアクセス", "security_link": "https://github.com/prisma/prisma/security/advisories"}], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/email-sender"}, {"id": "maice-admin-overall-architecture", "repo": "maice-admin", "repo_slug": "maice-admin", "category": "Core Application", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    client[\\"Web Client\\\\nBrowser\\"]:::entry\\n    router[\\"Page Router\\\\nsrc/app/\\"]:::entry\\n    ui-components[\\"UI Components\\\\nsrc/components/\\"]\\n    state-mgmt[\\"State & Hooks\\\\nsrc/hooks/, src/stores/\\"]\\n    api-layer[\\"API & Services\\\\nsrc/lib/, src/api/\\"]\\n    backend[\\"MAICE Backend API\\\\nmaice-backend\\"]:::external\\n\\n    client -->|\\"HTTP Request\\"| router\\n    router -->|\\"Render Views\\"| ui-components\\n    ui-components -->|\\"User Actions\\"| state-mgmt\\n    state-mgmt -->|\\"Data Fetching\\"| api-layer\\n    api-layer -->|\\"REST / GraphQL\\"| backend", "description": "maice-admin はNext.jsベースのWebフロントエンドアプリケーションです。PLUS IMPACT maice-admin component", "is_root": false, "createdAt": "2025-06-13T10:25:21Z", "updatedAt": "2026-11-06T08:18:06Z", "pushedAt": "2026-11-06T08:18:00Z", "commit_hash": "1a193e5", "commit_date": "2026-11-06", "commit_subject": "fix(prompt-tuning): add preview examples for 26 live prompt variables (#242)", "commit_author": "tk-the-greatest-in-plus-impact", "commit_stat": "547 files changed, 96779 insertions(+)", "commit_body": ["* fix(prompt-tuning): add preview examples for 26 live prompt variables", "The nightly live-inventory smoke check first ran once the QA admin could", "pass 2FA and found 26 dev prompt variables with no Admin fallback example.", "Add ja/en examples that mirror each backend supplier's runtime shape and", "register them in the unit-test inventory (56 -> 82).", "* fix(prompt-tuning): align payloadJson example with the N11 scoring input", "Use the real evaluateN11 top-level keys (contract, library, turns,", "verification_context, item_result_schema, output_items, output_shape) and", "the N11Turn shape, and mark the trimmed parts as a simplified placeholder.", "---------"], "commit_files": ["A\\t.cursor/rules/ai-modal.mdc", "A\\t.eslintrc.json", "A\\t.github/CODEOWNERS", "A\\t.github/FUNDING.yml", "A\\t.github/astra_review/.gitignore", "A\\t.github/astra_review/account_status.py", "A\\t.github/astra_review/artifact.js", "A\\t.github/astra_review/cli.py"], "deps": {"frameworks": [{"name": "Next.js", "version": "15.3.2", "status": "latest", "desc": "Next.js 15 最新安定版 (React 19 / Turbopack / Server Actions セキュリティ強化)", "cve": null, "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "19.0.0", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "TypeScript", "version": "5.7.2", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^3.4.17", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/maice-admin"}, {"id": "maice-ai-service-overall-architecture", "repo": "maice-ai-service", "repo_slug": "maice-ai-service", "category": "AI & Processing", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    source[\\"Source Assets\\\\nSpecifications / Configs\\"]:::entry\\n    core-modules[\\"Core Modules\\\\nProject Files\\"]\\n    distribution[\\"Distribution / Exports\\\\nGenerated Assets\\"]:::store\\n    consumers[\\"Dependent Services\\\\nMAICE / PLUS IMPACT Apps\\"]:::external\\n\\n    source -->|\\"Process & Build\\"| core-modules\\n    core-modules -->|\\"Export\\"| distribution\\n    consumers -->|\\"Consume Package\\"| distribution", "description": "maice-ai-service: PLUS IMPACT maice-ai-service component。", "is_root": false, "createdAt": "2025-05-20T02:42:04Z", "updatedAt": "2025-05-20T02:42:07Z", "pushedAt": "2025-05-20T02:42:04Z", "commit_hash": "6d66297", "commit_date": "2025-05-20", "commit_subject": "Initial commit", "commit_author": "Shogo Nishino", "commit_stat": "1 file changed, 1 insertion(+)", "commit_body": [], "commit_files": ["A\\tREADME.md"], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/maice-ai-service"}, {"id": "maice-backend-overall-architecture", "repo": "maice-backend", "repo_slug": "maice-backend", "category": "Core Backend", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n    classDef concern fill:#f38ba8,stroke:#f38ba8,color:#1e1e2e\\n\\n    clients[\\"Web / Mobile Clients\\\\nFrontend Apps\\"]:::entry\\n    http-gateway[\\"HTTP Gateway & Server\\\\nsrc/server.ts, src/app.ts\\"]:::entry\\n    ws-gateway[\\"WebSocket Gateway\\\\nsrc/ws/\\"]:::entry\\n    api-router[\\"API Router\\\\nsrc/routes.ts\\"]\\n    feature-modules[\\"Domain Features\\\\nsrc/features/\\"]\\n    job-queues[\\"Job Queues & Workers\\\\nsrc/queues/, src/jobs/\\"]\\n    database[\\"PostgreSQL & Knex\\\\nsrc/db/\\"]:::store\\n    redis-store[\\"Redis Cache & Broker\\\\nsrc/external-services/redis.ts\\"]:::store\\n    external-apis[\\"External AI & Cloud APIs\\\\nsrc/external-services/\\"]:::external\\n\\n    clients -->|\\"HTTP / REST API\\"| http-gateway\\n    clients -->|\\"WebSocket Connection\\"| ws-gateway\\n    http-gateway -->|\\"Dispatch Request\\"| api-router\\n    api-router -->|\\"Route by Domain\\"| feature-modules\\n    ws-gateway -->|\\"Real-time Interview Flow\\"| feature-modules\\n    feature-modules -->|\\"Query / Transact\\"| database\\n    feature-modules -->|\\"Enqueue Heavy Tasks\\"| job-queues\\n    feature-modules -->|\\"Cache & Rate Limit\\"| redis-store\\n    job-queues -->|\\"Pop & Process Jobs\\"| redis-store\\n    job-queues -->|\\"AI Scoring / Transcription\\"| external-apis\\n    feature-modules -->|\\"AI & S3 Access\\"| external-apis\\n", "description": "MAICEのバックエンドシステム全体の高水準アーキテクチャ。Express.js + TypeScriptによるREST APIサーバーと、リアルタイムAI面接用のWebSocketサーバーが稼働し、ドメイン別のFeatureモジュール（Corporate, Individual, Admin等）、非同期ジョブキュー（BullMQ/Redis）、PostgreSQLデータベース、外部AI・クラウドサービス（Gemini, OpenAI, AWS S3, Auth0）が連携しています。\\n", "is_root": false, "createdAt": "2025-05-25T17:04:41Z", "updatedAt": "2026-11-06T09:59:31Z", "pushedAt": "2026-11-06T09:59:27Z", "commit_hash": "e7719af", "commit_date": "2026-11-06", "commit_subject": "fix(talk-report): make the Talk report PDF match the web view (XD-2248) (#2247)", "commit_author": "paingphyo", "commit_stat": "5125 files changed, 1642993 insertions(+)", "commit_body": ["* fix(talk-report): make the Talk report PDF match the web view (XD-2248)", "- Localize every PDF label from the same copy the web report uses", "(corporate talk.reports.* for the manager PDF, individual", "xcoreTalk.report.* for the employee PDF), 8 languages", "- Self-heal wrong-language values in same-language renders like", "getReport does (ensureLanguage)", "- Bump PDF_TEMPLATE_VERSION to 9 so stale cached PDFs re-render", "* fix(talk-report): address #2247 review (XD-2248)", "- Fix the 3 failing tests: template section comments no longer repeat", "English heading text (comments are emitted into the rendered HTML);"], "commit_files": ["A\\t.DS_Store", "A\\t.claude/settings.local.json", "A\\t.dockerignore", "A\\t.env.example", "A\\t.gitattributes", "A\\t.github/CODEOWNERS", "A\\t.github/astra_review/.gitignore", "A\\t.github/astra_review/account_status.py"], "deps": {"frameworks": [{"name": "Express", "version": "^5.1.0", "status": "latest", "desc": "v5系 最新メジャー (非同期エラーハンドリング標準化・プロトタイプ汚染対策)", "security_link": "https://github.com/expressjs/express/security/advisories"}, {"name": "axios", "version": "^1.8.4", "status": "safe", "desc": "HTTPクライアントライブラリ", "cve": null, "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "^5.8.2", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}], "databases": [{"name": "Knex.js ORM", "version": "^3.1.0", "type": "SQL Query Builder", "desc": "マイグレーション管理 & SQLインジェクション防止プリペアドステートメント", "security_link": "https://github.com/knex/knex/security/advisories"}, {"name": "pg (PostgreSQL Client)", "version": "^8.16.2", "type": "Database Driver", "desc": "PostgreSQL 16接続クライアントドライバ", "security_link": "https://github.com/brianc/node-postgres/security/advisories"}, {"name": "BullMQ", "version": "^5.55.0", "type": "Job Queue", "desc": "Redis 7対応 高スループット分散非同期キュー", "security_link": "https://github.com/taskforcesh/bullmq/security/advisories"}], "ai_sdks": [{"name": "@google/genai", "version": "^1.38.0", "desc": "Google Gemini 1.5 新SDK"}, {"name": "openai", "version": "^6.7.0", "desc": "OpenAI 公式APIクライアント"}], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/maice-backend"}, {"id": "maice-backend-request-lifecycle", "repo": "maice-backend", "repo_slug": "maice-backend", "category": "Core Backend", "perspective": "request-lifecycle", "diagram": "graph LR\\n    client[\\"Client HTTP Request\\\\nBrowser / Mobile\\"]\\n    cors-helmet[\\"CORS & Security Middleware\\\\nsrc/app.ts\\"]\\n    jwt-auth[\\"JWT & Membership Check\\\\nsrc/middlewares/oauth-jwt.ts\\"]\\n    route-dispatch[\\"Feature Route Handler\\\\nsrc/routes.ts\\"]\\n    controller[\\"Controller & Service\\\\nsrc/features/*/\\"]\\n    db-query[\\"Knex Transaction\\\\nsrc/db/db.ts\\"]\\n    queue-dispatch[\\"Async Queue Enqueue\\\\nsrc/queues/\\"]\\n    response[\\"JSON Response Formatter\\\\nsrc/utils/response.ts\\"]\\n\\n    client -->|\\"HTTP Request\\"| cors-helmet\\n    cors-helmet -->|\\"Sanitized Request\\"| jwt-auth\\n    jwt-auth -->|\\"Authenticated User\\"| route-dispatch\\n    route-dispatch -->|\\"Invoke Action\\"| controller\\n    controller -->|\\"SQL Query / Update\\"| db-query\\n    controller -->|\\"Offload Heavy Work\\"| queue-dispatch\\n    controller -->|\\"Return Payload\\"| response\\n    response -->|\\"HTTP 200/201 JSON\\"| client\\n", "description": "MAICE Backendにおける一般的なHTTP REST APIリクエストのライフサイクル。クライアントからのリクエスト受信から、CORS/ヘッダー検査、JWT認証・所属企業メンバーシップ検証、Featureコントローラーによるビジネスロジック実行、Knex/DBトランザクション、非同期キュー投入、そして統一フォーマットでのJSONレスポンス返却までの処理フローを定義します。\\n", "is_root": false, "createdAt": "2025-05-25T17:04:41Z", "updatedAt": "2026-11-06T09:59:31Z", "pushedAt": "2026-11-06T09:59:27Z", "commit_hash": "e7719af", "commit_date": "2026-11-06", "commit_subject": "fix(talk-report): make the Talk report PDF match the web view (XD-2248) (#2247)", "commit_author": "paingphyo", "commit_stat": "5125 files changed, 1642993 insertions(+)", "commit_body": ["* fix(talk-report): make the Talk report PDF match the web view (XD-2248)", "- Localize every PDF label from the same copy the web report uses", "(corporate talk.reports.* for the manager PDF, individual", "xcoreTalk.report.* for the employee PDF), 8 languages", "- Self-heal wrong-language values in same-language renders like", "getReport does (ensureLanguage)", "- Bump PDF_TEMPLATE_VERSION to 9 so stale cached PDFs re-render", "* fix(talk-report): address #2247 review (XD-2248)", "- Fix the 3 failing tests: template section comments no longer repeat", "English heading text (comments are emitted into the rendered HTML);"], "commit_files": ["A\\t.DS_Store", "A\\t.claude/settings.local.json", "A\\t.dockerignore", "A\\t.env.example", "A\\t.gitattributes", "A\\t.github/CODEOWNERS", "A\\t.github/astra_review/.gitignore", "A\\t.github/astra_review/account_status.py"], "deps": {"frameworks": [{"name": "Express", "version": "^5.1.0", "status": "latest", "desc": "v5系 最新メジャー (非同期エラーハンドリング標準化・プロトタイプ汚染対策)", "security_link": "https://github.com/expressjs/express/security/advisories"}, {"name": "axios", "version": "^1.8.4", "status": "safe", "desc": "HTTPクライアントライブラリ", "cve": null, "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "^5.8.2", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}], "databases": [{"name": "Knex.js ORM", "version": "^3.1.0", "type": "SQL Query Builder", "desc": "マイグレーション管理 & SQLインジェクション防止プリペアドステートメント", "security_link": "https://github.com/knex/knex/security/advisories"}, {"name": "pg (PostgreSQL Client)", "version": "^8.16.2", "type": "Database Driver", "desc": "PostgreSQL 16接続クライアントドライバ", "security_link": "https://github.com/brianc/node-postgres/security/advisories"}, {"name": "BullMQ", "version": "^5.55.0", "type": "Job Queue", "desc": "Redis 7対応 高スループット分散非同期キュー", "security_link": "https://github.com/taskforcesh/bullmq/security/advisories"}], "ai_sdks": [{"name": "@google/genai", "version": "^1.38.0", "desc": "Google Gemini 1.5 新SDK"}, {"name": "openai", "version": "^6.7.0", "desc": "OpenAI 公式APIクライアント"}], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/maice-backend"}, {"id": "maice-corporate-overall-architecture", "repo": "maice-corporate", "repo_slug": "maice-corporate", "category": "Core Application", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    recruiter[\\"Recruiter / Hiring Manager\\\\nCorporate Browser\\"]:::entry\\n    app-router[\\"Next.js App Router\\\\nsrc/app/\\"]:::entry\\n    auth-gateway[\\"Auth0 & Session API\\\\nsrc/app/api/auth/\\"]\\n    corporate-features[\\"Corporate Features\\\\nsrc/features/\\"]\\n    state-data[\\"Zustand & TanStack Query\\\\nsrc/stores/, src/hooks/\\"]\\n    shadcn-ui[\\"Shadcn & Tailwind v4 UI\\\\nsrc/components/\\"]\\n    backend-api[\\"MAICE Backend API\\\\nmaice-backend\\"]:::external\\n\\n    recruiter -->|\\"Dashboard Access\\"| app-router\\n    app-router -->|\\"Login / Token Exchange\\"| auth-gateway\\n    app-router -->|\\"Render Feature Pages\\"| corporate-features\\n    corporate-features -->|\\"Manage State & Caching\\"| state-data\\n    corporate-features -->|\\"Compose UI Components\\"| shadcn-ui\\n    state-data -->|\\"REST API / Bearer Token\\"| backend-api\\n", "description": "MAICE Corporateの法人企業向けフロントエンドダッシュボード。Next.js 15（App Router）、React 19、Shadcn-ui、Tailwind CSS v4、Zustand、TanStack Queryを採用。企業の採用担当者や面接官が、AI面接の作成・管理、候補者の職務経歴書自動スクリーニング（Smart Filter）、AI評価レポート確認、チームメンバー管理を行うための総合ポータルです。\\n", "is_root": false, "createdAt": "2025-07-01T01:52:38Z", "updatedAt": "2026-11-06T09:09:07Z", "pushedAt": "2026-11-06T09:09:04Z", "commit_hash": "0ce9ad9", "commit_date": "2026-11-06", "commit_subject": "feat(ai-interview-v2): create and publish N11 interviews without generate-axes (#1142)", "commit_author": "tk-the-greatest-in-plus-impact", "commit_stat": "1526 files changed, 363870 insertions(+)", "commit_body": ["* feat(ai-interview-v2): show N1-N11 targets on the Questions step behind a flag", "With NEXT_PUBLIC_AI_INTERVIEW_V2_N11_TARGETS (and public authoring) on, a", "Hiring design is seeded on the rubric_library_v2 / rubrics-n11-v1 pair over", "the existing fixed context. Bank questions start with their N11 library", "default item, other questions with none (no C id is mapped to an N id), and", "the scope is those items at equal weights. Adding a bank question from the", "library brings its item into the scope at weight 0.", "* docs(ai-interview-v2): list the public authoring and N11 targets flags in .env.example", "* fix(ai-interview-v2): re-split N11 weights equally when a library item joins", "Adding a library bank question put its N item into the scope at weight 0."], "commit_files": ["A\\t.claude/settings.local.json", "A\\t.claude/skills/vercel-react-best-practices/AGENTS.md", "A\\t.claude/skills/vercel-react-best-practices/SKILL.md", "A\\t.claude/skills/vercel-react-best-practices/rules/advanced-event-handler-refs.md", "A\\t.claude/skills/vercel-react-best-practices/rules/advanced-init-once.md", "A\\t.claude/skills/vercel-react-best-practices/rules/advanced-use-latest.md", "A\\t.claude/skills/vercel-react-best-practices/rules/async-api-routes.md", "A\\t.claude/skills/vercel-react-best-practices/rules/async-defer-await.md"], "deps": {"frameworks": [{"name": "Next.js", "version": "^15.3.6", "status": "latest", "desc": "Next.js 15 最新安定版 (React 19 / Turbopack / Server Actions セキュリティ強化)", "cve": null, "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "^19.0.1", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "axios", "version": "^1.10.0", "status": "warn", "desc": "⚠️ CVE-2024-39338 SSRF脆弱性影響 (v1.7.4以上への更新推奨)", "cve": "CVE-2024-39338", "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "5.7.2", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^4.0.0", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": [{"id": "CVE-2024-39338", "cve": "CVE-2024-39338", "title": "Axios Server-Side Request Forgery (SSRF) bypass in relative URLs", "pkg": "axios", "installed": "^1.10.0", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)", "affected": "axios < 1.7.4", "fixed_in": "1.7.4 以上", "summary": "Axiosにおいて相対URL（/path）を用いてリクエストを送信する際、baseURLやプロキシ設定の厳格なサニタイズが迂回され、内部ネットワークや不正エンドポイントへのリクエストが発生するSSRF脆弱性。", "impact": "クラウド環境内のメタデータサービス（AWS IMDS等）や内部プライベートAPIが不正に呼び出される危険性があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-39338", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-8hc4-vh64-cxmj)", "url": "https://github.com/advisories/GHSA-8hc4-vh64-cxmj", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-39338", "type": "MITRE"}, {"name": "Axios Official Release Notes", "url": "https://github.com/axios/axios/releases/tag/v1.7.4", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/maice-corporate && npm install axios@latest"}]}, "github_url": "https://github.com/plusimpact/maice-corporate"}, {"id": "maice-frontend-overall-architecture", "repo": "maice-frontend", "repo_slug": "maice-frontend", "category": "Marketing / Web", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    browser[\\"Web Browser\\\\nClient Device\\"]:::entry\\n    next-middleware[\\"Next.js Middleware & i18n\\\\nsrc/middleware.ts\\"]:::entry\\n    app-router[\\"App Router Pages\\\\nsrc/app/[locale]/\\"]\\n    domain-views[\\"Domain Components\\\\nsrc/components/\\"]\\n    ui-primitives[\\"Radix & Tailwind UI\\\\nsrc/components/ui/\\"]\\n    locale-store[\\"Multi-Language Locales\\\\nlocales/\\"]:::store\\n    backend-api[\\"MAICE Backend API\\\\nmaice-backend\\"]:::external\\n\\n    browser -->|\\"HTTP GET / Route\\"| next-middleware\\n    next-middleware -->|\\"Locale Match & Rewrite\\"| app-router\\n    app-router -->|\\"Load Translations\\"| locale-store\\n    app-router -->|\\"Compose Layouts\\"| domain-views\\n    domain-views -->|\\"Render UI Atoms\\"| ui-primitives\\n    domain-views -->|\\"Client / Server Fetch\\"| backend-api\\n", "description": "xCORE / MAICEのパブリックWebサイトおよびマーケティングフロントエンド。Next.js 14（App Router）、TypeScript、Tailwind CSS、Radix UIにより構築され、next-intlによる7言語対応（日本語、英語、インドネシア語、ベトナム語、ベンガル語、ミャンマー語、韓国語）をサポートします。\\n", "is_root": false, "createdAt": "2025-05-14T10:58:05Z", "updatedAt": "2026-11-04T08:22:24Z", "pushedAt": "2026-11-06T12:42:43Z", "commit_hash": "076e0e5", "commit_date": "2026-11-04", "commit_subject": "Merge pull request #112 from plusimpact/fix/xcore-pinned-legal-v2", "commit_author": "Arifuzzaman Pranto", "commit_stat": "488 files changed, 69589 insertions(+)", "commit_body": ["fix: port pinned legal pages and the draft notice to develop-v2 (#82)"], "commit_files": ["A\\t.claude/commands/generate-tests.md", "A\\t.claude/settings.json", "A\\t.claude/settings.local.json", "A\\t.eslintrc.json", "A\\t.github/pull_requested_template.md", "A\\t.github/workflows/branch-merge-validation.yml", "A\\t.github/workflows/ci.yml", "A\\t.github/workflows/claude-code-review.yml"], "deps": {"frameworks": [{"name": "Next.js", "version": "^14.2.30", "status": "warn", "desc": "⚠️ CVE-2024-34351 SSRキャッシュポイズニング影響 (v14.2.4以上への更新推奨)", "cve": "CVE-2024-34351", "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "^18", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "axios", "version": "^1.6.2", "status": "warn", "desc": "⚠️ CVE-2024-39338 SSRF脆弱性影響 (v1.7.4以上への更新推奨)", "cve": "CVE-2024-39338", "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "^5", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^3.4.17", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": [{"id": "CVE-2024-34351", "cve": "CVE-2024-34351", "title": "Next.js Server Actions SSR Cache Poisoning (ホストヘッダー偽装によるキャッシュ汚染)", "pkg": "Next.js", "installed": "^14.2.30", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N)", "affected": "Next.js >= 13.0.0, < 14.2.4", "fixed_in": "14.2.4 以上 または 15.x", "summary": "Next.jsのServer Actionsリクエストにおいて、Hostヘッダーの検証が不十分なため、細工されたリクエストによりSSRキャッシュがポイズニングされ、正規ユーザーが意図しない外部URLへリダイレクトされたり内部情報が漏洩する脆弱性。", "impact": "悪意のあるキャッシュが配信され、フィッシングサイトへの誘導やSSRFの踏み台にされる危険があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-34351", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-79g7-3prr-559v)", "url": "https://github.com/advisories/GHSA-79g7-3prr-559v", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-34351", "type": "MITRE"}, {"name": "Vercel / Next.js Security Advisory", "url": "https://github.com/vercel/next.js/security/advisories/GHSA-79g7-3prr-559v", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/maice-frontend && npm install next@latest react@latest react-dom@latest"}, {"id": "CVE-2024-39338", "cve": "CVE-2024-39338", "title": "Axios Server-Side Request Forgery (SSRF) bypass in relative URLs", "pkg": "axios", "installed": "^1.6.2", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)", "affected": "axios < 1.7.4", "fixed_in": "1.7.4 以上", "summary": "Axiosにおいて相対URL（/path）を用いてリクエストを送信する際、baseURLやプロキシ設定の厳格なサニタイズが迂回され、内部ネットワークや不正エンドポイントへのリクエストが発生するSSRF脆弱性。", "impact": "クラウド環境内のメタデータサービス（AWS IMDS等）や内部プライベートAPIが不正に呼び出される危険性があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-39338", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-8hc4-vh64-cxmj)", "url": "https://github.com/advisories/GHSA-8hc4-vh64-cxmj", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-39338", "type": "MITRE"}, {"name": "Axios Official Release Notes", "url": "https://github.com/axios/axios/releases/tag/v1.7.4", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/maice-frontend && npm install axios@latest"}]}, "github_url": "https://github.com/plusimpact/maice-frontend"}, {"id": "maice-frontend-route-page-map", "repo": "maice-frontend", "repo_slug": "maice-frontend", "category": "Marketing / Web", "perspective": "route-page-map", "diagram": "graph LR\\n    root[\\"Locale Root\\\\n/[locale]\\"]\\n    home[\\"Home LP Page\\\\n/[locale]/page.tsx\\"]\\n    products[\\"Products Page\\\\n/[locale]/(marketing)/products/\\"]\\n    pricing[\\"Pricing Page\\\\n/[locale]/(marketing)/pricing/\\"]\\n    trust[\\"Trust & Security\\\\n/[locale]/(marketing)/trust/\\"]\\n    blog[\\"Blog & Insights\\\\n/[locale]/(marketing)/blog/\\"]\\n    demo[\\"Request Demo\\\\n/[locale]/(marketing)/request-demo/\\"]\\n    legal[\\"Legal & Terms\\\\n/[locale]/legal/\\"]\\n\\n    root -->|\\"Top / LP\\"| home\\n    root -->|\\"Products Info\\"| products\\n    root -->|\\"Plans & Fees\\"| pricing\\n    root -->|\\"Security & Compliance\\"| trust\\n    root -->|\\"Articles & News\\"| blog\\n    root -->|\\"Inquiry Form\\"| demo\\n    root -->|\\"Terms & Policies\\"| legal\\n", "description": "MAICE / xCOREフロントエンドのルーティング構成とページ構造マップ。多言語ロケールプレフィックス（/[locale]/）配下のマーケティングおよび法的情報ページ群を網羅します。\\n", "is_root": false, "createdAt": "2025-05-14T10:58:05Z", "updatedAt": "2026-11-04T08:22:24Z", "pushedAt": "2026-11-06T12:42:43Z", "commit_hash": "076e0e5", "commit_date": "2026-11-04", "commit_subject": "Merge pull request #112 from plusimpact/fix/xcore-pinned-legal-v2", "commit_author": "Arifuzzaman Pranto", "commit_stat": "488 files changed, 69589 insertions(+)", "commit_body": ["fix: port pinned legal pages and the draft notice to develop-v2 (#82)"], "commit_files": ["A\\t.claude/commands/generate-tests.md", "A\\t.claude/settings.json", "A\\t.claude/settings.local.json", "A\\t.eslintrc.json", "A\\t.github/pull_requested_template.md", "A\\t.github/workflows/branch-merge-validation.yml", "A\\t.github/workflows/ci.yml", "A\\t.github/workflows/claude-code-review.yml"], "deps": {"frameworks": [{"name": "Next.js", "version": "^14.2.30", "status": "warn", "desc": "⚠️ CVE-2024-34351 SSRキャッシュポイズニング影響 (v14.2.4以上への更新推奨)", "cve": "CVE-2024-34351", "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "^18", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "axios", "version": "^1.6.2", "status": "warn", "desc": "⚠️ CVE-2024-39338 SSRF脆弱性影響 (v1.7.4以上への更新推奨)", "cve": "CVE-2024-39338", "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "^5", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^3.4.17", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": [{"id": "CVE-2024-34351", "cve": "CVE-2024-34351", "title": "Next.js Server Actions SSR Cache Poisoning (ホストヘッダー偽装によるキャッシュ汚染)", "pkg": "Next.js", "installed": "^14.2.30", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N)", "affected": "Next.js >= 13.0.0, < 14.2.4", "fixed_in": "14.2.4 以上 または 15.x", "summary": "Next.jsのServer Actionsリクエストにおいて、Hostヘッダーの検証が不十分なため、細工されたリクエストによりSSRキャッシュがポイズニングされ、正規ユーザーが意図しない外部URLへリダイレクトされたり内部情報が漏洩する脆弱性。", "impact": "悪意のあるキャッシュが配信され、フィッシングサイトへの誘導やSSRFの踏み台にされる危険があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-34351", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-79g7-3prr-559v)", "url": "https://github.com/advisories/GHSA-79g7-3prr-559v", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-34351", "type": "MITRE"}, {"name": "Vercel / Next.js Security Advisory", "url": "https://github.com/vercel/next.js/security/advisories/GHSA-79g7-3prr-559v", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/maice-frontend && npm install next@latest react@latest react-dom@latest"}, {"id": "CVE-2024-39338", "cve": "CVE-2024-39338", "title": "Axios Server-Side Request Forgery (SSRF) bypass in relative URLs", "pkg": "axios", "installed": "^1.6.2", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)", "affected": "axios < 1.7.4", "fixed_in": "1.7.4 以上", "summary": "Axiosにおいて相対URL（/path）を用いてリクエストを送信する際、baseURLやプロキシ設定の厳格なサニタイズが迂回され、内部ネットワークや不正エンドポイントへのリクエストが発生するSSRF脆弱性。", "impact": "クラウド環境内のメタデータサービス（AWS IMDS等）や内部プライベートAPIが不正に呼び出される危険性があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-39338", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-8hc4-vh64-cxmj)", "url": "https://github.com/advisories/GHSA-8hc4-vh64-cxmj", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-39338", "type": "MITRE"}, {"name": "Axios Official Release Notes", "url": "https://github.com/axios/axios/releases/tag/v1.7.4", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/maice-frontend && npm install axios@latest"}]}, "github_url": "https://github.com/plusimpact/maice-frontend"}, {"id": "maice-individual-overall-architecture", "repo": "maice-individual", "repo_slug": "maice-individual", "category": "Core Application", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    candidate[\\"Job Seeker / Candidate\\\\nBrowser / Mobile Web\\"]:::entry\\n    app-router[\\"Next.js App Router\\\\nsrc/app/\\"]:::entry\\n    auth-subsystem[\\"Auth0 & Local Session\\\\nsrc/app/api/auth/\\"]\\n    candidate-features[\\"Candidate Features\\\\nsrc/features/\\"]\\n    interview-runtime[\\"Real-Time Interview Room\\\\nsrc/features/exam/, xcore-talk/\\"]\\n    state-cache[\\"Zustand & TanStack Query\\\\nsrc/stores/, src/hooks/\\"]\\n    shadcn-components[\\"Shadcn & Tailwind UI\\\\nsrc/components/\\"]\\n    backend-api[\\"MAICE Backend API\\\\nmaice-backend\\"]:::external\\n    backend-ws[\\"WebSocket Audio Server\\\\nmaice-backend (ws)\\"]:::external\\n\\n    candidate -->|\\"Interview & Profile Access\\"| app-router\\n    app-router -->|\\"Sign In / Token Exchange\\"| auth-subsystem\\n    app-router -->|\\"Render Experience\\"| candidate-features\\n    candidate-features -->|\\"Enter AI Interview\\"| interview-runtime\\n    candidate-features -->|\\"State & Data Fetch\\"| state-cache\\n    candidate-features -->|\\"Render UI Atoms\\"| shadcn-components\\n    state-cache -->|\\"HTTP REST API\\"| backend-api\\n    interview-runtime -->|\\"Real-time Audio & STT\\"| backend-ws\\n", "description": "MAICE Individualの個人ユーザー（求職者・候補者）向けフロントエンド。Next.js 15（App Router）、React、Shadcn-ui、Tailwind CSS、Zustand、TanStack Queryを採用。候補者がAI面接を受検（WebRTC/WebSocket連携によるリアルタイム発話・録画・顔認証）、履歴書の登録・管理、適性検査（IPIP100）受検、および評価結果レポート・修了証の確認を行うための総合クライアントです。\\n", "is_root": false, "createdAt": "2025-07-01T01:54:45Z", "updatedAt": "2026-11-06T02:44:42Z", "pushedAt": "2026-11-06T07:02:59Z", "commit_hash": "ccccb5d", "commit_date": "2026-11-06", "commit_subject": "Merge pull request #1184 from plusimpact/fix/consent-banner-hidden-under-page-backdrop", "commit_author": "paingphyo", "commit_stat": "1385 files changed, 293697 insertions(+)", "commit_body": ["fix: keep consent banner above page-level background backdrops"], "commit_files": ["A\\t.claude/settings.json", "A\\t.claude/settings.local.json", "A\\t.eslintrc.json", "A\\t.github/CODEOWNERS", "A\\t.github/astra_review/.gitignore", "A\\t.github/astra_review/account_status.py", "A\\t.github/astra_review/artifact.js", "A\\t.github/astra_review/cli.py"], "deps": {"frameworks": [{"name": "Next.js", "version": "^15.3.6", "status": "latest", "desc": "Next.js 15 最新安定版 (React 19 / Turbopack / Server Actions セキュリティ強化)", "cve": null, "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "^19.0.1", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "axios", "version": "^1.11.0", "status": "warn", "desc": "⚠️ CVE-2024-39338 SSRF脆弱性影響 (v1.7.4以上への更新推奨)", "cve": "CVE-2024-39338", "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "5.7.2", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^4.0.0", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [], "ai_sdks": [{"name": "@google/generative-ai", "version": "^0.21.0", "desc": "Google Generative AI SDK"}, {"name": "openai", "version": "^4.77.3", "desc": "OpenAI 公式APIクライアント"}], "auth": [{"name": "@auth0/nextjs-auth0", "version": "^4.9.0", "desc": "Auth0公式 Next.js SDK (App Router/Pages Router対応)"}], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": [{"id": "CVE-2024-39338", "cve": "CVE-2024-39338", "title": "Axios Server-Side Request Forgery (SSRF) bypass in relative URLs", "pkg": "axios", "installed": "^1.11.0", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)", "affected": "axios < 1.7.4", "fixed_in": "1.7.4 以上", "summary": "Axiosにおいて相対URL（/path）を用いてリクエストを送信する際、baseURLやプロキシ設定の厳格なサニタイズが迂回され、内部ネットワークや不正エンドポイントへのリクエストが発生するSSRF脆弱性。", "impact": "クラウド環境内のメタデータサービス（AWS IMDS等）や内部プライベートAPIが不正に呼び出される危険性があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-39338", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-8hc4-vh64-cxmj)", "url": "https://github.com/advisories/GHSA-8hc4-vh64-cxmj", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-39338", "type": "MITRE"}, {"name": "Axios Official Release Notes", "url": "https://github.com/axios/axios/releases/tag/v1.7.4", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/maice-individual && npm install axios@latest"}]}, "github_url": "https://github.com/plusimpact/maice-individual"}, {"id": "maice-infra-overall-architecture", "repo": "maice-infra", "repo_slug": "maice-infra", "category": "Infrastructure", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    ci-cd[\\"CI/CD Pipeline\\\\nGitHub Actions\\"]:::entry\\n    infra-code[\\"IaC Templates\\\\nTerraform / CDK / ECS\\"]\\n    ecs-cluster[\\"ECS Container Cluster\\\\nAWS ECS Fargate\\"]\\n    s3-storage[\\"Object Storage\\\\nAWS S3 Buckets\\"]:::store\\n    rds-postgres[\\"Relational Database\\\\nAWS RDS PostgreSQL\\"]:::store\\n    networking[\\"VPC & Load Balancing\\\\nALB / Security Groups\\"]\\n\\n    ci-cd -->|\\"Plan & Apply\\"| infra-code\\n    infra-code -->|\\"Provision Networking\\"| networking\\n    infra-code -->|\\"Deploy Containers\\"| ecs-cluster\\n    infra-code -->|\\"Configure Storage\\"| s3-storage\\n    infra-code -->|\\"Configure DB\\"| rds-postgres\\n    networking -->|\\"Route Traffic\\"| ecs-cluster", "description": "maice-infra はインフラストラクチャ定義・クラウドプロビジョニングコードです。Maice Infra for the AWS services", "is_root": false, "createdAt": "2025-07-30T10:49:42Z", "updatedAt": "2026-09-21T14:13:05Z", "pushedAt": "2026-10-29T05:07:01Z", "commit_hash": "2d4145b", "commit_date": "2026-09-21", "commit_subject": "Merge pull request #17 from plusimpact/chore/prod-rds-adopt-restore", "commit_author": "tk-the-greatest-in-plus-impact", "commit_stat": "74 files changed, 6726 insertions(+)", "commit_body": ["chore(rds): parameterize manage_master_user_password for prod restore-DB adoption"], "commit_files": ["A\\t.gitignore", "A\\t.terraform.lock.hcl", "A\\tAGENTS.md", "A\\tCLAUDE.md", "A\\tLoad-testing.md", "A\\tREADME.md", "A\\tai-interview-tts-monitoring.tf", "A\\tbackend-split.tf"], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/maice-infra"}, {"id": "maice-prompt-tuning-overall-architecture", "repo": "maice-prompt-tuning", "repo_slug": "maice-prompt-tuning", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    client[\\"Web Client\\\\nBrowser\\"]:::entry\\n    router[\\"Page Router\\\\nsrc/app/\\"]:::entry\\n    ui-components[\\"UI Components\\\\nsrc/components/\\"]\\n    state-mgmt[\\"State & Hooks\\\\nsrc/hooks/, src/stores/\\"]\\n    api-layer[\\"API & Services\\\\nsrc/lib/, src/api/\\"]\\n    backend[\\"MAICE Backend API\\\\nmaice-backend\\"]:::external\\n\\n    client -->|\\"HTTP Request\\"| router\\n    router -->|\\"Render Views\\"| ui-components\\n    ui-components -->|\\"User Actions\\"| state-mgmt\\n    state-mgmt -->|\\"Data Fetching\\"| api-layer\\n    api-layer -->|\\"REST / GraphQL\\"| backend", "description": "maice-prompt-tuning はNext.jsベースのWebフロントエンドアプリケーションです。PLUS IMPACT maice-prompt-tuning component", "is_root": false, "createdAt": "2025-12-19T06:47:29Z", "updatedAt": "2026-01-15T05:51:06Z", "pushedAt": "2026-01-23T11:52:27Z", "commit_hash": "82831dd", "commit_date": "2026-01-15", "commit_subject": "Merge pull request #1 from plusimpact/feature/prompt-db-management", "commit_author": "Shogo Nishino", "commit_stat": "41 files changed, 13227 insertions(+)", "commit_body": ["feat: AI Prompts management UI with validation"], "commit_files": ["A\\t.dockerignore", "A\\t.env.example", "A\\t.eslintrc.json", "A\\t.gitignore", "A\\tDockerfile", "A\\tREADME.md", "A\\tnext.config.mjs", "A\\tpackage-lock.json"], "deps": {"frameworks": [{"name": "Next.js", "version": "14.2.35", "status": "warn", "desc": "⚠️ CVE-2024-34351 SSRキャッシュポイズニング影響 (v14.2.4以上への更新推奨)", "cve": "CVE-2024-34351", "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "^18", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "TypeScript", "version": "^5", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^3.4.1", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [{"name": "Prisma ORM", "version": "^6.19.1", "type": "Type-safe ORM", "desc": "スキーマ定義 & 型安全データベースアクセス", "security_link": "https://github.com/prisma/prisma/security/advisories"}], "ai_sdks": [{"name": "openai", "version": "^6.15.0", "desc": "OpenAI 公式APIクライアント"}], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": [{"id": "CVE-2024-34351", "cve": "CVE-2024-34351", "title": "Next.js Server Actions SSR Cache Poisoning (ホストヘッダー偽装によるキャッシュ汚染)", "pkg": "Next.js", "installed": "14.2.35", "severity": "HIGH", "cvss": "7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N)", "affected": "Next.js >= 13.0.0, < 14.2.4", "fixed_in": "14.2.4 以上 または 15.x", "summary": "Next.jsのServer Actionsリクエストにおいて、Hostヘッダーの検証が不十分なため、細工されたリクエストによりSSRキャッシュがポイズニングされ、正規ユーザーが意図しない外部URLへリダイレクトされたり内部情報が漏洩する脆弱性。", "impact": "悪意のあるキャッシュが配信され、フィッシングサイトへの誘導やSSRFの踏み台にされる危険があります。", "sources": [{"name": "NIST NVD (米国立標準技術研究所)", "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-34351", "type": "NVD公式"}, {"name": "GitHub Advisory Database (GHSA-79g7-3prr-559v)", "url": "https://github.com/advisories/GHSA-79g7-3prr-559v", "type": "GitHub公式"}, {"name": "MITRE CVE Entry", "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-34351", "type": "MITRE"}, {"name": "Vercel / Next.js Security Advisory", "url": "https://github.com/vercel/next.js/security/advisories/GHSA-79g7-3prr-559v", "type": "公式ベンダー"}], "remediation_cmd": "cd ~/Git/plusimpact/maice-prompt-tuning && npm install next@latest react@latest react-dom@latest"}]}, "github_url": "https://github.com/plusimpact/maice-prompt-tuning"}, {"id": "maice-utils-overall-architecture", "repo": "maice-utils", "repo_slug": "maice-utils", "category": "Microservices", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    clients[\\"API Clients\\\\nWeb / Mobile\\"]:::entry\\n    server[\\"Express Server\\\\nsrc/server.ts, app.ts\\"]:::entry\\n    routes[\\"Route Handlers\\\\nsrc/routes/\\"]\\n    services[\\"Service Business Logic\\\\nsrc/services/\\"]\\n    db[\\"Database Layer\\\\nPostgreSQL / Knex\\"]:::store\\n    external-apis[\\"External Services\\\\nAI / AWS APIs\\"]:::external\\n\\n    clients -->|\\"REST API Call\\"| server\\n    server -->|\\"Dispatch\\"| routes\\n    routes -->|\\"Execute Logic\\"| services\\n    services -->|\\"Query / Persist\\"| db\\n    services -->|\\"Integrate\\"| external-apis", "description": "maice-utils はExpress.js + TypeScriptによるAPIバックエンドサービスです。maice-utils: video conversion + Gemini transcription microservice", "is_root": false, "createdAt": "2026-06-02T09:43:11Z", "updatedAt": "2026-08-11T09:31:15Z", "pushedAt": "2026-08-11T09:30:12Z", "commit_hash": "e1799ed", "commit_date": "2026-08-11", "commit_subject": "Merge pull request #11 from plusimpact/feature/transcript-result-contract-v1", "commit_author": "tk-the-greatest-in-plus-impact", "commit_stat": "43 files changed, 9506 insertions(+)", "commit_body": ["feat(transcription): add versioned transcript result contract"], "commit_files": ["A\\t.env.example", "A\\t.github/workflows/deploy-ecs-fargate.yml", "A\\t.gitignore", "A\\t.prettierrc.json", "A\\tDockerfile", "A\\tINFRA_DEPLOY_HANDOFF.md", "A\\tREADME.md", "A\\tdocs/architecture.md"], "deps": {"frameworks": [{"name": "Express", "version": "^5.1.0", "status": "latest", "desc": "v5系 最新メジャー (非同期エラーハンドリング標準化・プロトタイプ汚染対策)", "security_link": "https://github.com/expressjs/express/security/advisories"}, {"name": "axios", "version": "^1.8.4", "status": "safe", "desc": "HTTPクライアントライブラリ", "cve": null, "security_link": "https://github.com/axios/axios/security/advisories"}, {"name": "TypeScript", "version": "^5.8.2", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}], "databases": [{"name": "BullMQ", "version": "^5.55.0", "type": "Job Queue", "desc": "Redis 7対応 高スループット分散非同期キュー", "security_link": "https://github.com/taskforcesh/bullmq/security/advisories"}], "ai_sdks": [{"name": "@google/genai", "version": "^1.38.0", "desc": "Google Gemini 1.5 新SDK"}], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/maice-utils"}, {"id": "maice-websocket-demo-overall-architecture", "repo": "maice-websocket-demo", "repo_slug": "maice-websocket-demo", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    client[\\"Web Client\\\\nBrowser\\"]:::entry\\n    router[\\"Page Router\\\\nsrc/app/\\"]:::entry\\n    ui-components[\\"UI Components\\\\nsrc/components/\\"]\\n    state-mgmt[\\"State & Hooks\\\\nsrc/hooks/, src/stores/\\"]\\n    api-layer[\\"API & Services\\\\nsrc/lib/, src/api/\\"]\\n    backend[\\"MAICE Backend API\\\\nmaice-backend\\"]:::external\\n\\n    client -->|\\"HTTP Request\\"| router\\n    router -->|\\"Render Views\\"| ui-components\\n    ui-components -->|\\"User Actions\\"| state-mgmt\\n    state-mgmt -->|\\"Data Fetching\\"| api-layer\\n    api-layer -->|\\"REST / GraphQL\\"| backend", "description": "maice-websocket-demo はNext.jsベースのWebフロントエンドアプリケーションです。PLUS IMPACT maice-websocket-demo component", "is_root": false, "createdAt": "2026-03-25T06:05:55Z", "updatedAt": "2026-03-25T06:20:54Z", "pushedAt": "2026-03-25T06:20:51Z", "commit_hash": "acac11f", "commit_date": "2026-03-25", "commit_subject": "Add architecture guide documentation in Japanese", "commit_author": "takuya-kubo", "commit_stat": "44 files changed, 12833 insertions(+)", "commit_body": ["Created a new HTML file for the architecture guide, detailing the project structure and design elements. The guide includes styling and layout for better readability and user experience."], "commit_files": ["A\\t.gitignore", "A\\tAGENTS.md", "A\\tCLAUDE.md", "A\\tREADME.md", "A\\tdocs/architecture-guide.html", "A\\teslint.config.mjs", "A\\tnext.config.ts", "A\\tpackage-lock.json"], "deps": {"frameworks": [{"name": "Next.js", "version": "16.2.0", "status": "safe", "desc": "セキュリティパッチ適用済 (最新安定)", "cve": null, "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "19.2.4", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "TypeScript", "version": "^5", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^4", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [], "ai_sdks": [{"name": "openai", "version": "^6.32.0", "desc": "OpenAI 公式APIクライアント"}], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/maice-websocket-demo"}, {"id": "marketing-sites-overall-architecture", "repo": "marketing-sites", "repo_slug": "marketing-sites", "category": "Marketing / Web", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#f38ba8,stroke:#f38ba8,color:#1e1e2e\\n\\n    user[\\"Website Visitor\\"]:::entry\\n    lp-jgrade[\\"J-Grade Marketing LP\\nNext.js 14\\"]:::entry\\n    lp-hellodesk[\\"Hello Desk LP\\nNext.js 14\\"]:::entry\\n    \\n    gtm[\\"Google Tag Manager & GA4\\"]:::external\\n    hubspot[\\"HubSpot CRM Lead Ingestion\\"]:::external\\n    email[\\"SendGrid Notification\\"]:::external\\n\\n    user -->|\\"Browse & Inquire\\"| lp-jgrade\\n    user -->|\\"Browse & Inquire\\"| lp-hellodesk\\n    lp-jgrade -->|\\"Event Tracking\\"| gtm\\n    lp-hellodesk -->|\\"Event Tracking\\"| gtm\\n    lp-jgrade -->|\\"Form Submission\\"| hubspot\\n    lp-hellodesk -->|\\"Form Submission\\"| hubspot\\n    hubspot -->|\\"Alert Notification\\"| email\\n", "description": "# marketing-sites システムアーキテクチャ\\n\\n## 概要\\nPLUS IMPACTの各種プロダクト（J-Grade、Hello Desk等）のマーケティングLP・リード獲得用Webサイト群。\\nNext.js 14、Tailwind CSS、HubSpot CRM連携、Google Tag Manager/GA4によるコンバージョン測定を統合しています。\\n", "is_root": false, "createdAt": "2026-09-16T10:35:46Z", "updatedAt": "2026-11-02T10:23:29Z", "pushedAt": "2026-11-02T10:23:24Z", "commit_hash": "94214b8", "commit_date": "2026-11-02", "commit_subject": "Merge pull request #24 from plusimpact/fix/jgrade-selective-indexing-w-g7eut9", "commit_author": "charles", "commit_stat": "19 files changed, 1676 insertions(+), 98 deletions(-)", "commit_body": ["fix: selectively enable indexing for verified J-GRADE HTML"], "commit_files": [], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/marketing-sites"}, {"id": "nacode.ai-backend-overall-architecture", "repo": "nacode.ai-backend", "repo_slug": "nacode.ai-backend", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    clients[\\"API Clients\\\\nWeb / Mobile\\"]:::entry\\n    server[\\"Express Server\\\\nsrc/server.ts, app.ts\\"]:::entry\\n    routes[\\"Route Handlers\\\\nsrc/routes/\\"]\\n    services[\\"Service Business Logic\\\\nsrc/services/\\"]\\n    db[\\"Database Layer\\\\nPostgreSQL / Knex\\"]:::store\\n    external-apis[\\"External Services\\\\nAI / AWS APIs\\"]:::external\\n\\n    clients -->|\\"REST API Call\\"| server\\n    server -->|\\"Dispatch\\"| routes\\n    routes -->|\\"Execute Logic\\"| services\\n    services -->|\\"Query / Persist\\"| db\\n    services -->|\\"Integrate\\"| external-apis", "description": "nacode.ai-backend はExpress.js + TypeScriptによるAPIバックエンドサービスです。PLUS IMPACT nacode.ai-backend component", "is_root": false, "createdAt": "2026-04-06T06:16:06Z", "updatedAt": "2026-04-08T10:29:25Z", "pushedAt": "2026-04-15T02:11:23Z", "commit_hash": "32d5165", "commit_date": "2026-04-08", "commit_subject": "バックエンド作成", "commit_author": "uto8", "commit_stat": "88 files changed, 10937 insertions(+)", "commit_body": [], "commit_files": ["A\\t.dockerignore", "A\\t.env.example", "A\\t.gitignore", "A\\t.playwright-cli/chat-response.png", "A\\t.playwright-cli/chat-screen.png", "A\\t.playwright-cli/console-2026-04-07T04-51-15-294Z.log", "A\\t.playwright-cli/console-2026-04-07T04-52-01-498Z.log", "A\\t.playwright-cli/console-2026-04-07T04-52-14-557Z.log"], "deps": {"frameworks": [{"name": "TypeScript", "version": "^6.0.2", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}], "databases": [{"name": "pg (PostgreSQL Client)", "version": "^8.20.0", "type": "Database Driver", "desc": "PostgreSQL 16接続クライアントドライバ", "security_link": "https://github.com/brianc/node-postgres/security/advisories"}, {"name": "TypeORM", "version": "^0.3.28", "type": "ORM", "desc": "Active Record / Data MapperパターンORM", "security_link": "https://github.com/typeorm/typeorm/security/advisories"}], "ai_sdks": [{"name": "@google/generative-ai", "version": "^0.24.1", "desc": "Google Generative AI SDK"}], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/nacode.ai-backend"}, {"id": "nacode.ai-frontend-overall-architecture", "repo": "nacode.ai-frontend", "repo_slug": "nacode.ai-frontend", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    client[\\"Web Client\\\\nBrowser\\"]:::entry\\n    router[\\"Page Router\\\\nsrc/app/\\"]:::entry\\n    ui-components[\\"UI Components\\\\nsrc/components/\\"]\\n    state-mgmt[\\"State & Hooks\\\\nsrc/hooks/, src/stores/\\"]\\n    api-layer[\\"API & Services\\\\nsrc/lib/, src/api/\\"]\\n    backend[\\"MAICE Backend API\\\\nmaice-backend\\"]:::external\\n\\n    client -->|\\"HTTP Request\\"| router\\n    router -->|\\"Render Views\\"| ui-components\\n    ui-components -->|\\"User Actions\\"| state-mgmt\\n    state-mgmt -->|\\"Data Fetching\\"| api-layer\\n    api-layer -->|\\"REST / GraphQL\\"| backend", "description": "nacode.ai-frontend はNext.jsベースのWebフロントエンドアプリケーションです。PLUS IMPACT nacode.ai-frontend component", "is_root": false, "createdAt": "2026-04-06T05:34:52Z", "updatedAt": "2026-04-06T06:17:25Z", "pushedAt": "2026-04-06T05:36:01Z", "commit_hash": "d982496", "commit_date": "2026-04-06", "commit_subject": "feat: DB設計 — 25テーブルのTypeORMエンティティ + SQLマイグレーション", "commit_author": "uto8", "commit_stat": "72 files changed, 15147 insertions(+)", "commit_body": ["- database-schema.md に基づく全25テーブルのエンティティ定義", "- PostgreSQL 17 + pgvector 0.7.x 対応のDDL��イグレーション", "- HNSW ベクトルインデックス、月次パ���ティション、マスタデータ初期投入含む", "- TypeORM DataSource 設定（SnakeNamingStrategy）"], "commit_files": ["A\\t.claude/skills/agent-teams-setup/SKILL.md", "A\\t.claude/skills/code-verification/SKILL.md", "A\\t.claude/skills/dev-workflow/SKILL.md", "A\\t.claude/skills/elevenlabs-agents/SKILL.md", "A\\t.claude/skills/elevenlabs-agents/references/agent-configuration.md", "A\\t.claude/skills/elevenlabs-agents/references/client-tools.md", "A\\t.claude/skills/elevenlabs-agents/references/installation.md", "A\\t.claude/skills/elevenlabs-agents/references/outbound-calls.md"], "deps": {"frameworks": [{"name": "Next.js", "version": "16.2.2", "status": "safe", "desc": "セキュリティパッチ適用済 (最新安定)", "cve": null, "security_link": "https://github.com/vercel/next.js/security/advisories"}, {"name": "React", "version": "19.2.4", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "TypeScript", "version": "^5", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^4", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [{"name": "pg (PostgreSQL Client)", "version": "^8.20.0", "type": "Database Driver", "desc": "PostgreSQL 16接続クライアントドライバ", "security_link": "https://github.com/brianc/node-postgres/security/advisories"}, {"name": "TypeORM", "version": "^0.3.28", "type": "ORM", "desc": "Active Record / Data MapperパターンORM", "security_link": "https://github.com/typeorm/typeorm/security/advisories"}], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/nacode.ai-frontend"}, {"id": "nacode.ai-native-overall-architecture", "repo": "nacode.ai-native", "repo_slug": "nacode.ai-native", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    source[\\"Source Assets\\\\nSpecifications / Configs\\"]:::entry\\n    core-modules[\\"Core Modules\\\\nProject Files\\"]\\n    distribution[\\"Distribution / Exports\\\\nGenerated Assets\\"]:::store\\n    consumers[\\"Dependent Services\\\\nMAICE / PLUS IMPACT Apps\\"]:::external\\n\\n    source -->|\\"Process & Build\\"| core-modules\\n    core-modules -->|\\"Export\\"| distribution\\n    consumers -->|\\"Consume Package\\"| distribution", "description": "nacode.ai-native: PLUS IMPACT nacode.ai-native component。", "is_root": false, "createdAt": "2026-04-07T22:23:14Z", "updatedAt": "2026-04-08T10:29:53Z", "pushedAt": "2026-04-15T04:12:06Z", "commit_hash": "95b0114", "commit_date": "2026-04-08", "commit_subject": "API接続", "commit_author": "uto8", "commit_stat": "98 files changed, 24810 insertions(+)", "commit_body": [], "commit_files": ["A\\t.claude/skills/agent-teams-setup/SKILL.md", "A\\t.claude/skills/code-verification/SKILL.md", "A\\t.claude/skills/dev-workflow/SKILL.md", "A\\t.claude/skills/elevenlabs-agents/SKILL.md", "A\\t.claude/skills/elevenlabs-agents/references/agent-configuration.md", "A\\t.claude/skills/elevenlabs-agents/references/client-tools.md", "A\\t.claude/skills/elevenlabs-agents/references/installation.md", "A\\t.claude/skills/elevenlabs-agents/references/outbound-calls.md"], "deps": {"frameworks": [{"name": "React", "version": "19.1.0", "status": "safe", "desc": "UIレンダリングエンジン", "security_link": "https://github.com/facebook/react/releases"}, {"name": "TypeScript", "version": "~5.9.2", "status": "safe", "desc": "静的型付けコンパイラ", "security_link": "https://github.com/microsoft/TypeScript/releases"}, {"name": "Tailwind CSS", "version": "^3.4.19", "status": "safe", "desc": "ユーティリティファーストCSS", "security_link": "https://github.com/tailwindlabs/tailwindcss/releases"}], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/nacode.ai-native"}, {"id": "radio-now-overall-architecture", "repo": "radio-now", "repo_slug": "radio-now", "category": "AI Audio Pipeline", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    trigger[\\"Execution Trigger\\\\nCLI / Cron / Event\\"]:::entry\\n    entrypoint[\\"Main Pipeline\\\\nmain.py / cli.py\\"]:::entry\\n    core-logic[\\"Core Logic\\\\nsrc/ / modules/\\"]\\n    ai-models[\\"AI Inference Engine\\\\nGemini / OpenAI API\\"]:::external\\n    storage[\\"Data Output / Cache\\\\nLocal FS / S3\\"]:::store\\n\\n    trigger -->|\\"Start Execution\\"| entrypoint\\n    entrypoint -->|\\"Run Pipeline\\"| core-logic\\n    core-logic -->|\\"Inference & Analysis\\"| ai-models\\n    core-logic -->|\\"Export Artifacts\\"| storage", "description": "radio-now はPythonによるAI/データ処理・自動化パイプラインです。海外駐在日本人向け現地ニュースラジオ番組自動生成パイプライン", "is_root": false, "createdAt": "2026-04-28T02:48:48Z", "updatedAt": "2026-08-16T01:49:02Z", "pushedAt": "2026-08-16T01:48:57Z", "commit_hash": "412b6d8", "commit_date": "2026-06-10", "commit_subject": "docs: Actions予算設定確認を記録", "commit_author": "Kenta Takada", "commit_stat": "112 files changed, 16082 insertions(+)", "commit_body": [], "commit_files": ["A\\t.env.example", "A\\t.github/workflows/collect-rankings.yml", "A\\t.github/workflows/generate-episode.yml", "A\\t.gitignore", "A\\tCLAUDE.md", "A\\tcountries/indonesia/ads/.gitkeep", "A\\tcountries/indonesia/cast.json", "A\\tcountries/indonesia/config.yaml"], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/radio-now"}, {"id": "robie-execution-overall-architecture", "repo": "robie-execution", "repo_slug": "robie-execution", "category": "Dev Automation", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    trigger[\\"Execution Trigger\\\\nCLI / Cron / Event\\"]:::entry\\n    entrypoint[\\"Main Pipeline\\\\nmain.py / cli.py\\"]:::entry\\n    core-logic[\\"Core Logic\\\\nsrc/ / modules/\\"]\\n    ai-models[\\"AI Inference Engine\\\\nGemini / OpenAI API\\"]:::external\\n    storage[\\"Data Output / Cache\\\\nLocal FS / S3\\"]:::store\\n\\n    trigger -->|\\"Start Execution\\"| entrypoint\\n    entrypoint -->|\\"Run Pipeline\\"| core-logic\\n    core-logic -->|\\"Inference & Analysis\\"| ai-models\\n    core-logic -->|\\"Export Artifacts\\"| storage", "description": "robie-execution はPythonによるAI/データ処理・自動化パイプラインです。Robie development automation control plane, isolated runners, and audit contracts", "is_root": false, "createdAt": "2026-07-12T15:51:56Z", "updatedAt": "2026-07-25T15:06:32Z", "pushedAt": "2026-08-16T17:10:42Z", "commit_hash": "0952a04", "commit_date": "2026-07-25", "commit_subject": "feat: add RUN-001 host-only Phase A contract (#33)", "commit_author": "Kenta Takada", "commit_stat": "81 files changed, 12300 insertions(+)", "commit_body": ["* feat: add RUN-001 host-only Phase A contract", "Decide whether a proposed host-only Phase A plan is admissible and whether a", "returned evidence record actually proves the boundary. The module is pure: no", "filesystem, network, subprocess, environment, clock or randomness access. This", "change starts no host mutation, provider login, credential read, company-code", "transfer or external write.", "Evidence cannot self-certify. host_policy_failures recomputes the boundary from", "the observed fields and validate_evidence rejects any record whose declared", "conclusion disagrees with that recomputation.", "The schema $id is bound and every const guard is independently re-checked, so a"], "commit_files": ["A\\t.github/workflows/ci.yml", "A\\t.python-version", "A\\tREADME.md", "A\\tdocs/contracts/authority-decision.v1.md", "A\\tdocs/contracts/generator-provider-boundary.v1.md", "A\\tdocs/contracts/historical-replay-result.v1.md", "A\\tdocs/contracts/implementation-context-packet.v1.md", "A\\tdocs/contracts/provider-request-result.v1.md"], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/robie-execution"}, {"id": "studyfor-alpha-overall-architecture", "repo": "studyfor-alpha", "repo_slug": "studyfor-alpha", "category": "Other Services", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    source[\\"Source Assets\\\\nSpecifications / Configs\\"]:::entry\\n    core-modules[\\"Core Modules\\\\nProject Files\\"]\\n    distribution[\\"Distribution / Exports\\\\nGenerated Assets\\"]:::store\\n    consumers[\\"Dependent Services\\\\nMAICE / PLUS IMPACT Apps\\"]:::external\\n\\n    source -->|\\"Process & Build\\"| core-modules\\n    core-modules -->|\\"Export\\"| distribution\\n    consumers -->|\\"Consume Package\\"| distribution", "description": "studyfor-alpha: PLUS IMPACT studyfor-alpha component。", "is_root": false, "createdAt": "2023-01-22T01:24:56Z", "updatedAt": "2023-01-22T01:25:58Z", "pushedAt": "2023-03-05T12:31:52Z", "commit_hash": "6bf2a36", "commit_date": "2023-03-05", "commit_subject": "fix navbar", "commit_author": "0xywzx", "commit_stat": "325 files changed, 35768 insertions(+)", "commit_body": [], "commit_files": ["A\\tREADME.md", "A\\tfront/src/aws-exports.js", "A\\tpackage.json", "A\\tpackages/.gitignore", "A\\tpackages/.vscode/settings.json", "A\\tpackages/backend/.eslintignore", "A\\tpackages/backend/.gitignore", "A\\tpackages/backend/.graphqlconfig.yml"], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/studyfor-alpha"}, {"id": "xCORE-Talk-overall-architecture", "repo": "xCORE-Talk", "repo_slug": "xCORE-Talk", "category": "xCORE Design & IA", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    source[\\"Source Assets\\\\nSpecifications / Configs\\"]:::entry\\n    core-modules[\\"Core Modules\\\\nProject Files\\"]\\n    distribution[\\"Distribution / Exports\\\\nGenerated Assets\\"]:::store\\n    consumers[\\"Dependent Services\\\\nMAICE / PLUS IMPACT Apps\\"]:::external\\n\\n    source -->|\\"Process & Build\\"| core-modules\\n    core-modules -->|\\"Export\\"| distribution\\n    consumers -->|\\"Consume Package\\"| distribution", "description": "xCORE-Talk: Xcoreトークのデザイン資料・IA・ワイヤーフレーム。", "is_root": false, "createdAt": "2026-05-18T15:51:38Z", "updatedAt": "2026-08-16T01:49:11Z", "pushedAt": "2026-09-26T10:06:23Z", "commit_hash": "64f800d", "commit_date": "2026-07-02", "commit_subject": "docs: Gemma 4追加母数評価を記録", "commit_author": "Kenta Takada", "commit_stat": "363 files changed, 439122 insertions(+)", "commit_body": [], "commit_files": ["A\\t.gitignore", "A\\tAGENTS.en.md", "A\\tAGENTS.md", "A\\tAIInterview/evals/golden-set/results/2026-07-02T03-19-04-081Z-gemma-4-31b-medium-ai-interview-axis-golden-set.json", "A\\tAIInterview/evals/golden-set/results/2026-07-02T03-19-04-081Z-gemma-4-31b-medium-ai-interview-axis-golden-set.md", "A\\tAIInterview/evals/golden-set/results/2026-07-02T03-19-04-081Z-gemma-4-31b-none-ai-interview-axis-golden-set.json", "A\\tAIInterview/evals/golden-set/results/2026-07-02T03-19-04-081Z-gemma-4-31b-none-ai-interview-axis-golden-set.md", "A\\tAIInterview/evals/golden-set/results/2026-07-02T03-19-04-081Z-gpt-oss-120b-medium-ai-interview-axis-golden-set.json"], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/xCORE-Talk"}, {"id": "xcore-design-system-overall-architecture", "repo": "xcore-design-system", "repo_slug": "xcore-design-system", "category": "Design System", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    source[\\"Source Assets\\\\nSpecifications / Configs\\"]:::entry\\n    core-modules[\\"Core Modules\\\\nProject Files\\"]\\n    distribution[\\"Distribution / Exports\\\\nGenerated Assets\\"]:::store\\n    consumers[\\"Dependent Services\\\\nMAICE / PLUS IMPACT Apps\\"]:::external\\n\\n    source -->|\\"Process & Build\\"| core-modules\\n    core-modules -->|\\"Export\\"| distribution\\n    consumers -->|\\"Consume Package\\"| distribution", "description": "xcore-design-system: xCORE design system source of truth for Claude Code and Codex。", "is_root": false, "createdAt": "2026-06-21T18:21:53Z", "updatedAt": "2026-06-22T06:32:37Z", "pushedAt": "2026-06-22T06:32:33Z", "commit_hash": "2c7db60", "commit_date": "2026-06-22", "commit_subject": "docs: ReportAccentRailの検証記録を更新", "commit_author": "Kenta Takada", "commit_stat": "116 files changed, 13213 insertions(+)", "commit_body": [], "commit_files": ["A\\t.gitignore", "A\\tAGENTS.md", "A\\tCLAUDE.md", "A\\tCanvas.dc.html", "A\\tREADME.md", "A\\tSKILL.md", "A\\t_adherence.oxlintrc.json", "A\\t_ds_bundle.js"], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/xcore-design-system"}, {"id": "xcore-personality-overall-architecture", "repo": "xcore-personality", "repo_slug": "xcore-personality", "category": "AI & Assessment", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    source[\\"Source Assets\\\\nSpecifications / Configs\\"]:::entry\\n    core-modules[\\"Core Modules\\\\nProject Files\\"]\\n    distribution[\\"Distribution / Exports\\\\nGenerated Assets\\"]:::store\\n    consumers[\\"Dependent Services\\\\nMAICE / PLUS IMPACT Apps\\"]:::external\\n\\n    source -->|\\"Process & Build\\"| core-modules\\n    core-modules -->|\\"Export\\"| distribution\\n    consumers -->|\\"Consume Package\\"| distribution", "description": "xcore-personality: xCORE Personality Assessment — 設計仕様・レポートテンプレート・多言語リソース。", "is_root": false, "createdAt": "2026-04-12T12:11:18Z", "updatedAt": "2026-04-12T12:55:29Z", "pushedAt": "2026-07-19T15:48:44Z", "commit_hash": "14fc269", "commit_date": "2026-04-12", "commit_subject": "fix: 英語版・簡易版にもPDF A4出力修正を適用", "commit_author": "Kenta Takada", "commit_stat": "51 files changed, 20701 insertions(+)", "commit_body": ["- @page margin: 0、@media print height: 297mm + overflow: hidden", "- セクション間マージン・SJTチャート高さ・trust-block・probe-list調整", "- Match Rate色をグラデーション→Core Blue単色に変更（PDF互換性）"], "commit_files": ["A\\t.gitignore", "A\\tREADME.md", "A\\tdocs/README.md", "A\\t\\"docs/business/xCORE_\\\\343\\\\202\\\\242\\\\343\\\\202\\\\273\\\\343\\\\202\\\\271\\\\343\\\\203\\\\241\\\\343\\\\203\\\\263\\\\343\\\\203\\\\210\\\\346\\\\246\\\\202\\\\350\\\\246\\\\201\\\\357\\\\274\\\\210\\\\343\\\\203\\\\223\\\\343\\\\202\\\\270\\\\343\\\\203\\\\215\\\\343\\\\202\\\\271\\\\345\\\\220\\\\221\\\\343\\\\201\\\\221\\\\357\\\\274\\\\211.md\\"", "A\\t\\"docs/design/xCORE Smart Filter \\\\350\\\\250\\\\255\\\\350\\\\250\\\\210\\\\344\\\\273\\\\225\\\\346\\\\247\\\\230\\\\343\\\\201\\\\253\\\\351\\\\226\\\\242\\\\343\\\\201\\\\231\\\\343\\\\202\\\\213AI\\\\343\\\\201\\\\250\\\\343\\\\201\\\\256\\\\345\\\\257\\\\276\\\\350\\\\251\\\\261.md\\"", "A\\t\\"docs/design/xCORE_HEXACO_QuadFC_Part2_\\\\347\\\\260\\\\241\\\\346\\\\230\\\\223\\\\347\\\\211\\\\21030\\\\343\\\\202\\\\257\\\\343\\\\202\\\\242\\\\343\\\\203\\\\203\\\\343\\\\203\\\\211.md\\"", "A\\t\\"docs/design/xCORE_HEXACO_QuadFC_Part3_\\\\350\\\\251\\\\263\\\\347\\\\264\\\\260\\\\347\\\\211\\\\210\\\\350\\\\277\\\\275\\\\345\\\\212\\\\240+\\\\347\\\\267\\\\264\\\\347\\\\277\\\\222.md\\"", "A\\t\\"docs/design/xCORE_HEXACO_QuadFC\\\\350\\\\250\\\\255\\\\345\\\\225\\\\217\\\\343\\\\202\\\\273\\\\343\\\\203\\\\203\\\\343\\\\203\\\\210.md\\""], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/xcore-personality"}, {"id": "xcore-video-productions-overall-architecture", "repo": "xcore-video-productions", "repo_slug": "xcore-video-productions", "category": "Video Pipeline", "perspective": "overall-architecture", "diagram": "graph LR\\n    classDef entry fill:#89b4fa,stroke:#89b4fa,color:#1e1e2e\\n    classDef store fill:#a6e3a1,stroke:#a6e3a1,color:#1e1e2e\\n    classDef external fill:#585b70,stroke:#585b70,color:#cdd6f4\\n\\n    source[\\"Source Assets\\\\nSpecifications / Configs\\"]:::entry\\n    core-modules[\\"Core Modules\\\\nProject Files\\"]\\n    distribution[\\"Distribution / Exports\\\\nGenerated Assets\\"]:::store\\n    consumers[\\"Dependent Services\\\\nMAICE / PLUS IMPACT Apps\\"]:::external\\n\\n    source -->|\\"Process & Build\\"| core-modules\\n    core-modules -->|\\"Export\\"| distribution\\n    consumers -->|\\"Consume Package\\"| distribution", "description": "xcore-video-productions: xCORE marketing video productions (HyperFrames compositions, generation prompts, production runbooks)。", "is_root": false, "createdAt": "2026-08-03T17:44:36Z", "updatedAt": "2026-08-04T20:56:04Z", "pushedAt": "2026-08-04T20:56:01Z", "commit_hash": "af1e8eb", "commit_date": "2026-08-05", "commit_subject": "Vietnamese edition: demo Japanese, not Vietnamese", "commit_author": "Kenta Takada", "commit_stat": "242 files changed, 10609 insertions(+)", "commit_body": ["Showing \\"I can interview in Vietnamese\\" to a Vietnamese audience proves", "nothing - she has been speaking Vietnamese for the whole video. The middle", "demo is now Japanese, which is what a Vietnamese company actually cares about", "when it hires for Japanese clients. The clip is the one built for the English", "edition (Omni guide + ElevenLabs Japanese, retimed), so no new generation.", "Master: final/xcore-hana-opener-vi-final-v2.mp4 (3:49); v1 removed."], "commit_files": ["A\\t.gitignore", "A\\tREADME.md", "A\\tdocs/xcore-hana-FINAL.md", "A\\tdocs/xcore-hana-LANGUAGE-VERSIONS.md", "A\\tdocs/xcore-hana-PRODUCTION.md", "A\\tdocs/xcore-hana-PROMPTS.md", "A\\tprojects/xcore-hana-en-scene1/AGENTS.md", "A\\tprojects/xcore-hana-en-scene1/CLAUDE.md"], "deps": {"frameworks": [], "databases": [], "ai_sdks": [], "auth": [], "runtime": {"node": "Node.js 20.x LTS", "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)", "redis": "Redis 7.2 (ElastiCache)"}, "security_advisories": []}, "github_url": "https://github.com/plusimpact/xcore-video-productions"}];
-    const techSpecs = {"client": {"title": "Client HTTP Request (Browser / Mobile)", "category": "Client / User Interface", "tech": "Next.js 15, React 19, Fetch / Axios", "desc": "採用企業人事・面接官、または受検者が操作するブラウザ/モバイル端末からのHTTPSリクエスト送信元です。", "responsibility": "ユーザー操作のキャプチャ、UI状態管理、セキュアなHTTPSリクエストのバックエンドへの発行。", "steps": ["ユーザー操作（面接作成、受検開始、検索実行）の入力イベント受信", "クライアントサイドバリデーション（必須項目、ファイルサイズチェック）", "Auth0セッショントークンを付与したHTTPSリクエストの非同期発行", "レスポンス受信後のUIレンダリング・トースト通知表示"], "files": ["src/app/", "src/components/"]}, "cors-helmet": {"title": "CORS & Security Middleware", "category": "Security & Gateway Middleware", "tech": "Express 5, Helmet, cors, cookie-parser", "desc": "外部クライアントからのHTTPリクエストの受付・サニタイズ、許可されたオリジンへのCORSアクセス制御、XSS/スニッフィング/クリックジャッキング防止ヘッダーの自動付与を担当します。", "responsibility": "APIゲートウェイセキュリティ、CORSオリジン制限、CSPヘッダー付与、リクエストボディサニタイズ。", "steps": ["HelmetによるセキュリティHTTPヘッダー（HSTS, X-Frame-Options, Content-Security-Policy等）の自動付与", "allowedOrigins（企業・受検者・管理ポータルURL）との完全一致によるCORSプリフライト（OPTIONS）検証", "CookieおよびJSONリクエストボディの不正文字・サイズ上限パース", "AIトークン消費コンテキスト（aiUsageContext）の初期化と認証層へのディスパッチ"], "files": ["src/app.ts", "src/middleware/cors.ts"]}, "jwt-auth": {"title": "Auth0 JWT & Session Authenticator", "category": "Authentication & Authorization", "tech": "Auth0 RS256, express-jwt, jwks-rsa", "desc": "リクエストヘッダー（Authorization: Bearer <token>）からJWTを抽出し、Auth0 JWKS公開鍵を用いて署名・有効期限（exp）・発行者（iss）を検証します。", "responsibility": "トークン署名検証、ユーザーID抽出、RBACロール認可判定。", "steps": ["HTTP AuthorizationヘッダーまたはセッションCookieからのJWTトークン抽出", "Auth0 JWKSエンドポイントから取得した公開鍵によるRS256署名検証", "ユーザーID・所属企業UUID（company_id）・権限ロール（Admin/Interviewer/Candidate）の抽出", "req.user コンテキストへのマッピングと認可ガードの実行"], "files": ["src/middleware/auth.ts"]}, "route-dispatch": {"title": "Feature Route Dispatcher", "category": "API Routing & Validation", "tech": "Express Router, Zod Validator", "desc": "URIパス（/api/corporate, /api/individual, /api/assessments 等）に基づき、各機能モジュールのルーターへリクエストを振り分けます。", "responsibility": "URLルーティング、リクエストバリデーション、エラーハンドリング。", "steps": ["URIパスとHTTPメソッドに応じたドメイン別ルーターへのマッピング", "Zodバリデータによるクエリ・ボディパラメータの型および必須項目バリデーション", "不正入力時のHTTP 400（Bad Request）エラー返却と正常パラメータのDomain Controller転送"], "files": ["src/routes/"]}, "controller": {"title": "Domain Business Controller", "category": "Core Business Logic", "tech": "TypeScript, Domain Services", "desc": "求人作成、AI面接設定、候補者一覧フィルタ、評価サマリー照会などのコア業務ロジックを実行します。", "responsibility": "ビジネスロジック実行、データ整合性維持、複数サービスのオーケストレーション。", "steps": ["業務ルールおよび前提条件（有効期限、権限、プラン枠）のチェック", "Knex ORMを用いたDBトランザクションの開始とデータ永続化", "重い処理（AI採点・音声認識・PDFパース）のBullMQジョブキューへの非同期オフロード"], "files": ["src/controllers/", "src/services/"]}, "db-query": {"title": "Database Query & Transaction Execution", "category": "Database Layer", "tech": "PostgreSQL 16.3, Knex.js, AWS RDS Multi-AZ", "desc": "Knex.jsクエリビルダーを介してAmazon RDS PostgreSQL 16.3クラスターに対してSQLクエリを発行します。", "responsibility": "ACIDトランザクション保証、SQLクエリ発行、コネクションプール管理。", "steps": ["KnexコネクションプールからのDB接続ハンドルの取得（最大20並列）", "READ COMMITTED分離レベルでのトランザクション実行（BEGIN〜COMMIT/ROLLBACK）", "パラメータバインドによるSQLインジェクション完全防止とインデックス活用クエリ実行"], "files": ["src/db/db.ts", "knexfile.ts"]}, "queue-dispatch": {"title": "Async Task & BullMQ Job Queue", "category": "Background Task Queue", "tech": "Redis 7.2.4 (ElastiCache), BullMQ", "desc": "音声トランスクリプト生成、LLM面接評価サマリー生成、面接結果PDF作成などのヘビーな処理をRedisキューへ投入します。", "responsibility": "ジョブエンキュー、遅延実行制御、ワーカーへの負荷分散。", "steps": ["ペイロードのシリアライズとBullMQジョブのRedis Streamへのプッシュ", "指数バックオフによる自動リトライポリシー（最大3回）の設定", "ジョブ進捗イベントのPub/Sub通知とバックグラウンドワーカーによる並列消化"], "files": ["src/queue/"]}, "response": {"title": "HTTP 200/201 JSON Formatter & Serializer", "category": "API Response Layer", "tech": "Express Response, JSON Serializer", "desc": "コントローラーの処理結果を標準化されたJSON形式（{ success: true, data: ... }）にシリアライズしてクライアントへHTTPレスポンスを返却します。", "responsibility": "機密データマスキング、JSONシリアライズ、HTTPステータスコード設定。", "steps": ["内部機密フィールド（パスワードハッシュ、API内部キー等）のサニタイズ・除外", "統一レスポンスエンベロープ（status, data, meta）へのデータ構造化", "ETagヘッダーの生成と適切なHTTPキャッシュヘッダーの付与、200/201返却"], "files": ["src/utils/response.ts"]}};
-    const tableSchemas = {"companies": {"name": "companies", "logical_name": "企業・組織マスタ", "category": "組織・アカウント管理", "desc": "MAICEを利用する契約企業の基本アカウント情報、契約プラン（Enterprise/Standard）、請求状態、ロケール・タイムゾーン設定を統括管理する最上位エンティティです。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "企業一意識別子 (v4 UUID)"}, {"name": "name", "type": "VARCHAR(255)", "constraints": "NOT NULL", "desc": "企業正式名称"}, {"name": "code", "type": "VARCHAR(64)", "constraints": "UNIQUE, NOT NULL", "desc": "企業識別コード (URLスラッグ・招待コード)"}, {"name": "plan_tier", "type": "VARCHAR(32)", "constraints": "DEFAULT 'standard'", "desc": "契約プラン [starter, standard, enterprise]"}, {"name": "billing_status", "type": "VARCHAR(32)", "constraints": "DEFAULT 'active'", "desc": "請求状態 [trial, active, past_due, canceled]"}, {"name": "country_code", "type": "VARCHAR(8)", "constraints": "DEFAULT 'JP'", "desc": "ISO国コード (JP, US, MM, etc.)"}, {"name": "timezone", "type": "VARCHAR(64)", "constraints": "DEFAULT 'Asia/Tokyo'", "desc": "企業標準タイムゾーン"}, {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "アカウント作成日時"}, {"name": "updated_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "最終更新日時"}], "relations": [{"type": "1:N", "target": "positions.company_id", "desc": "企業に紐づく募集求人枠"}, {"type": "1:N", "target": "company_memberships.company_id", "desc": "企業に所属する人事・面接官ユーザー"}, {"type": "1:N", "target": "assessments.company_id", "desc": "企業が実施するAI面接定義"}], "indexes": ["PRIMARY KEY (id)", "UNIQUE INDEX (code)", "INDEX (billing_status, plan_tier)"], "sample_query": "SELECT id, name, plan_tier, billing_status FROM companies WHERE billing_status = 'active';"}, "positions": {"name": "positions", "logical_name": "募集求人・ポジション枠", "category": "採用求人管理", "desc": "採用企業が募集する職種・求人枠情報。配属部署、応募要件、選考ステータス、必須スキル要件をJSONBで保持します。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "求人枠一意識別子"}, {"name": "company_id", "type": "UUID", "constraints": "FK -> companies.id, NOT NULL", "desc": "所属企業のUUID"}, {"name": "title", "type": "VARCHAR(255)", "constraints": "NOT NULL", "desc": "職種・求人タイトル (例: シニアバックエンドエンジニア)"}, {"name": "department_id", "type": "UUID", "constraints": "FK -> departments.id", "desc": "配属部署UUID"}, {"name": "employment_type", "type": "VARCHAR(32)", "constraints": "NOT NULL", "desc": "雇用形態 [full_time, contract, part_time, internship]"}, {"name": "status", "type": "VARCHAR(32)", "constraints": "DEFAULT 'open'", "desc": "募集ステータス [draft, open, paused, closed]"}, {"name": "experience_level", "type": "VARCHAR(32)", "constraints": "NULLABLE", "desc": "必要経験年数・レベル"}, {"name": "required_skills", "type": "JSONB", "constraints": "DEFAULT '[]'", "desc": "必須スキル・職歴キーワード配列"}, {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "求人作成日時"}, {"name": "updated_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "最終更新日時"}], "relations": [{"type": "N:1", "target": "companies.id", "desc": "所属元企業"}, {"type": "1:N", "target": "assessments.position_id", "desc": "求人に紐づくAI面接・適性検査"}], "indexes": ["PRIMARY KEY (id)", "INDEX (company_id, status)", "INDEX (department_id)"], "sample_query": "SELECT id, title, status, employment_type FROM positions WHERE company_id = :companyId AND status = 'open';"}, "assessments": {"name": "assessments", "logical_name": "AI面接・選考アセスメント定義", "category": "面接選考定義", "desc": "求人に対して実施されるAI面接の選考フェーズ定義。設問設計、採点Rubric、受検有効期限、AI音声モデル設定を統括します。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "面接定義一意識別子"}, {"name": "company_id", "type": "UUID", "constraints": "FK -> companies.id, NOT NULL", "desc": "所属企業UUID"}, {"name": "position_id", "type": "UUID", "constraints": "FK -> positions.id, NOT NULL", "desc": "対象求人UUID"}, {"name": "title", "type": "VARCHAR(255)", "constraints": "NOT NULL", "desc": "面接タイトル (例: 1次AI技術面接)"}, {"name": "interview_type", "type": "VARCHAR(32)", "constraints": "DEFAULT 'ai_voice_v2'", "desc": "面接形式 [ai_voice_v2, asynchronous_video, screening_survey]"}, {"name": "time_limit_mins", "type": "INTEGER", "constraints": "DEFAULT 30", "desc": "最大受検制限時間 (分)"}, {"name": "rubric_template_id", "type": "UUID", "constraints": "NULLABLE", "desc": "適用評価ルーブリックID"}, {"name": "status", "type": "VARCHAR(32)", "constraints": "DEFAULT 'active'", "desc": "ステータス [draft, active, archived]"}, {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "作成日時"}, {"name": "updated_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "最終更新日時"}], "relations": [{"type": "N:1", "target": "positions.id", "desc": "対象募集求人"}, {"type": "1:N", "target": "ai_interview_active_sessions.assessment_id", "desc": "受検中セッション"}, {"type": "1:N", "target": "ai_interview_evaluations.assessment_id", "desc": "面接評価レポート"}], "indexes": ["PRIMARY KEY (id)", "INDEX (company_id, position_id)", "INDEX (status)"], "sample_query": "SELECT id, title, interview_type, time_limit_mins FROM assessments WHERE position_id = :positionId AND status = 'active';"}, "ai_interview_active_sessions": {"name": "ai_interview_active_sessions", "logical_name": "リアルタイム受検セッション情報", "category": "リアルタイム面接管理", "desc": "WebRTC/WebSocket接続状態、面接質問進行インデックス、一時的音声回答バッファを管理し、面接の中断復帰やリアルタイムAI判定を支える高頻度更新テーブルです。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "セッション一意識別子"}, {"name": "assessment_id", "type": "UUID", "constraints": "FK -> assessments.id, NOT NULL", "desc": "受検アセスメントID"}, {"name": "candidate_id", "type": "UUID", "constraints": "FK -> candidates.id, NOT NULL", "desc": "受検候補者ID"}, {"name": "socket_id", "type": "VARCHAR(128)", "constraints": "NULLABLE", "desc": "現在接続中のWebSocket接続ID"}, {"name": "current_step", "type": "INTEGER", "constraints": "DEFAULT 1", "desc": "現在進行中の設問番号 (1〜N)"}, {"name": "status", "type": "VARCHAR(32)", "constraints": "DEFAULT 'in_progress'", "desc": "受検状態 [waiting, in_progress, completed, terminated]"}, {"name": "started_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "受検開始時刻"}, {"name": "expires_at", "type": "TIMESTAMPTZ", "constraints": "NOT NULL", "desc": "セッション失効制限時刻"}, {"name": "heartbeat_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "直近クライアント生存確認時刻"}, {"name": "context_payload", "type": "JSONB", "constraints": "DEFAULT '{}'", "desc": "AI対話コンテキスト一時キャッシュ"}], "relations": [{"type": "N:1", "target": "assessments.id", "desc": "受検面接定義"}, {"type": "1:1", "target": "ai_interview_evaluations.session_id", "desc": "完了後AI採点レポート"}], "indexes": ["PRIMARY KEY (id)", "INDEX (assessment_id, candidate_id)", "INDEX (socket_id)", "INDEX (status, expires_at)"], "sample_query": "SELECT id, candidate_id, current_step, status, heartbeat_at FROM ai_interview_active_sessions WHERE status = 'in_progress' AND expires_at > NOW();"}, "ai_interview_evaluations": {"name": "ai_interview_evaluations", "logical_name": "AI評価スコア・面接分析サマリー", "category": "AI採点・選考分析", "desc": "面接完了後にLLM（Gemini/Claude）が生成した総合スコア、ルーブリック別評価点、強み・懸念点の要約、発話トランスクリプトを格納する評価レコードです。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "評価レコード一意識別子"}, {"name": "session_id", "type": "UUID", "constraints": "FK -> ai_interview_active_sessions.id, UNIQUE", "desc": "受検セッションID"}, {"name": "assessment_id", "type": "UUID", "constraints": "FK -> assessments.id, NOT NULL", "desc": "アセスメント定義ID"}, {"name": "candidate_id", "type": "UUID", "constraints": "FK -> candidates.id, NOT NULL", "desc": "候補者ID"}, {"name": "overall_score", "type": "NUMERIC(4,2)", "constraints": "CHECK (0-100)", "desc": "総合評価スコア (0.00〜100.00)"}, {"name": "rubric_scores", "type": "JSONB", "constraints": "NOT NULL", "desc": "各評価項目別スコア及び根拠 (論理的思考力, 専門性等)"}, {"name": "summary_text", "type": "TEXT", "constraints": "NOT NULL", "desc": "面接官向けAI要約サマリー (強み/弱み/懸念点)"}, {"name": "full_transcript", "type": "JSONB", "constraints": "DEFAULT '[]'", "desc": "質問・回答の全発話テキスト・タイムスタンプ配列"}, {"name": "ai_model_version", "type": "VARCHAR(64)", "constraints": "NOT NULL", "desc": "採点に使用したAIモデル識別子"}, {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "評価生成完了日時"}], "relations": [{"type": "1:1", "target": "ai_interview_active_sessions.id", "desc": "受検セッション"}, {"type": "N:1", "target": "assessments.id", "desc": "評価基準面接定義"}], "indexes": ["PRIMARY KEY (id)", "UNIQUE INDEX (session_id)", "INDEX (candidate_id)", "INDEX (assessment_id, overall_score)"], "sample_query": "SELECT id, candidate_id, overall_score, summary_text, created_at FROM ai_interview_evaluations WHERE assessment_id = :assessmentId ORDER BY overall_score DESC;"}, "company_memberships": {"name": "company_memberships", "logical_name": "企業所属メンバー・権限管理", "category": "組織・アカウント管理", "desc": "企業に所属する人事担当者・面接官ユーザーのアカウント紐付けとロール権限（Owner/Admin/Member/Interviewer）を管理します。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "所属一意識別子"}, {"name": "company_id", "type": "UUID", "constraints": "FK -> companies.id, NOT NULL", "desc": "企業UUID"}, {"name": "user_id", "type": "UUID", "constraints": "FK -> users.id, NOT NULL", "desc": "Auth0連携ユーザーUUID"}, {"name": "role", "type": "VARCHAR(32)", "constraints": "DEFAULT 'member'", "desc": "所属ロール [owner, admin, member, interviewer]"}, {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "招待・参加日時"}], "relations": [{"type": "N:1", "target": "companies.id", "desc": "所属企業"}, {"type": "N:1", "target": "users.id", "desc": "対象ユーザーアカウント"}], "indexes": ["PRIMARY KEY (id)", "UNIQUE INDEX (company_id, user_id)", "INDEX (role)"], "sample_query": "SELECT user_id, role FROM company_memberships WHERE company_id = :companyId;"}, "smart_filter_queries": {"name": "smart_filter_queries", "logical_name": "スマート候補者フィルタークエリ", "category": "候補者検索・AIフィルタ", "desc": "企業人事が保存した候補者検索条件、自然言語AIクエリ、およびフィルタリング結果のスナップショットキャッシュを管理します。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "クエリ一意識別子"}, {"name": "company_id", "type": "UUID", "constraints": "FK -> companies.id, NOT NULL", "desc": "所属企業UUID"}, {"name": "title", "type": "VARCHAR(255)", "constraints": "NOT NULL", "desc": "検索条件名 (例: Python 3年以上 + 海外大卒)"}, {"name": "query_json", "type": "JSONB", "constraints": "NOT NULL", "desc": "検索フィルタパラメータ定義"}, {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "保存日時"}], "relations": [{"type": "N:1", "target": "companies.id", "desc": "企業アカウント"}], "indexes": ["PRIMARY KEY (id)", "INDEX (company_id)"], "sample_query": "SELECT id, title, query_json FROM smart_filter_queries WHERE company_id = :companyId ORDER BY created_at DESC;"}};
-    const sequenceDiagrams = [{"id": "seq-jgrade-pipeline", "title": "J-GRADE / 音声評価 & 多層AI判定パイプライン (詳細)", "short_title": "J-GRADE 音声評価詳細", "category": "Sequence Flow", "desc": "クライアントからの音声アップロードから、Wav2Vec2/Silero-VADによる音響・流暢さ解析、OpenAI/Claude/Geminiの3並行LLM判定、合意形成（Consensus）までの時系列実行フロー。", "diagram": "sequenceDiagram\\n    autonumber\\n    participant Client as クライアント (CLI / Web)\\n    participant API as jgrade_eval/api.py\\n    participant Svc as jgrade_eval/api_service.py<br/>(サービス / パイプライン実行)\\n    participant Audio as jgrade_eval/audio_pipeline.py\\n    participant Profile as jgrade_eval/tuning_profile.py\\n    participant Judges as jgrade_eval/live_judges.py\\n    participant Delib as jgrade_eval/deliberation.py\\n    participant Cons as jgrade_eval/consensus.py\\n    participant LLM as 外部 LLM API\\n\\n    Client->>API: 1. 評価リクエスト (audio_path, roleplay_task, judge_providers)\\n    API->>Svc: 2. evaluate_speech_level(...)\\n    rect rgb(15, 23, 42)\\n        Note over Svc,Profile: 流暢さモジュール\\n        Svc->>Audio: 3. evaluate_audio_manifest(...)\\n        Note over Audio: Wav2Vec2ひらがなモデル推論<br/>& Silero-VADによる無音区間検出\\n        Audio-->>Svc: 4. objective_data (raw_transcript_hiragana, fluency_metrics)\\n        Svc->>Profile: 5. load_profile(...)\\n        Profile-->>Svc: 6. profile (TuningProfile)\\n    end\\n    Svc->>Judges: 7. judge_auto_cefr_with_live_panel(...)\\n    par 7.1. 各LLMプロバイダへの並行APIリクエスト\\n        Judges->>LLM: 7.1.a. OpenAI API (GPT-4o)\\n        LLM-->>Judges: 7.2.a. 判定JSON\\n    and\\n        Judges->>LLM: 7.1.b. Anthropic API (Claude 3.5 Sonnet)\\n        LLM-->>Judges: 7.2.b. 判定JSON\\n    and\\n        Judges->>LLM: 7.1.c. Gemini API (Gemini 1.5 Pro)\\n        LLM-->>Judges: 7.2.c. 判定JSON\\n    end\\n    Judges-->>Svc: 8. judge_results\\n    Svc->>Delib: 9. deliberate_auto_cefr(...)\\n    Delib->>Cons: 9.1. decide(...)\\n    Note over Cons: 多数決または中央値での合意形成\\n    Cons-->>Delib: 9.2. raw_decision (AutoLevelDecision)\\n    Note over Delib: 過去の修正履歴と今回の特徴量の類似度照合\\n    Delib-->>Svc: 10. deliberation (AutoCefrDeliberation)\\n    Svc-->>API: 11. final_decision (AutoLevelDecision)\\n    API-->>Client: 12. 最終評価レポート返却 (JSON Response)\\n"}, {"id": "seq-japanese-eval", "title": "日本語音声評価 & 3判定者コンセンサス (ビジネスビュー)", "short_title": "3判定者コンセンサス", "category": "Sequence Flow", "desc": "学習者・先生が日本語音声をアップロードし、音声・話し方の分析、3つの独立AI判定者による並行採点、意見突き合わせを経て最終評価レポートが生成されるまでの全体フロー。", "diagram": "sequenceDiagram\\n    autonumber\\n    actor User as 学習者・先生\\n    participant UI as 評価画面\\n    participant Audio as 音声・話し方の分析\\n    participant Judges as 3つのAI判定者\\n    participant Review as 判定の確認・調整\\n    participant Report as 評価レポート\\n\\n    User->>UI: 日本語の音声を選ぶ\\n    UI->>Audio: 音声を分析する\\n    Note over Audio: ひらがな書き起こし、<br/>話す速さ、間、発話量を確認\\n    Audio-->>UI: 客観的な話し方データ\\n    UI->>Judges: 同じ根拠を渡してレベルを確認\\n    par 3者が独立して判断\\n        Judges->>Judges: 判定者 A (文法・語彙)\\n    and\\n        Judges->>Judges: 判定者 B (流暢さ・論理性)\\n    and\\n        Judges->>Judges: 判定者 C (発音・抑揚)\\n    end\\n    Judges-->>UI: それぞれの判定と理由\\n    UI->>Judges: 判定を突き合わせる\\n    Note over Review: 意見の一致度と過去の教師フィードバックを確認\\n    Review-->>Report: 最終的な評価を作成\\n    Note over Report: CEFRレベル、達成度、根拠、<br/>人による確認が必要かを表示\\n    Report-->>User: 評価結果の確認\\n"}, {"id": "seq-maice-interview", "title": "MAICE リアルタイムAI面接 & 採点処理シーケンス", "short_title": "MAICE AI面接フロー", "category": "Sequence Flow", "desc": "候補者がブラウザからAI面接を受検し、WebSocketを通じて音声認識、質問生成、回答蓄積、そして完了後にBullMQ経由でLLM総合採点レポートを生成するまでのフルスタック処理フロー。", "diagram": "sequenceDiagram\\n    autonumber\\n    actor Cand as 受検候補者 (ブラウザ)\\n    participant Web as maice-individual (Web Client)\\n    participant Auth as Auth0 SSO\\n    participant WS as maice-backend (WebSocket & API)\\n    participant DB as PostgreSQL 16 (Knex)\\n    participant Queue as Redis 7 (BullMQ)\\n    participant AI as AI Engine (Gemini / Whisper / TTS)\\n    actor Recruiter as 企業採用担当者\\n\\n    Cand->>Web: 招待リンクから受検アクセス\\n    Web->>Auth: 候補者ワンタイムトークン認証\\n    Auth-->>Web: 有効JWTトークン発行\\n    Web->>WS: WebSocket接続確立 (/ws/interview-v2)\\n    WS->>DB: 受検セッション開始登録 (ai_interview_active_sessions)\\n    WS-->>Web: 接続成功 & 最初の面接質問音声配信 (TTS)\\n    loop 各面接質問のやり取り (1〜N問)\\n        Cand->>Web: 音声で回答\\n        Web->>WS: 音声ストリームチャンク送信 (Binary/Base64)\\n        WS->>AI: リアルタイム音声認識 (STT)\\n        AI-->>WS: 確定トランスクリプト\\n        WS->>DB: 一時回答バッファを更新 (context_payload)\\n        WS->>AI: 次の質問生成 & 音声合成 (Gemini Flash & TTS)\\n        AI-->>WS: 次の質問音声\\n        WS-->>Web: 次の質問を再生\\n    end\\n    Web->>WS: 面接完了イベント送信\\n    WS->>DB: セッション完了フラグ更新 (status = 'completed')\\n    WS->>Queue: 総合AI採点ジョブ投入 (BullMQ: eval-worker)\\n    WS-->>Web: 面接終了画面へ遷移\\n    Queue->>AI: ルーブリック採点 & 詳細要約生成 (Gemini Pro)\\n    AI-->>Queue: 評価スコア・要約・分析データ\\n    Queue->>DB: 採点結果永続化 (ai_interview_evaluations)\\n    Recruiter->>WS: 法人ポータルで結果閲覧\\n    WS->>DB: 評価結果取得\\n    WS-->>Recruiter: 総合スコア・録画・詳細レポート表示\\n"}];
+    const diagrams = [];
+    const techSpecs = {};
+    const tableSchemas = {};
+    const sequenceDiagrams = [];
 
     const navContainer = document.getElementById('nav-container');
     const viewTitle = document.getElementById('view-title');
@@ -6756,7 +5940,7 @@ def build_portal_html(data, is_shareable=False):
     let isSidebarResizing = false;
 
     // Resizer Logic (Right Inspector Splitter)
-    const savedWidth = localStorage.getItem('repochex_inspector_width') || localStorage.getItem('plusimpact_inspector_width');
+    const savedWidth = localStorage.getItem('repochex_inspector_width') || localStorage.getItem('repoaudt_inspector_width');
     if (savedWidth) {
       inspector.style.width = savedWidth + 'px';
     }
@@ -6776,7 +5960,7 @@ def build_portal_html(data, is_shareable=False):
     });
 
     // Sidebar Resizer Logic (Left Sidebar Splitter)
-    const savedSidebarWidth = localStorage.getItem('repochex_sidebar_width') || localStorage.getItem('plusimpact_sidebar_width');
+    const savedSidebarWidth = localStorage.getItem('repochex_sidebar_width') || localStorage.getItem('repoaudt_sidebar_width');
     if (savedSidebarWidth) {
       sidebar.style.width = savedSidebarWidth + 'px';
     }
@@ -7801,6 +6985,7 @@ def build_portal_html(data, is_shareable=False):
           <div class="hero-repo-desc">${escapeHtml(item.description || '')}</div>
           <div class="workspace-commit">${en ? 'Saved commit' : '解析対象コミット'} <code>${escapeHtml(item.commit_hash || (en ? 'Not recorded' : '未記録'))}</code></div>
           <div class="workspace-commit" data-audit-repository-status></div>
+          ${currentViewMode === 'coderabbit' ? pullRequestControl(item) : ''}
         </div>
         <div class="hero-right-controls">
           <span class="workspace-findings">${en ? `${count} findings` : `指摘 ${count}件`}</span>
@@ -8873,7 +8058,7 @@ def build_portal_html(data, is_shareable=False):
         let isFallback = false;
         if (tables.length === 0) {
           tables = [
-            { name: "companies", desc: isEn ? "Manages corporate account profiles, subscription plans, billing status, and locale settings." : "MAICEを利用する契約企業の基本アカウント情報、契約プラン、請求状態、ロケールを管理します。" },
+            { name: "companies", desc: isEn ? "Manages corporate account profiles, subscription plans, billing status, and locale settings." : "契約企業の基本アカウント情報、契約プラン、請求状態、ロケールを管理します。" },
             { name: "positions", desc: isEn ? "Manages job openings, target departments, application requirements, and hiring pipeline status." : "採用企業が募集する職種・求人枠情報。配属部署や応募要件、選考ステータスを管理します。" },
             { name: "assessments", desc: isEn ? "Defines AI interview stages, question sets, scoring rubrics, and assessment expiration windows." : "求人に対して実施されるAI面接の選考フェーズ定義。設問設計、採点Rubric、受検有効期限を統括します。" },
             { name: "ai_interview_active_sessions", desc: isEn ? "High-frequency table tracking WebRTC/WebSocket session state, question progress index, and real-time buffers." : "WebRTC/WebSocket接続状態、質問進行インデックス、一時回答バッファを管理し、面接の中断復帰やリアルタイムAI判定を支える高頻度更新テーブルです。" },
@@ -9729,12 +8914,8 @@ def build_portal_html(data, is_shareable=False):
         }
       });
 
-      if (slug.includes('xcore')) {
-        keywords.push('service business logic', 'src/services');
-      } else if (slug === 'plusimpact') {
-        keywords.push('corporate website', 'core api');
-      } else if (slug.includes('maice-backend')) {
-        keywords.push('jwt', 'auth0', 'controller', 'domain business');
+      if (slug.includes('backend')) {
+        keywords.push('jwt', 'auth', 'controller', 'service business logic', 'src/services');
       }
 
       let matchedNodes = [];

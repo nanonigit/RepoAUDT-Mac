@@ -4567,6 +4567,9 @@
 .audit-chat-messages article { border-top: 1px solid var(--workspace-border); padding: 12px 0; }
 .audit-chat-messages article p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .audit-chat-error { color: var(--workspace-danger-text); }
+.audit-chat-pending { display: inline-flex; align-items: center; gap: 8px; padding: 10px 0; color: var(--workspace-muted); font-size: 0.9rem; }
+.audit-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(148, 163, 184, 0.35); border-top-color: currentColor; border-radius: 50%; animation: audit-spin 0.75s linear infinite; flex-shrink: 0; }
+@keyframes audit-spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -4717,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/20 03:19:00</strong>
+              <strong id="portal-sync-time">2026/11/20 14:49:47</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -5773,7 +5776,7 @@
 
     const diagrams = [];
     const techSpecs = {"client": {"title": "Client HTTP Request (Browser / Mobile)", "category": "Client / User Interface", "tech": "Next.js 15, React 19, Fetch / Axios", "desc": "採用企業人事・面接官、または受検者が操作するブラウザ/モバイル端末からのHTTPSリクエスト送信元です。", "steps": ["ユーザー操作（面接作成、受検開始、検索実行）の入力イベント受信", "クライアントサイドバリデーション（必須項目、ファイルサイズチェック）", "Auth0セッショントークンを付与したHTTPSリクエストの非同期発行", "レスポンス受信後のUIレンダリング・トースト通知表示"], "files": ["src/app/", "src/components/"]}, "cors-helmet": {"title": "CORS & Security Middleware", "category": "Security & Gateway Middleware", "tech": "Express 5, Helmet, cors, cookie-parser", "desc": "外部クライアントからのHTTPリクエストの受付・サニタイズ、許可されたオリジンへのCORSアクセス制御、XSS/スニッフィング/クリックジャッキング防止ヘッダーの自動付与を担当します。", "steps": ["HelmetによるセキュリティHTTPヘッダー（HSTS, CSP等）の自動付与", "allowedOriginsとの完全一致によるCORSプリフライト（OPTIONS）検証", "CookieおよびJSONリクエストボディの不正文字・サイズ上限パース", "AIトークン消費コンテキストの初期化と認証層へのディスパッチ"], "files": ["src/app.ts", "src/middleware/cors.ts"]}, "jwt-auth": {"title": "Auth0 JWT & Session Authenticator", "category": "Authentication & Authorization", "tech": "Auth0 RS256, express-jwt, jwks-rsa", "desc": "リクエストヘッダー（Authorization: Bearer <token>）からJWTを抽出し、Auth0 JWKS公開鍵を用いて署名・有効期限（exp）・発行者（iss）を検証します。", "steps": ["HTTP AuthorizationヘッダーまたはCookieからのJWTトークン抽出", "Auth0 JWKSエンドポイントから取得した公開鍵によるRS256署名検証", "ユーザーID・所属企業UUID（company_id）・権限ロールの抽出", "req.user コンテキストへのマッピングと認可ガードの実行"], "files": ["src/middlewares/oauth-jwt.ts", "src/middlewares/admin-jwt-auth.ts"]}, "route-dispatch": {"title": "Feature Route Dispatcher", "category": "API Routing & Validation", "tech": "Express Router, Zod Validator", "desc": "URIパスに基づき、各機能モジュールのルーターへリクエストを振り分け、Zodバリデーションを行います。", "steps": ["URIパスとHTTPメソッドに応じたドメイン別ルーターへのマッピング", "Zodバリデータによるクエリ・ボディパラメータの型および必須項目バリデーション", "不正入力時のHTTP 400エラー返却と正常パラメータのDomain Controller転送"], "files": ["src/routes/index.ts", "src/routes.ts"]}, "db-query": {"title": "Database Query & Transaction Execution", "category": "Database Layer", "tech": "PostgreSQL 16.3, Knex.js, AWS RDS Multi-AZ", "desc": "Knex.jsクエリビルダーを介してAmazon RDS PostgreSQL 16.3クラスターに対してSQLクエリを発行します。", "steps": ["KnexコネクションプールからのDB接続ハンドルの取得（最大20並列）", "READ COMMITTED分離レベルでのトランザクション実行（BEGIN〜COMMIT/ROLLBACK）", "パラメータバインドによるSQLインジェクション完全防止とインデックス活用クエリ実行"], "files": ["src/db/db.ts", "knexfile.ts"]}, "queue-dispatch": {"title": "Async Task & BullMQ Job Queue", "category": "Background Task Queue", "tech": "Redis 7.2.4 (ElastiCache), BullMQ", "desc": "音声トランスクリプト生成、LLM面接評価サマリー生成、面接結果PDF作成などのヘビーな処理をRedisキューへ投入します。", "steps": ["ペイロードのシリアライズとBullMQジョブのRedis Streamへのプッシュ", "指数バックオフによる自動リトライポリシー（最大3回）の設定", "ジョブ進捗イベントのPub/Sub通知とバックグラウンドワーカーによる並列消化"], "files": ["src/external-services/redis.ts", "src/queue/"]}};
-    const tableSchemas = {"companies": {"name": "companies", "logical_name": "企業・組織マスタ", "category": "組織・アカウント管理", "desc": "MAICEを利用する契約企業の基本アカウント情報、契約プラン（Enterprise/Standard）、請求状態、ロケール・タイムゾーン設定を統括管理する最上位エンティティです。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "企業一意識別子 (v4 UUID)"}, {"name": "name", "type": "VARCHAR(255)", "constraints": "NOT NULL", "desc": "企業正式名称"}, {"name": "code", "type": "VARCHAR(64)", "constraints": "UNIQUE, NOT NULL", "desc": "企業識別コード (URLスラッグ・招待コード)"}, {"name": "plan_tier", "type": "VARCHAR(32)", "constraints": "DEFAULT 'standard'", "desc": "契約プラン [starter, standard, enterprise]"}, {"name": "billing_status", "type": "VARCHAR(32)", "constraints": "DEFAULT 'active'", "desc": "請求状態 [trial, active, past_due, canceled]"}, {"name": "country_code", "type": "VARCHAR(8)", "constraints": "DEFAULT 'JP'", "desc": "ISO国コード (JP, US, MM, etc.)"}, {"name": "timezone", "type": "VARCHAR(64)", "constraints": "DEFAULT 'Asia/Tokyo'", "desc": "企業標準タイムゾーン"}, {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "アカウント作成日時"}, {"name": "updated_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "最終更新日時"}], "relations": [{"type": "1:N", "target": "positions.company_id", "desc": "企業に紐づく募集求人枠"}, {"type": "1:N", "target": "company_memberships.company_id", "desc": "企業に所属する人事・面接官ユーザー"}, {"type": "1:N", "target": "assessments.company_id", "desc": "企業が実施するAI面接定義"}], "indexes": ["PRIMARY KEY (id)", "UNIQUE INDEX (code)", "INDEX (billing_status, plan_tier)"], "sample_query": "SELECT id, name, plan_tier, billing_status FROM companies WHERE billing_status = 'active';"}, "positions": {"name": "positions", "logical_name": "募集求人・ポジション枠", "category": "採用求人管理", "desc": "採用企業が募集する職種・求人枠情報。配属部署、応募要件、選考ステータス、必須スキル要件をJSONBで保持します。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "求人枠一意識別子"}, {"name": "company_id", "type": "UUID", "constraints": "FK -> companies.id, NOT NULL", "desc": "所属企業のUUID"}, {"name": "title", "type": "VARCHAR(255)", "constraints": "NOT NULL", "desc": "職種・求人タイトル (例: シニアバックエンドエンジニア)"}, {"name": "department_id", "type": "UUID", "constraints": "FK -> departments.id", "desc": "配属部署UUID"}, {"name": "employment_type", "type": "VARCHAR(32)", "constraints": "NOT NULL", "desc": "雇用形態 [full_time, contract, part_time, internship]"}, {"name": "status", "type": "VARCHAR(32)", "constraints": "DEFAULT 'open'", "desc": "募集ステータス [draft, open, paused, closed]"}, {"name": "experience_level", "type": "VARCHAR(32)", "constraints": "NULLABLE", "desc": "必要経験年数・レベル"}, {"name": "required_skills", "type": "JSONB", "constraints": "DEFAULT '[]'", "desc": "必須スキル・職歴キーワード配列"}, {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "求人作成日時"}, {"name": "updated_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "最終更新日時"}], "relations": [{"type": "N:1", "target": "companies.id", "desc": "所属元企業"}, {"type": "1:N", "target": "assessments.position_id", "desc": "求人に紐づくAI面接・適性検査"}], "indexes": ["PRIMARY KEY (id)", "INDEX (company_id, status)", "INDEX (department_id)"], "sample_query": "SELECT id, title, status, employment_type FROM positions WHERE company_id = :companyId AND status = 'open';"}, "assessments": {"name": "assessments", "logical_name": "AI面接・選考アセスメント定義", "category": "面接選考定義", "desc": "求人に対して実施されるAI面接の選考フェーズ定義。設問設計、採点Rubric、受検有効期限、AI音声モデル設定を統括します。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "面接定義一意識別子"}, {"name": "company_id", "type": "UUID", "constraints": "FK -> companies.id, NOT NULL", "desc": "所属企業UUID"}, {"name": "position_id", "type": "UUID", "constraints": "FK -> positions.id, NOT NULL", "desc": "対象求人UUID"}, {"name": "title", "type": "VARCHAR(255)", "constraints": "NOT NULL", "desc": "面接タイトル (例: 1次AI技術面接)"}, {"name": "interview_type", "type": "VARCHAR(32)", "constraints": "DEFAULT 'ai_voice_v2'", "desc": "面接形式 [ai_voice_v2, asynchronous_video, screening_survey]"}, {"name": "time_limit_mins", "type": "INTEGER", "constraints": "DEFAULT 30", "desc": "最大受検制限時間 (分)"}, {"name": "rubric_template_id", "type": "UUID", "constraints": "NULLABLE", "desc": "適用評価ルーブリックID"}, {"name": "status", "type": "VARCHAR(32)", "constraints": "DEFAULT 'active'", "desc": "ステータス [draft, active, archived]"}, {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "作成日時"}, {"name": "updated_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "最終更新日時"}], "relations": [{"type": "N:1", "target": "positions.id", "desc": "対象募集求人"}, {"type": "1:N", "target": "ai_interview_active_sessions.assessment_id", "desc": "受検中セッション"}, {"type": "1:N", "target": "ai_interview_evaluations.assessment_id", "desc": "面接評価レポート"}], "indexes": ["PRIMARY KEY (id)", "INDEX (company_id, position_id)", "INDEX (status)"], "sample_query": "SELECT id, title, interview_type, time_limit_mins FROM assessments WHERE position_id = :positionId AND status = 'active';"}, "ai_interview_active_sessions": {"name": "ai_interview_active_sessions", "logical_name": "リアルタイム受検セッション情報", "category": "リアルタイム面接管理", "desc": "WebRTC/WebSocket接続状態、質問進行インデックス、一時的音声回答バッファを管理し、面接の中断復帰やリアルタイムAI判定を支える高頻度更新テーブルです。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "セッション一意識別子"}, {"name": "assessment_id", "type": "UUID", "constraints": "FK -> assessments.id, NOT NULL", "desc": "受検アセスメントID"}, {"name": "candidate_id", "type": "UUID", "constraints": "FK -> candidates.id, NOT NULL", "desc": "受検候補者ID"}, {"name": "socket_id", "type": "VARCHAR(128)", "constraints": "NULLABLE", "desc": "現在接続中のWebSocket接続ID"}, {"name": "current_step", "type": "INTEGER", "constraints": "DEFAULT 1", "desc": "現在進行中の設問番号 (1〜N)"}, {"name": "status", "type": "VARCHAR(32)", "constraints": "DEFAULT 'in_progress'", "desc": "受検状態 [waiting, in_progress, completed, terminated]"}, {"name": "started_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "受検開始時刻"}, {"name": "expires_at", "type": "TIMESTAMPTZ", "constraints": "NOT NULL", "desc": "セッション失効制限時刻"}, {"name": "heartbeat_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "直近クライアント生存確認時刻"}, {"name": "context_payload", "type": "JSONB", "constraints": "DEFAULT '{}'", "desc": "AI対話コンテキスト一時キャッシュ"}], "relations": [{"type": "N:1", "target": "assessments.id", "desc": "受検面接定義"}, {"type": "1:1", "target": "ai_interview_evaluations.session_id", "desc": "完了後AI採点レポート"}], "indexes": ["PRIMARY KEY (id)", "INDEX (assessment_id, candidate_id)", "INDEX (socket_id)", "INDEX (status, expires_at)"], "sample_query": "SELECT id, candidate_id, current_step, status, heartbeat_at FROM ai_interview_active_sessions WHERE status = 'in_progress' AND expires_at > NOW();"}, "ai_interview_evaluations": {"name": "ai_interview_evaluations", "logical_name": "AI評価スコア・面接分析サマリー", "category": "AI採点・選考分析", "desc": "面接完了後にLLMが生成した総合スコア、ルーブリック別評価点、強み・懸念点の要約、発話トランスクリプトを格納する評価レコードです。", "pk": "id (UUID)", "columns": [{"name": "id", "type": "UUID", "constraints": "PK, NOT NULL", "desc": "評価レコード一意識別子"}, {"name": "session_id", "type": "UUID", "constraints": "FK -> ai_interview_active_sessions.id, UNIQUE", "desc": "受検セッションID"}, {"name": "assessment_id", "type": "UUID", "constraints": "FK -> assessments.id, NOT NULL", "desc": "アセスメント定義ID"}, {"name": "candidate_id", "type": "UUID", "constraints": "FK -> candidates.id, NOT NULL", "desc": "候補者ID"}, {"name": "overall_score", "type": "NUMERIC(4,2)", "constraints": "CHECK (0-100)", "desc": "総合評価スコア (0.00〜100.00)"}, {"name": "rubric_scores", "type": "JSONB", "constraints": "NOT NULL", "desc": "各評価項目別スコア及び根拠"}, {"name": "summary_text", "type": "TEXT", "constraints": "NOT NULL", "desc": "面接官向けAI要約サマリー (強み/弱み/懸念点)"}, {"name": "full_transcript", "type": "JSONB", "constraints": "DEFAULT '[]'", "desc": "質問・回答の全発話テキスト・タイムスタンプ配列"}, {"name": "ai_model_version", "type": "VARCHAR(64)", "constraints": "NOT NULL", "desc": "採点に使用したAIモデル識別子"}, {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()", "desc": "評価生成完了日時"}], "relations": [{"type": "1:1", "target": "ai_interview_active_sessions.id", "desc": "受検セッション"}, {"type": "N:1", "target": "assessments.id", "desc": "評価基準面接定義"}], "indexes": ["PRIMARY KEY (id)", "UNIQUE INDEX (session_id)", "INDEX (candidate_id)", "INDEX (assessment_id, overall_score)"], "sample_query": "SELECT id, candidate_id, overall_score, summary_text, created_at FROM ai_interview_evaluations WHERE assessment_id = :assessmentId ORDER BY overall_score DESC;"}};
+    const tableSchemas = {};
 
     const navContainer = document.getElementById('nav-container');
     const viewTitle = document.getElementById('view-title');
@@ -5823,7 +5826,7 @@
     let isSidebarResizing = false;
 
     // Resizer Logic (Right Inspector Splitter)
-    const savedWidth = localStorage.getItem('repochex_inspector_width') || localStorage.getItem('plusimpact_inspector_width');
+    const savedWidth = localStorage.getItem('repochex_inspector_width') || localStorage.getItem('repoaudt_inspector_width');
     if (savedWidth) {
       inspector.style.width = savedWidth + 'px';
     }
@@ -5843,7 +5846,7 @@
     });
 
     // Sidebar Resizer Logic (Left Sidebar Splitter)
-    const savedSidebarWidth = localStorage.getItem('repochex_sidebar_width') || localStorage.getItem('plusimpact_sidebar_width');
+    const savedSidebarWidth = localStorage.getItem('repochex_sidebar_width') || localStorage.getItem('repoaudt_sidebar_width');
     if (savedSidebarWidth) {
       sidebar.style.width = savedSidebarWidth + 'px';
     }
@@ -6868,6 +6871,7 @@
           <div class="hero-repo-desc">${escapeHtml(item.description || '')}</div>
           <div class="workspace-commit">${en ? 'Saved commit' : '解析対象コミット'} <code>${escapeHtml(item.commit_hash || (en ? 'Not recorded' : '未記録'))}</code></div>
           <div class="workspace-commit" data-audit-repository-status></div>
+          ${currentViewMode === 'coderabbit' ? pullRequestControl(item) : ''}
         </div>
         <div class="hero-right-controls">
           <span class="workspace-findings">${en ? `${count} findings` : `指摘 ${count}件`}</span>
@@ -7940,7 +7944,7 @@
         let isFallback = false;
         if (tables.length === 0) {
           tables = [
-            { name: "companies", desc: isEn ? "Manages corporate account profiles, subscription plans, billing status, and locale settings." : "MAICEを利用する契約企業の基本アカウント情報、契約プラン、請求状態、ロケールを管理します。" },
+            { name: "companies", desc: isEn ? "Manages corporate account profiles, subscription plans, billing status, and locale settings." : "契約企業の基本アカウント情報、契約プラン、請求状態、ロケールを管理します。" },
             { name: "positions", desc: isEn ? "Manages job openings, target departments, application requirements, and hiring pipeline status." : "採用企業が募集する職種・求人枠情報。配属部署や応募要件、選考ステータスを管理します。" },
             { name: "assessments", desc: isEn ? "Defines AI interview stages, question sets, scoring rubrics, and assessment expiration windows." : "求人に対して実施されるAI面接の選考フェーズ定義。設問設計、採点Rubric、受検有効期限を統括します。" },
             { name: "ai_interview_active_sessions", desc: isEn ? "High-frequency table tracking WebRTC/WebSocket session state, question progress index, and real-time buffers." : "WebRTC/WebSocket接続状態、質問進行インデックス、一時回答バッファを管理し、面接の中断復帰やリアルタイムAI判定を支える高頻度更新テーブルです。" },
@@ -8797,12 +8801,8 @@
         }
       });
 
-      if (slug.includes('xcore')) {
-        keywords.push('service business logic', 'src/services');
-      } else if (slug === 'plusimpact') {
-        keywords.push('corporate website', 'core api');
-      } else if (slug.includes('maice-backend')) {
-        keywords.push('jwt', 'auth0', 'controller', 'domain business');
+      if (slug.includes('backend')) {
+        keywords.push('jwt', 'auth', 'controller', 'service business logic', 'src/services');
       }
 
       let matchedNodes = [];
@@ -11489,7 +11489,8 @@ function publishNativeWorkspace(page = null) {
         const ranks = {critical: 5, high: 4, medium: 3, warning: 3, low: 2, info: 1};
         const next = String(issue.severity || '').toLowerCase();
         return (ranks[next] || 0) > (ranks[highest] || 0) ? next : highest;
-      }, '')
+      }, ''),
+      updatedAt: String(item.github_meta?.pushedAt || item.github_meta?.updatedAt || item.analyzed_at || '')
     })),
     selectedID: selectedDiagram ? String(selectedDiagram.id) : null
   });
@@ -11506,6 +11507,12 @@ async function nativeWorkspaceCommand(command, value) {
       closeAuditChat();
       const index = diagrams.findIndex(item => String(item.id) === value);
       if (index >= 0) await selectDiagram(index);
+      break;
+    }
+    case 'copilot-chat': {
+      const index = diagrams.findIndex(item => String(item.id) === value);
+      if (index >= 0) await selectDiagram(index);
+      openAuditChat(null, 'copilot');
       break;
     }
     case 'page':
@@ -11568,6 +11575,32 @@ function renderNativeInspector() {
 /* Read-only GitHub evidence and contextual conversation in the native workspace. */
 const auditRepositoryStatuses = new Map();
 let auditConversation = null;
+let auditLLMConfig = null;
+
+const AUDIT_PROVIDER_LABELS = {
+  openai: 'OpenAI',
+  claude: 'Claude',
+  gemini: 'Gemini',
+  groq: 'Groq',
+  copilot: 'GitHub Copilot',
+  local: 'Local LLM'
+};
+
+async function loadAuditLLMConfig(force = false) {
+  if (auditLLMConfig && !force) return auditLLMConfig;
+  try {
+    const resp = await fetch('/api/settings');
+    if (resp.ok) {
+      auditLLMConfig = await resp.json();
+    }
+  } catch (_) {}
+  return auditLLMConfig;
+}
+
+function getConfiguredAuditProviders(cfg) {
+  if (!cfg || !cfg.configured) return [];
+  return Object.keys(AUDIT_PROVIDER_LABELS).filter(key => Boolean(cfg.configured[key]));
+}
 
 function auditLabel(english, japanese) {
   return currentLang === 'en' ? english : japanese;
@@ -11605,6 +11638,55 @@ function repositoryFacts(info) {
     · ${auditDate(info.head_date)}</div>
     <div>${auditLabel('Repository last pushed', 'リポジトリの最終 Push')}: ${auditDate(info.pushed_at)}</div>
     <div>${auditLabel('Checked', '取得日時')}: ${auditDate(info.checked_at)}</div>`;
+}
+
+function pullRequestControl(repo) {
+  if (!document.documentElement.classList.contains('native-host') || repo.is_root ||
+      !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(repo.github_url || '')) return '';
+  return `<details class="audit-comparison">
+    <summary>${auditLabel('Pull request status', 'PRの進捗')}</summary>
+    <form class="issue-actions" data-repository="${escapeHtml(String(repo.id))}"
+      onsubmit="event.preventDefault(); loadPullRequestStatus(this)">
+      <label>${auditLabel('PR number or GitHub URL', 'PR番号またはGitHub URL')}
+        <input name="pull" type="text" maxlength="240" required>
+      </label>
+      <button type="submit" class="table-view-btn">${auditLabel('Check status', '状態を確認')}</button>
+    </form>
+    <div data-pull-status role="status"></div>
+  </details>`;
+}
+
+async function loadPullRequestStatus(form) {
+  const output = form.parentElement.querySelector('[data-pull-status]');
+  const button = form.querySelector('button');
+  button.disabled = true;
+  output.textContent = auditLabel('Checking GitHub…', 'GitHubを確認中…');
+  try {
+    const info = await auditRequest('pull-request', {
+      repository: form.dataset.repository, pull: form.elements.pull.value.trim()
+    });
+    const states = {
+      open: auditLabel('Open', '進行中'),
+      draft: auditLabel('Draft', '下書き'),
+      closed: auditLabel('Closed', 'クローズ済み'),
+      merged: auditLabel('Merged', 'マージ済み')
+    };
+    const head = info.head_repository || auditLabel('Source repository unavailable', '変更元のリポジトリを取得できません');
+    const branch = (repo, ref) => escapeHtml(repo + ':' + ref);
+    const merge = info.merge_commit
+      ? `<p>${auditLabel('Integrated commit for re-audit', '再監査に使う取り込みコミット')}
+        ${auditLink('https://github.com/' + info.base_repository + '/commit/' + info.merge_commit, info.merge_commit.slice(0, 9))}
+        <button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${escapeHtml(info.merge_commit)}">
+          ${auditLabel('Copy SHA', 'SHAをコピー')}
+        </button></p>` : '';
+    output.innerHTML = `<p>${auditLink(info.url, '#' + info.number)} · ${states[info.status]}
+      · ${auditDate(info.merged_at || info.updated_at)}</p>
+      <p><code>${branch(head, info.head_ref)} → ${branch(info.base_repository, info.base_ref)}</code></p>${merge}`;
+  } catch (error) {
+    output.textContent = auditLabel('PR status unavailable: ', 'PRの状態を取得できません：') + error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function updateAuditRepositoryStatus(hero, repo, force = false) {
@@ -11738,16 +11820,21 @@ function findingSourceControls(repo, issue, file) {
   };
   const canVerify = issue.scanner === 'authorization-evidence' && issue.diff
     && repo.source_revision?.kind === 'github_commit';
-  return `<div class="finding-source" data-context="${escapeHtml(JSON.stringify(context))}">
+  const canCopilotIssue = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(repo.github_url || '');
+  return `<div class="finding-source" data-context="${escapeHtml(JSON.stringify(context))}" data-finding-title="${escapeHtml(String(issue.title || ''))}" data-finding-severity="${escapeHtml(String(issue.severity || ''))}" data-finding-desc="${escapeHtml(String(issue.description || issue.fix || ''))}">
     <div class="issue-actions">
       <button type="button" class="table-view-btn" data-load-finding-source onclick="loadFindingSource(this)">
         ${auditLabel('Compare current source', '現在のソースを照合')}</button>
       <button type="button" class="table-view-btn" onclick="chatAboutFinding(this)">
         ${auditLabel('Ask AI about this finding', 'この指摘をAIに相談')}</button>
+      ${canCopilotIssue
+        ? `<button type="button" class="table-view-btn" onclick="createCopilotIssueForFinding(this)">
+          ${auditLabel('Assign to Copilot', 'Copilot に修正 Issue を依頼')}</button>` : ''}
       ${canVerify
         ? `<button type="button" class="table-view-btn" onclick="verifyFindingDiff(this)">
           ${auditLabel('Verify diff locally', '修正差分をローカル検証')}</button>` : ''}
     </div>
+    <div data-copilot-issue role="status"></div>
     <div data-diff-verification role="status"></div>
     ${canVerify ? `<form class="issue-actions" onsubmit="event.preventDefault(); verifyRemediationCommit(this)">
       <label>${auditLabel('Remediation commit SHA', '修正コミットのSHA')}
@@ -11761,6 +11848,40 @@ function findingSourceControls(repo, issue, file) {
     ${disclosureEditor(repo, issue)}
     <div data-evidence-result aria-live="polite"></div>
   </div>`;
+}
+
+async function createCopilotIssueForFinding(button) {
+  const panel = button.closest('.finding-source');
+  const output = panel.querySelector('[data-copilot-issue]');
+  const {repository, path, line} = JSON.parse(panel.dataset.context);
+  const findingTitle = panel.dataset.findingTitle || 'Security/Audit Finding';
+  const severity = panel.dataset.findingSeverity || 'medium';
+  const desc = panel.dataset.findingDesc || '';
+  const title = `[RepoAUDT] Fix ${findingTitle} (${path}:${line})`;
+  const body = [
+    `## Audit Finding`,
+    `- **Title**: ${findingTitle}`,
+    `- **Severity**: ${severity}`,
+    `- **Location**: \`${path}:${line}\``,
+    desc ? `\n## Details\n${desc}` : '',
+    `\n## Request\nPlease investigate and open a PR to fix this issue safely.`
+  ].filter(Boolean).join('\n');
+
+  button.disabled = true;
+  output.textContent = auditLabel('Creating GitHub Issue for Copilot…', 'Copilot 用 GitHub Issue を作成中…');
+  try {
+    const result = await auditRequest('copilot-issue', {
+      repository, title, body, assign_copilot: true
+    });
+    const badge = result.copilot_assigned
+      ? auditLabel('Assigned to @copilot', '@copilot にアサイン済み')
+      : auditLabel('Issue created (assign @copilot manually if needed)', 'Issue を作成しました（必要に応じて @copilot をアサインしてください）');
+    output.innerHTML = `${auditLink(result.issue_url, '#' + (result.issue_number || 'Issue'))} · ${escapeHtml(badge)}`;
+  } catch (error) {
+    output.textContent = auditLabel('Failed to create Issue: ', 'Issue 作成に失敗：') + error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function verifyRemediationCommit(form) {
@@ -11869,18 +11990,212 @@ function closeAuditChat() {
   document.getElementById('app-workspace')?.removeAttribute('inert');
 }
 
-function openAuditChat(context = null) {
-  const id = String(selectedDiagram?.id || '');
-  if (!auditConversation || auditConversation.repository !== id || context) {
-    auditConversation = {repository: id, context, messages: [], pending: false, draft: '', path: '', line: ''};
+function buildAuditStarter(repo, context) {
+  if (!repo || repo.is_root) return {greeting: '', suggestions: []};
+  const issues = typeof getWorkspaceIssues === 'function' ? getWorkspaceIssues(repo) : [];
+  if (context && (context.title || context.path)) {
+    const sev = context.severity ? `[${String(context.severity).toUpperCase()}] ` : '';
+    const loc = context.path ? `${context.path}${context.line ? ':' + context.line : ''}` : '';
+    const desc = context.desc ? `\n${context.desc}` : '';
+    const greeting = auditLabel(
+      `Loaded finding for ${repo.repo}:\n${sev}${context.title || loc}${loc && context.title ? ' (' + loc + ')' : ''}${desc}\n\nWhat would you like to do with this finding?`,
+      `「${repo.repo}」の指摘を読み込みました：\n${sev}${context.title || loc}${loc && context.title ? ' (' + loc + ')' : ''}${desc}\n\nこの指摘について何をしますか？`
+    );
+    const targetLabel = context.title || loc || 'this finding';
+    return {
+      greeting,
+      suggestions: [
+        {
+          label: auditLabel('🛠️ Propose a safe code fix', '🛠️ 安全な修正案を提案して'),
+          prompt: auditLabel(
+            `Propose a concrete, defensive code fix for "${targetLabel}"${loc ? ' at ' + loc : ''}.`,
+            `「${targetLabel}」${loc ? '（' + loc + '）' : ''}に対する具体的で安全な修正案（コード例）を提案してください。`
+          )
+        },
+        {
+          label: auditLabel('🔎 Check if still present on GitHub', '🔎 最新コードでまだ発生しているか確認'),
+          prompt: auditLabel(
+            `Check the latest GitHub commit for "${targetLabel}"${loc ? ' at ' + loc : ''} and tell me if it is still present.`,
+            `最新の GitHub コミットを確認して、「${targetLabel}」${loc ? '（' + loc + '）' : ''}が現在も残っているか教えてください。`
+          )
+        },
+        {
+          label: auditLabel('🧪 Check false positive likelihood', '🧪 誤検知の可能性を確認'),
+          prompt: auditLabel(
+            `Evaluate whether "${targetLabel}" could be a false positive and what I should verify.`,
+            `「${targetLabel}」が誤検知である可能性と、確認すべきポイントを教えてください。`
+          )
+        }
+      ]
+    };
   }
-  renderAuditChat();
+
+  const topList = issues.slice(0, 3).map(i => `• [${String(i.severity || 'info').toUpperCase()}] ${i.title || ''}`).join('\n');
+  const greeting = issues.length > 0
+    ? auditLabel(
+        `Loaded "${repo.repo}" (${issues.length} saved findings):\n${topList}\n\nWhat would you like to ask or check?`,
+        `「${repo.repo}」を読み込みました（保存済みの指摘 ${issues.length}件）：\n${topList}\n\nこのリポジトリについて何を確認・相談しますか？`
+      )
+    : auditLabel(
+        `Loaded "${repo.repo}". What would you like to ask or check?`,
+        `「${repo.repo}」を読み込みました。このリポジトリについて何を確認・相談しますか？`
+      );
+
+  const suggestions = [
+    ...(issues.length > 0 ? [{
+      label: auditLabel(`🔍 Prioritize ${issues.length} saved findings`, `🔍 指摘（${issues.length}件）の修正方針を相談`),
+      prompt: auditLabel(
+        `Summarize the ${issues.length} saved findings in ${repo.repo} (${issues.slice(0, 3).map(i => i.title).join('; ')}) and suggest a prioritized fix plan.`,
+        `${repo.repo} の保存済み指摘 ${issues.length}件（${issues.slice(0, 3).map(i => i.title).join('、')} など）について、優先度と修正方針を提案してください。`
+      )
+    }] : []),
+    {
+      label: auditLabel('🔄 What changed since the audit?', '🔄 監査時点から何が変わった？'),
+      prompt: auditLabel(
+        `What changed in ${repo.repo} since the audited commit?`,
+        `${repo.repo} について、監査時点のコミットから何が変わったか教えてください。`
+      )
+    },
+    {
+      label: auditLabel('🏗️ Summarize architecture & risks', '🏗️ 構成と主なリスクを要約'),
+      prompt: auditLabel(
+        `Summarize the architecture and key security/quality risks of ${repo.repo}.`,
+        `${repo.repo} の構成と主なセキュリティ・品質リスクを要約してください。`
+      )
+    }
+  ];
+  return {greeting, suggestions};
 }
 
-function chatAboutFinding(button) {
-  const context = JSON.parse(button.closest('.finding-source').dataset.context);
-  openAuditChat(context);
+function openAuditChat(context = null, preferredProvider = '') {
+  const id = String(selectedDiagram?.id || '');
+  if (!auditConversation || auditConversation.repository !== id || context || preferredProvider) {
+    const starter = buildAuditStarter(selectedDiagram, context);
+    auditConversation = {
+      repository: id,
+      context,
+      messages: [],
+      greeting: starter.greeting,
+      suggestions: starter.suggestions,
+      pending: false,
+      draft: '',
+      path: context?.path || '',
+      line: context?.line ? String(context.line) : '',
+      selectedProvider: preferredProvider || ''
+    };
+  }
+  renderAuditChat();
+  loadAuditLLMConfig(true).then(() => {
+    if (auditChatVisible()) renderAuditChat();
+  });
+}
+
+function chatAboutFinding(button, preferredProvider = '') {
+  const panel = button.closest('.finding-source') || button.closest('.audit-issue')?.querySelector('.finding-source');
+  const issueEl = button.closest('.audit-issue');
+  const baseContext = panel ? JSON.parse(panel.dataset.context) : {};
+  const context = {
+    ...baseContext,
+    title: panel?.dataset.findingTitle || issueEl?.querySelector('.issue-title')?.textContent?.trim() || '',
+    severity: panel?.dataset.findingSeverity || issueEl?.querySelector('.issue-severity')?.textContent?.trim() || '',
+    desc: panel?.dataset.findingDesc || issueEl?.querySelector('.saved-finding-description')?.textContent?.trim() || ''
+  };
+  openAuditChat(context, preferredProvider);
   publishNativeWorkspace('chat');
+}
+
+function closeFindingContextMenu() {
+  document.getElementById('finding-context-menu')?.remove();
+}
+
+function showFindingContextMenu(event, issueEl) {
+  event.preventDefault();
+  closeFindingContextMenu();
+
+  const panel = issueEl.querySelector('.finding-source');
+  const baseContext = panel ? JSON.parse(panel.dataset.context) : {};
+  const titleText = panel?.dataset.findingTitle || issueEl.querySelector('.issue-title')?.textContent?.trim() || '';
+  const severityText = panel?.dataset.findingSeverity || issueEl.querySelector('.issue-severity')?.textContent?.trim() || '';
+  const metaText = issueEl.querySelector('.issue-file')?.textContent?.trim() || '';
+  const descText = panel?.dataset.findingDesc || issueEl.querySelector('.saved-finding-description')?.textContent?.trim() || '';
+  const context = {...baseContext, title: titleText, severity: severityText, desc: descText};
+
+  const menu = document.createElement('div');
+  menu.id = 'finding-context-menu';
+  menu.setAttribute('role', 'menu');
+  Object.assign(menu.style, {
+    position: 'fixed',
+    left: `${Math.min(event.clientX, window.innerWidth - 240)}px`,
+    top: `${Math.min(event.clientY, window.innerHeight - 140)}px`,
+    zIndex: '10000',
+    minWidth: '210px',
+    padding: '6px',
+    borderRadius: '10px',
+    background: 'rgba(30, 32, 40, 0.96)',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.45)',
+    backdropFilter: 'blur(12px)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px'
+  });
+
+  const makeItem = (label, onClick) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('role', 'menuitem');
+    btn.textContent = label;
+    Object.assign(btn.style, {
+      textAlign: 'left',
+      padding: '7px 10px',
+      borderRadius: '6px',
+      border: 'none',
+      background: 'transparent',
+      color: '#f8fafc',
+      fontSize: '0.84rem',
+      cursor: 'pointer'
+    });
+    btn.onmouseenter = () => { btn.style.background = 'rgba(56, 189, 248, 0.22)'; };
+    btn.onmouseleave = () => { btn.style.background = 'transparent'; };
+    btn.onclick = () => {
+      closeFindingContextMenu();
+      onClick();
+    };
+    return btn;
+  };
+
+  menu.append(
+    makeItem(auditLabel('🤖 Ask Copilot about this finding', '🤖 Copilot にこの指摘を相談'), () => {
+      openAuditChat(context, 'copilot');
+      publishNativeWorkspace('chat');
+    }),
+    makeItem(auditLabel('💬 Ask AI Chat', '💬 監査チャットに相談'), () => {
+      openAuditChat(context, '');
+      publishNativeWorkspace('chat');
+    }),
+    makeItem(auditLabel('📋 Copy finding details', '📋 指摘内容をコピー'), () => {
+      const text = [titleText, metaText, descText].filter(Boolean).join('\n');
+      navigator.clipboard?.writeText(text).catch(() => {});
+    })
+  );
+
+  document.body.append(menu);
+}
+
+if (!window.__repoaudtFindingMenuBound) {
+  window.__repoaudtFindingMenuBound = true;
+  document.addEventListener('contextmenu', event => {
+    const issueEl = event.target?.closest?.('.audit-issue');
+    if (issueEl) {
+      showFindingContextMenu(event, issueEl);
+    } else {
+      closeFindingContextMenu();
+    }
+  });
+  document.addEventListener('click', closeFindingContextMenu);
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeFindingContextMenu();
+  });
 }
 
 function renderAuditChat() {
@@ -11894,9 +12209,43 @@ function renderAuditChat() {
     document.getElementById('app-workspace')?.setAttribute('inert', '');
   }
   const context = state.context;
+  const cfg = auditLLMConfig;
+  const configured = getConfiguredAuditProviders(cfg);
+  const activeProv = cfg?.active_provider && configured.includes(cfg.active_provider)
+    ? cfg.active_provider
+    : (configured[0] || '');
+  if (!state.selectedProvider || !configured.includes(state.selectedProvider)) {
+    state.selectedProvider = activeProv;
+  }
+  const formatProvider = prov => {
+    const label = AUDIT_PROVIDER_LABELS[prov] || prov;
+    const model = cfg?.models?.[prov] || '';
+    return model ? `${label} (${model})` : label;
+  };
+  const aiStatusHtml = !cfg
+    ? `<p class="audit-note">${auditLabel('Checking configured AI providers…', '接続済みAIを確認中…')}</p>`
+    : configured.length === 0
+      ? `<div class="audit-chat-error" role="status" style="padding: 8px 12px; border-radius: 8px; border: 1px solid currentColor; margin-top: 8px;">
+          ${auditLabel(
+            'No AI provider is connected yet. Open "Connections > AI connections" in the left sidebar to configure OpenAI, Claude, Gemini, Groq, GitHub Copilot, or a Local LLM.',
+            'AI がまだ1つも接続されていません。左サイドバーの「接続 ＞ AI 接続」から OpenAI / Claude / Gemini / Groq / GitHub Copilot / ローカル LLM のいずれかを接続してください。'
+          )}
+        </div>`
+      : configured.length === 1
+        ? `<p class="audit-note" style="margin-top: 6px;">🤖 ${auditLabel('Active AI', '使用中のAI')}: <strong>${escapeHtml(formatProvider(configured[0]))}</strong></p>`
+        : `<div class="issue-actions" style="margin-top: 8px; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
+              <span>🤖 ${auditLabel('AI model', '使用AI')}</span>
+              <select id="audit-chat-provider">
+                ${configured.map(prov => `<option value="${escapeHtml(prov)}" ${prov === state.selectedProvider ? 'selected' : ''}>${escapeHtml(formatProvider(prov))}</option>`).join('')}
+              </select>
+            </label>
+          </div>`;
+
   section.innerHTML = `<div class="audit-chat-inner">
     <header><h2>${auditLabel('Audit chat', '監査チャット')}</h2>
       <p>${escapeHtml(selectedDiagram?.is_root ? '' : (selectedDiagram?.repo || ''))}</p>
+      ${aiStatusHtml}
     </header>
     ${!selectedDiagram || selectedDiagram.is_root ? `<p>${auditLabel('Select a saved repository from the sidebar.', 'サイドバーから保存済みのリポジトリを選択してください。')}</p>` : `
     ${context ? `<code>${escapeHtml(context.path)}:${context.line}</code>` : `
@@ -11907,24 +12256,50 @@ function renderAuditChat() {
           <input name="line" type="number" min="1" max="1000000" value="${escapeHtml(state.line)}"></label>
       </div>`}
     <div class="audit-chat-messages" aria-live="polite">
+      ${state.greeting ? `<article>
+        <strong>${escapeHtml(state.selectedProvider === 'copilot' ? 'GitHub Copilot' : 'AI')}</strong>
+        <p style="white-space: pre-line;">${escapeHtml(state.greeting)}</p>
+      </article>` : ''}
       ${state.latest ? `<details><summary>${auditLabel('Latest GitHub evidence', '最新のGitHub確認結果')}</summary>
         ${state.latest.path ? sourceComparison(state.latest) : repositoryFacts(state.latest)}</details>` : ''}
       ${state.messages.map(message => `<article>
-        <strong>${message.role === 'user' ? auditLabel('You', 'あなた') : 'AI'}</strong>
+        <strong>${message.role === 'user'
+          ? auditLabel('You', 'あなた')
+          : escapeHtml(message.provider ? `AI (${AUDIT_PROVIDER_LABELS[message.provider] || message.provider}${message.model ? ' · ' + message.model : ''})` : 'AI')}</strong>
         <p>${escapeHtml(message.text)}</p>
       </article>`).join('')}
-      ${state.pending ? `<p role="status">${auditLabel('Checking GitHub and waiting for AI…', 'GitHub を確認し、AI の回答を待っています…')}</p>` : ''}
+      ${state.pending ? `<p class="audit-chat-pending" role="status"><span class="audit-spinner" aria-hidden="true"></span><span>${auditLabel('Checking GitHub and waiting for AI…', 'GitHub を確認し、AI の回答を待っています…')}</span></p>` : ''}
       ${state.error ? `<p class="audit-chat-error" role="alert">${escapeHtml(state.error)}</p>` : ''}
     </div>
+    ${state.suggestions && state.suggestions.length && !state.pending ? `<div class="issue-actions" style="margin-bottom: 8px; flex-wrap: wrap;">
+      ${state.suggestions.map((item, idx) => `<button type="button" class="table-view-btn" data-audit-suggestion="${idx}">${escapeHtml(item.label)}</button>`).join('')}
+    </div>` : ''}
     <form>
       <label for="audit-question">${auditLabel('Question', '質問')}</label>
       <textarea id="audit-question" required maxlength="4000" rows="3" placeholder="${auditLabel('What changed since the audit?', '監査時点から何が変わった？')}">${escapeHtml(state.draft)}</textarea>
       <div class="issue-actions">
-        <button class="table-view-btn workspace-primary" type="submit" ${state.pending ? 'disabled' : ''}>${auditLabel('Check GitHub and ask AI', 'GitHubを確認してAIに聞く')}</button>
+        <button class="table-view-btn workspace-primary" type="submit" ${state.pending ? 'disabled' : ''}>
+          ${state.pending
+            ? `<span class="audit-spinner" aria-hidden="true"></span> ${auditLabel('Waiting for AI…', 'AI 応答待ち…')}`
+            : auditLabel('Check GitHub and ask AI', 'GitHubを確認してAIに聞く')}
+        </button>
       </div>
       <p class="audit-note">${auditLabel('Your question, recent conversation and evidence metadata are sent to the configured AI provider.', '質問・直近の会話・監査の比較結果を設定済みAIに送ります。')}</p>
     </form>`}
   </div>`;
+  const providerSelect = section.querySelector('#audit-chat-provider');
+  if (providerSelect) {
+    providerSelect.onchange = () => { state.selectedProvider = providerSelect.value; };
+  }
+  for (const btn of section.querySelectorAll('[data-audit-suggestion]')) {
+    btn.onclick = () => {
+      const idx = Number(btn.dataset.auditSuggestion);
+      const item = state.suggestions?.[idx];
+      if (!item) return;
+      state.draft = item.prompt;
+      sendAuditQuestion(state);
+    };
+  }
   const input = section.querySelector('textarea');
   if (!input) return;
   input.oninput = () => { state.draft = input.value; };
@@ -11956,11 +12331,18 @@ async function sendAuditQuestion(state) {
   renderAuditChat();
   try {
     const response = await auditRequest('chat', {
-      repository: state.repository, ...location, question, history, language: currentLang
+      repository: state.repository, ...location, question, history, language: currentLang,
+      ...(state.selectedProvider ? {provider: state.selectedProvider} : {})
     });
     state.latest = response;
-    if (response.answer) state.messages.push({role: 'assistant', text: response.answer});
-    else state.error = response.ai_error;
+    if (response.answer) {
+      state.messages.push({
+        role: 'assistant',
+        text: response.answer,
+        provider: response.provider,
+        model: response.model
+      });
+    } else state.error = response.ai_error;
   } catch (error) {
     state.error = error.message;
     if (!state.draft) state.draft = question;

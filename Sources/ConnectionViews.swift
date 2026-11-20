@@ -22,6 +22,10 @@ final class ConnectionStore: ObservableObject {
     @Published var output = ""
     @Published var busy = false
     @Published var failed = false
+    @Published var copilotInstalled = false
+    @Published var copilotVersion = ""
+    @Published var copilotPythonPath = ""
+    @Published var copilotStatusLoaded = false
     private var settings: [String: Any] = [:]
     var port = 18765
 
@@ -79,6 +83,45 @@ final class ConnectionStore: ObservableObject {
             self.provider = active == "auto" ? "openai" : active
             self.localURL = self.settings["local_base_url"] as? String ?? self.localURL
             self.selectProvider()
+            await self.refreshCopilotStatus()
+        }
+    }
+
+    func refreshCopilotStatus() async {
+        do {
+            let status = try await self.request("/api/connections/copilot/status")
+            self.copilotInstalled = status["sdk_installed"] as? Bool ?? false
+            self.copilotVersion = status["sdk_version"] as? String ?? ""
+            self.copilotPythonPath = status["python_executable"] as? String ?? ""
+            self.copilotStatusLoaded = true
+        } catch {
+            self.copilotStatusLoaded = false
+        }
+    }
+
+    func installOrUpdateCopilotSDK(english: Bool) {
+        run {
+            let result = try await self.request("/api/connections/copilot/install", body: [:])
+            self.copilotInstalled = result["sdk_installed"] as? Bool ?? false
+            self.copilotVersion = result["sdk_version"] as? String ?? ""
+            self.copilotPythonPath = result["python_executable"] as? String ?? ""
+            self.copilotStatusLoaded = true
+            let prev = result["previous_version"] as? String ?? ""
+            let updated = result["updated"] as? Bool ?? false
+            let verLabel = self.copilotVersion.isEmpty ? "" : " (v\(self.copilotVersion))"
+            if prev.isEmpty {
+                self.feedback = english
+                    ? "Installed GitHub Copilot SDK\(verLabel)."
+                    : "GitHub Copilot SDK\(verLabel) をインストールしました。"
+            } else if updated {
+                self.feedback = english
+                    ? "Updated GitHub Copilot SDK from v\(prev) to v\(self.copilotVersion)."
+                    : "GitHub Copilot SDK を v\(prev) から v\(self.copilotVersion) にアップデートしました。"
+            } else {
+                self.feedback = english
+                    ? "GitHub Copilot SDK\(verLabel) is up to date."
+                    : "GitHub Copilot SDK\(verLabel) は最新の状態です。"
+            }
         }
     }
 
@@ -180,6 +223,7 @@ struct AIConnectionView: View {
                     Text("Claude").tag("claude")
                     Text("Gemini").tag("gemini")
                     Text("Groq").tag("groq")
+                    Text("GitHub Copilot").tag("copilot")
                     Text(english ? "Local LLM" : "ローカル LLM").tag("local")
                 }
                 if store.provider == "local" {
@@ -189,12 +233,58 @@ struct AIConnectionView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 TextField(english ? "Model ID" : "モデル ID", text: $store.model)
-                SecureField(store.provider == "local" ? (english ? "Token (optional)" : "トークン（任意）") : "API Key", text: $store.key,
-                            prompt: Text(store.keyStatus.isEmpty ? "" : store.keyStatus))
-                Text(english ? "Leave the key blank to keep the saved value." : "キーを空欄にすると、保存済みの値を使用します。")
+                SecureField(
+                    store.provider == "local"
+                        ? (english ? "Token (optional)" : "トークン（任意）")
+                        : (store.provider == "copilot"
+                           ? (english ? "GitHub Token (optional)" : "GitHub トークン（任意）")
+                           : "API Key"),
+                    text: $store.key,
+                    prompt: Text(store.keyStatus.isEmpty ? "" : store.keyStatus)
+                )
+                Text(
+                    store.provider == "copilot"
+                        ? (english
+                           ? "Uses your GitHub Copilot subscription via Copilot SDK (falls back to gh CLI login if blank)."
+                           : "GitHub Copilot SDK 経由でサブスクリプションを利用します（空欄時は gh CLI のログインを使用）。")
+                        : (english
+                           ? "Leave the key blank to keep the saved value."
+                           : "キーを空欄にすると、保存済みの値を使用します。")
+                )
                     .font(.caption).foregroundStyle(.secondary)
             } header: {
                 Text(english ? "AI connection" : "AI 接続")
+            }
+            if store.provider == "copilot" {
+                Section {
+                    HStack {
+                        Label(
+                            store.copilotInstalled
+                                ? (english
+                                   ? "Installed\(store.copilotVersion.isEmpty ? "" : " (v\(store.copilotVersion))")"
+                                   : "インストール済み\(store.copilotVersion.isEmpty ? "" : " (v\(store.copilotVersion))")")
+                                : (english ? "Not installed" : "未インストール"),
+                            systemImage: store.copilotInstalled ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+                        )
+                        .foregroundStyle(SemanticColors.role(store.copilotInstalled ? "successText" : "dangerText"))
+                        Spacer()
+                        Button(
+                            store.copilotInstalled
+                                ? (english ? "Check for Updates" : "アップデートを確認")
+                                : (english ? "Install Copilot SDK" : "インストール")
+                        ) {
+                            store.installOrUpdateCopilotSDK(english: english)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    if !store.copilotPythonPath.isEmpty {
+                        Text(store.copilotPythonPath)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text(english ? "GitHub Copilot SDK" : "GitHub Copilot SDK ランタイム")
+                }
             }
             Section {
                 HStack {
@@ -207,7 +297,12 @@ struct AIConnectionView: View {
         }
         .formStyle(.grouped)
         .disabled(store.busy)
-        .onChange(of: store.provider) { _, _ in store.selectProvider() }
+        .onChange(of: store.provider) { _, next in
+            store.selectProvider()
+            if next == "copilot" {
+                Task { await store.refreshCopilotStatus() }
+            }
+        }
         .task { store.port = port; store.loadAI() }
     }
 }

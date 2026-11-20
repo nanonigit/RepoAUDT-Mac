@@ -9,6 +9,29 @@ struct WorkspaceRepository: Decodable, Identifiable {
     let description: String
     let findings: Int
     let severity: String
+    let updatedAt: String?
+}
+
+enum RepositorySortOrder: String, CaseIterable, Identifiable {
+    case defaultOrder
+    case nameAsc
+    case nameDesc
+    case updatedDesc
+    case findingsDesc
+    case severityDesc
+
+    var id: String { rawValue }
+
+    func title(english: Bool) -> String {
+        switch self {
+        case .defaultOrder: return english ? "Default order" : "保存順"
+        case .nameAsc: return english ? "Name (A–Z)" : "名前順 (A → Z)"
+        case .nameDesc: return english ? "Name (Z–A)" : "名前順 (Z → A)"
+        case .updatedDesc: return english ? "Recently updated" : "変更・更新が新しい順"
+        case .findingsDesc: return english ? "Most findings" : "指摘件数が多い順"
+        case .severityDesc: return english ? "Highest severity" : "重要度が高い順"
+        }
+    }
 }
 
 struct WorkspaceSnapshot: Decodable {
@@ -58,16 +81,86 @@ struct MainContentView: View {
     @ObservedObject var backend = BackendServerManager.shared
     @ObservedObject var coordinator: WebViewCoordinator
     @AppStorage("workspaceLanguage") private var language = "ja"
-    @State private var selection: String? = WorkspacePage.dashboard.rawValue
+    @AppStorage("repositorySortOrder") private var sortOrderRaw = RepositorySortOrder.defaultOrder.rawValue
+    @State private var selection: Set<String> = [WorkspacePage.dashboard.rawValue]
     @State private var query = ""
+    @State private var busyRepoIDs: Set<String> = []
+    @State private var reposPendingDeletion: [WorkspaceRepository] = []
+    @State private var repoActionError: String?
+    @State private var checkingAppUpdate = false
+    @State private var applyingAppUpdate = false
+    @State private var appUpdatePrompt: AppUpdateInfo?
+    @State private var appUpdateStatusMessage: String?
+    @State private var refreshingList = false
+    @State private var listRefreshNote = ""
+
+    private struct AppUpdateInfo {
+        let localCommit: String
+        let remoteCommit: String
+        let behindCount: Int
+        let latestMessage: String
+        let dirty: Bool
+    }
 
     private var nativePage: Bool { [.dashboard, .ai, .mcp].contains(page) }
     private var english: Bool { language == "en" }
     private var page: WorkspacePage { coordinator.page }
+    private var sortOrder: RepositorySortOrder {
+        RepositorySortOrder(rawValue: sortOrderRaw) ?? .defaultOrder
+    }
     private var repositories: [WorkspaceRepository] {
-        coordinator.repositories.filter {
+        let filtered = coordinator.repositories.filter {
             query.isEmpty || $0.name.localizedCaseInsensitiveContains(query)
         }
+        return sortRepositories(filtered, by: sortOrder)
+    }
+
+    private func sortRepositories(_ items: [WorkspaceRepository], by order: RepositorySortOrder) -> [WorkspaceRepository] {
+        switch order {
+        case .defaultOrder:
+            return items
+        case .nameAsc:
+            return items.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .nameDesc:
+            return items.sorted { $0.name.localizedStandardCompare($1.name) == .orderedDescending }
+        case .updatedDesc:
+            return items.sorted {
+                let lhs = normalizedTimestamp($0.updatedAt)
+                let rhs = normalizedTimestamp($1.updatedAt)
+                if lhs != rhs { return lhs > rhs }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        case .findingsDesc:
+            return items.sorted {
+                if $0.findings != $1.findings { return $0.findings > $1.findings }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        case .severityDesc:
+            return items.sorted {
+                let lhs = severityRank($0.severity)
+                let rhs = severityRank($1.severity)
+                if lhs != rhs { return lhs > rhs }
+                if $0.findings != $1.findings { return $0.findings > $1.findings }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        }
+    }
+
+    private func severityRank(_ severity: String) -> Int {
+        switch severity.lowercased() {
+        case "critical": return 5
+        case "high": return 4
+        case "medium", "warning": return 3
+        case "low": return 2
+        case "info": return 1
+        default: return 0
+        }
+    }
+
+    private func normalizedTimestamp(_ raw: String?) -> String {
+        guard let raw, !raw.isEmpty else { return "" }
+        // Normalize "YYYY/MM/DD HH:MM:SS" and ISO-8601 strings to lexicographically comparable format.
+        return raw.replacingOccurrences(of: "/", with: "-")
     }
 
     var body: some View {
@@ -83,12 +176,48 @@ struct MainContentView: View {
                     Label(english ? "AI connections" : "AI 接続", systemImage: "brain").tag(WorkspacePage.ai.rawValue)
                     Label("MCP", systemImage: "point.3.filled.connected.trianglepath.dotted").tag(WorkspacePage.mcp.rawValue)
                 }
-                Section(english ? "Repositories" : "リポジトリ") {
+                Section {
                     ForEach(repositories) { repo in
-                        Label(repo.name, systemImage: "folder")
-                            .lineLimit(1)
-                            .help(repo.name)
-                            .tag("repo:" + repo.id)
+                        HStack(spacing: 6) {
+                            Label(repo.name, systemImage: "folder")
+                                .lineLimit(1)
+                            if busyRepoIDs.contains(repo.id) {
+                                Spacer(minLength: 4)
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                        .help(repo.name)
+                        .tag("repo:" + repo.id)
+                        .contextMenu {
+                            repositoryContextMenu(for: repo)
+                        }
+                    }
+                } header: {
+                    HStack(spacing: 6) {
+                        Text(english ? "Repositories" : "リポジトリ")
+                        Spacer()
+                        Menu {
+                            ForEach(RepositorySortOrder.allCases) { option in
+                                Button {
+                                    sortOrderRaw = option.rawValue
+                                } label: {
+                                    if sortOrder == option {
+                                        Label(option.title(english: english), systemImage: "checkmark")
+                                    } else {
+                                        Text(option.title(english: english))
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .font(.caption)
+                                .foregroundStyle(sortOrder == .defaultOrder ? Color.secondary : Color.accentColor)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .help(english ? "Sort repositories (\(sortOrder.title(english: true)))"
+                                      : "並び替え (\(sortOrder.title(english: false)))")
                     }
                 }
             }
@@ -104,6 +233,26 @@ struct MainContentView: View {
                         Label(english ? "Settings" : "設定", systemImage: "gearshape")
                     }
                     .buttonStyle(.plain)
+                    Button {
+                        Task { await checkForAppUpdates() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Label(
+                                applyingAppUpdate
+                                    ? (english ? "Updating…" : "アップデート中…")
+                                    : (checkingAppUpdate
+                                       ? (english ? "Checking updates…" : "更新を確認中…")
+                                       : (english ? "Update App" : "アプリをアップデート")),
+                                systemImage: "arrow.triangle.2.circlepath"
+                            )
+                            if checkingAppUpdate || applyingAppUpdate {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(checkingAppUpdate || applyingAppUpdate || !backend.isReady)
                     .padding(.bottom, 8)
                     Label(coordinator.ready ? (english ? "Local engine" : "ローカル解析エンジン") :
                             (english ? "Loading" : "読み込み中"),
@@ -167,20 +316,33 @@ struct MainContentView: View {
             }
         }
         .tint(SemanticColors.role("action"))
-        .onChange(of: selection) { _, value in
-            guard let value else { return }
-            if let next = WorkspacePage(rawValue: value) {
+        .onChange(of: selection) { oldValue, newValue in
+            let added = newValue.subtracting(oldValue)
+            if let pageTag = added.first(where: { WorkspacePage(rawValue: $0) != nil }),
+               let next = WorkspacePage(rawValue: pageTag) {
+                if newValue.count > 1 {
+                    selection = [pageTag]
+                }
                 coordinator.page = next
                 coordinator.send("page", value: next.command)
-            } else if value.hasPrefix("repo:") {
+                return
+            }
+
+            let repoTags = newValue.filter { $0.hasPrefix("repo:") }
+            if !repoTags.isEmpty, newValue.contains(where: { WorkspacePage(rawValue: $0) != nil }) {
+                selection = repoTags
+                return
+            }
+
+            if let repoTag = added.first(where: { $0.hasPrefix("repo:") }) ?? (repoTags.count == 1 ? repoTags.first : nil) {
                 coordinator.page = .audit
-                coordinator.send("repository", value: String(value.dropFirst(5)))
+                coordinator.send("repository", value: String(repoTag.dropFirst(5)))
                 coordinator.send("page", value: WorkspacePage.audit.command)
             }
         }
         .onChange(of: coordinator.page) { _, value in
-            if value != .audit || selection?.hasPrefix("repo:") != true {
-                selection = value.rawValue
+            if value != .audit || !selection.contains(where: { $0.hasPrefix("repo:") }) {
+                selection = [value.rawValue]
             }
         }
         .onChange(of: language) { _, value in
@@ -188,11 +350,96 @@ struct MainContentView: View {
             coordinator.send("language", value: value)
         }
         .onAppear { coordinator.language = language }
+        .confirmationDialog(
+            reposPendingDeletion.count > 1
+                ? (english
+                   ? "Remove \(reposPendingDeletion.count) selected repositories from RepoAUDT?"
+                   : "選択した \(reposPendingDeletion.count) 件のリポジトリを RepoAUDT から削除しますか？")
+                : (english
+                   ? "Remove \"\(reposPendingDeletion.first?.name ?? "")\" from RepoAUDT?"
+                   : "「\(reposPendingDeletion.first?.name ?? "")」を RepoAUDT から削除しますか？"),
+            isPresented: Binding(
+                get: { !reposPendingDeletion.isEmpty },
+                set: { if !$0 { reposPendingDeletion = [] } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if !reposPendingDeletion.isEmpty {
+                let targets = reposPendingDeletion
+                Button(
+                    targets.count > 1
+                        ? (english ? "Remove \(targets.count) Repositories" : "\(targets.count) 件を削除")
+                        : (english ? "Remove" : "削除"),
+                    role: .destructive
+                ) {
+                    reposPendingDeletion = []
+                    Task { await deleteRepositories(targets) }
+                }
+            }
+            Button(english ? "Cancel" : "キャンセル", role: .cancel) {
+                reposPendingDeletion = []
+            }
+        } message: {
+            Text(english
+                 ? "Local diagrams and audit data will be removed. Your GitHub remote repositories will not be affected."
+                 : "ローカルの構成図・監査データは削除されます。GitHub 上のリモートリポジトリには影響しません。")
+        }
+        .alert(
+            english ? "Repository Action Failed" : "リポジトリ操作に失敗しました",
+            isPresented: Binding(
+                get: { repoActionError != nil },
+                set: { if !$0 { repoActionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { repoActionError = nil }
+        } message: {
+            Text(repoActionError ?? "")
+        }
+        .alert(
+            english ? "New Version Available on GitHub" : "GitHub に新しいバージョンがあります",
+            isPresented: Binding(
+                get: { appUpdatePrompt != nil },
+                set: { if !$0 { appUpdatePrompt = nil } }
+            )
+        ) {
+            if let info = appUpdatePrompt, !info.dirty {
+                Button(english ? "Update & Relaunch" : "アップデートして再起動") {
+                    appUpdatePrompt = nil
+                    Task { await applyAppUpdate() }
+                }
+            }
+            Button(english ? "Close" : "閉じる", role: .cancel) {
+                appUpdatePrompt = nil
+            }
+        } message: {
+            if let info = appUpdatePrompt {
+                if info.dirty {
+                    Text(english
+                         ? "\(info.behindCount) new commit(s) on origin/main (\(info.localCommit) → \(info.remoteCommit)), but local uncommitted changes exist. Commit or stash them before updating."
+                         : "origin/main に \(info.behindCount) 件の更新があります（\(info.localCommit) → \(info.remoteCommit)）が、ローカルに未コミットの変更があるため自動更新できません。変更をコミットまたは退避してから再実行してください。")
+                } else {
+                    Text(english
+                         ? "\(info.behindCount) new commit(s) (\(info.localCommit) → \(info.remoteCommit))\nLatest: \(info.latestMessage)\n\nRepoAUDT Mac will rebuild and relaunch automatically."
+                         : "\(info.behindCount) 件の更新があります（\(info.localCommit) → \(info.remoteCommit)）\n最新: \(info.latestMessage)\n\n更新後にビルドして自動で再起動します。")
+                }
+            }
+        }
+        .alert(
+            english ? "App Update" : "アプリのアップデート",
+            isPresented: Binding(
+                get: { appUpdateStatusMessage != nil },
+                set: { if !$0 { appUpdateStatusMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { appUpdateStatusMessage = nil }
+        } message: {
+            Text(appUpdateStatusMessage ?? "")
+        }
     }
 
     private func showPage(_ next: WorkspacePage) {
         coordinator.page = next
-        selection = next.rawValue
+        selection = [next.rawValue]
         coordinator.send("page", value: next.command)
     }
 
@@ -248,11 +495,27 @@ struct MainContentView: View {
                         Text(english ? "Saved analyses" : "保存済みの解析").font(.headline)
                         Text("\(coordinator.repositories.count)").foregroundStyle(.secondary)
                         Spacer()
-                        Button {
-                            coordinator.send("refresh")
-                        } label: {
-                            Label(english ? "Reload list" : "一覧を更新", systemImage: "arrow.clockwise")
+                        if !listRefreshNote.isEmpty {
+                            Text(listRefreshNote)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
+                        Button {
+                            reloadSavedRepositories()
+                        } label: {
+                            HStack(spacing: 6) {
+                                if refreshingList {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                                Text(refreshingList
+                                     ? (english ? "Reloading…" : "更新中…")
+                                     : (english ? "Reload list" : "一覧を更新"))
+                            }
+                        }
+                        .disabled(refreshingList || !coordinator.ready)
                     }
                     if repositories.isEmpty {
                         ContentUnavailableView(
@@ -285,7 +548,7 @@ struct MainContentView: View {
 
     private func repositoryRow(_ repo: WorkspaceRepository) -> some View {
         Button {
-            selection = "repo:" + repo.id
+            selection = ["repo:" + repo.id]
             coordinator.page = .audit
             coordinator.send("repository", value: repo.id)
             coordinator.send("page", value: WorkspacePage.audit.command)
@@ -308,5 +571,227 @@ struct MainContentView: View {
         }
         .buttonStyle(.plain)
         .help(english ? "Open saved audit for \(repo.name)" : "\(repo.name) の監査結果を開く")
+        .contextMenu {
+            repositoryContextMenu(for: repo)
+        }
+    }
+
+    private var selectedRepositories: [WorkspaceRepository] {
+        let selectedIDs = Set(selection.filter { $0.hasPrefix("repo:") }.map { String($0.dropFirst(5)) })
+        return repositories.filter { selectedIDs.contains($0.id) }
+    }
+
+    private func targetRepositories(for clicked: WorkspaceRepository) -> [WorkspaceRepository] {
+        let selected = selectedRepositories
+        if selected.count > 1 && selected.contains(where: { $0.id == clicked.id }) {
+            return selected
+        }
+        return [clicked]
+    }
+
+    @ViewBuilder
+    private func repositoryContextMenu(for repo: WorkspaceRepository) -> some View {
+        let targets = targetRepositories(for: repo)
+        let updatable = targets.filter { !$0.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+        if targets.count == 1 {
+            Button {
+                selection = ["repo:" + repo.id]
+                coordinator.page = .chat
+                coordinator.send("copilot-chat", value: repo.id)
+            } label: {
+                Label(english ? "Ask Copilot" : "Copilot に相談", systemImage: "bubble.left.and.bubble.right")
+            }
+        }
+
+        Button {
+            Task { await runRepositoryBatch(updatable, endpoint: "/api/analyze") }
+        } label: {
+            Label(
+                targets.count > 1
+                    ? (english ? "Re-scan \(targets.count) Selected Repositories" : "選択した \(targets.count) 件を再スキャン")
+                    : (english ? "Re-scan Repository" : "再スキャン"),
+                systemImage: "arrow.trianglehead.2.clockwise.rotate.90"
+            )
+        }
+        .disabled(updatable.isEmpty || !busyRepoIDs.isEmpty)
+
+        Button {
+            Task { await runRepositoryBatch(updatable, endpoint: "/api/sync") }
+        } label: {
+            Label(
+                targets.count > 1
+                    ? (english ? "Update \(targets.count) Selected Repositories" : "選択した \(targets.count) 件を更新")
+                    : (english ? "Update Repository" : "リポジトリを更新"),
+                systemImage: "arrow.clockwise"
+            )
+        }
+        .disabled(updatable.isEmpty || !busyRepoIDs.isEmpty)
+
+        if targets.count == 1,
+           let url = URL(string: repo.url.trimmingCharacters(in: .whitespacesAndNewlines)),
+           url.scheme == "https" {
+            Button {
+                NSWorkspace.shared.open(url)
+            } label: {
+                Label(english ? "Open on GitHub" : "GitHub で開く", systemImage: "safari")
+            }
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            reposPendingDeletion = targets
+        } label: {
+            Label(
+                targets.count > 1
+                    ? (english ? "Remove \(targets.count) Selected from RepoAUDT" : "選択した \(targets.count) 件を RepoAUDT から削除")
+                    : (english ? "Remove from RepoAUDT" : "RepoAUDT から削除"),
+                systemImage: "trash"
+            )
+        }
+        .disabled(!busyRepoIDs.isEmpty)
+    }
+
+    private func runRepositoryBatch(_ targets: [WorkspaceRepository], endpoint: String) async {
+        let validTargets = targets.filter { !$0.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !validTargets.isEmpty, busyRepoIDs.isEmpty else { return }
+        busyRepoIDs = Set(validTargets.map(\.id))
+        defer { busyRepoIDs = [] }
+        do {
+            for target in validTargets {
+                let targetURL = target.url.trimmingCharacters(in: .whitespacesAndNewlines)
+                try await postRepositoryAction(endpoint, body: ["url": targetURL])
+            }
+            coordinator.send("refresh")
+        } catch {
+            repoActionError = error.localizedDescription
+        }
+    }
+
+    private func deleteRepositories(_ targets: [WorkspaceRepository]) async {
+        guard !targets.isEmpty, busyRepoIDs.isEmpty else { return }
+        let targetIDs = targets.map(\.id)
+        busyRepoIDs = Set(targetIDs)
+        defer { busyRepoIDs = [] }
+        do {
+            if targetIDs.count == 1, let singleID = targetIDs.first {
+                try await postRepositoryAction("/api/delete", body: ["id": singleID])
+            } else {
+                try await postRepositoryAction("/api/delete", body: ["ids": targetIDs])
+            }
+            let deletedTags = Set(targetIDs.map { "repo:" + $0 })
+            selection.subtract(deletedTags)
+            if selection.isEmpty {
+                selection = [WorkspacePage.dashboard.rawValue]
+                coordinator.page = .dashboard
+            }
+            coordinator.send("refresh")
+        } catch {
+            repoActionError = error.localizedDescription
+        }
+    }
+
+    private func reloadSavedRepositories() {
+        guard !refreshingList else { return }
+        refreshingList = true
+        listRefreshNote = ""
+        coordinator.send("refresh") {
+            Task { @MainActor in
+                // Keep spinner briefly visible so quick local reloads still give clear feedback.
+                try? await Task.sleep(for: .milliseconds(350))
+                refreshingList = false
+                let formatter = DateFormatter()
+                formatter.dateFormat = "HH:mm:ss"
+                let time = formatter.string(from: Date())
+                listRefreshNote = english
+                    ? "Updated \(time) · \(coordinator.repositories.count) items"
+                    : "更新済み \(time) · \(coordinator.repositories.count)件"
+            }
+        }
+    }
+
+    private func postRepositoryAction(_ path: String, body: [String: Any]) async throws {
+        _ = try await requestJSON(path, body: body)
+    }
+
+    private func checkForAppUpdates() async {
+        guard !checkingAppUpdate && !applyingAppUpdate else { return }
+        checkingAppUpdate = true
+        defer { checkingAppUpdate = false }
+        do {
+            let json = try await requestJSON("/api/app/update/check")
+            let available = json["update_available"] as? Bool ?? false
+            let localCommit = json["local_commit"] as? String ?? ""
+            let remoteCommit = json["remote_commit"] as? String ?? ""
+            let behindCount = json["behind_count"] as? Int ?? 0
+            let latestMessage = json["latest_message"] as? String ?? ""
+            let dirty = json["dirty"] as? Bool ?? false
+
+            if available {
+                appUpdatePrompt = AppUpdateInfo(
+                    localCommit: localCommit,
+                    remoteCommit: remoteCommit,
+                    behindCount: behindCount,
+                    latestMessage: latestMessage,
+                    dirty: dirty
+                )
+            } else {
+                appUpdateStatusMessage = english
+                    ? "RepoAUDT Mac is up to date (\(localCommit))."
+                    : "RepoAUDT Mac は最新です (\(localCommit))。"
+            }
+        } catch {
+            appUpdateStatusMessage = error.localizedDescription
+        }
+    }
+
+    private func applyAppUpdate() async {
+        guard !applyingAppUpdate else { return }
+        applyingAppUpdate = true
+        defer { applyingAppUpdate = false }
+        do {
+            let json = try await requestJSON("/api/app/update/apply", body: [:])
+            if json["already_latest"] as? Bool == true {
+                let commit = json["local_commit"] as? String ?? ""
+                appUpdateStatusMessage = english
+                    ? "RepoAUDT Mac is already up to date (\(commit))."
+                    : "RepoAUDT Mac はすでに最新です (\(commit))。"
+            } else {
+                appUpdateStatusMessage = english
+                    ? "Updating and rebuilding RepoAUDT Mac… It will relaunch automatically when finished."
+                    : "アップデートと再ビルドを開始しました。完了後に自動で再起動します。"
+            }
+        } catch {
+            appUpdateStatusMessage = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    private func requestJSON(_ path: String, body: [String: Any]? = nil) async throws -> [String: Any] {
+        guard let url = URL(string: "http://127.0.0.1:\(backend.port)\(path)") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 180
+        if let body {
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NSError(domain: "RepoAUDT", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: english ? "Invalid response from local engine." : "ローカルエンジンから無効な応答が返されました。"])
+        }
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if statusCode != 200 || (json["ok"] as? Bool) == false {
+            let msg = (json["error"] as? String)
+                ?? (json["message"] as? String)
+                ?? (english ? "Request failed (HTTP \(statusCode))." : "リクエストに失敗しました (HTTP \(statusCode))。")
+            throw NSError(domain: "RepoAUDT", code: 2, userInfo: [NSLocalizedDescriptionKey: msg])
+        }
+        return json
     }
 }

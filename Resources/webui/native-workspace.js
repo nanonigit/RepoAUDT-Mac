@@ -15,7 +15,8 @@ function publishNativeWorkspace(page = null) {
         const ranks = {critical: 5, high: 4, medium: 3, warning: 3, low: 2, info: 1};
         const next = String(issue.severity || '').toLowerCase();
         return (ranks[next] || 0) > (ranks[highest] || 0) ? next : highest;
-      }, '')
+      }, ''),
+      updatedAt: String(item.github_meta?.pushedAt || item.github_meta?.updatedAt || item.analyzed_at || '')
     })),
     selectedID: selectedDiagram ? String(selectedDiagram.id) : null
   });
@@ -32,6 +33,12 @@ async function nativeWorkspaceCommand(command, value) {
       closeAuditChat();
       const index = diagrams.findIndex(item => String(item.id) === value);
       if (index >= 0) await selectDiagram(index);
+      break;
+    }
+    case 'copilot-chat': {
+      const index = diagrams.findIndex(item => String(item.id) === value);
+      if (index >= 0) await selectDiagram(index);
+      openAuditChat(null, 'copilot');
       break;
     }
     case 'page':

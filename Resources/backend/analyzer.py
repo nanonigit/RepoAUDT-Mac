@@ -3,7 +3,7 @@
 """
 Universal GitHub Organization / User & Repository Analyzer for RepoAUDT Mac App.
 Supports BOTH:
-  - Parent / Organization / User URLs (e.g. https://github.com/plusimpact, https://github.com/nanonigit, plusimpact)
+  - Parent / Organization / User URLs (e.g. https://github.com/example-org, https://github.com/octocat, example-org)
     -> Discovers all repositories in the org/user, builds an Ecosystem Overview diagram (<owner> (全体エコシステム) [ECO])
        AND builds individual repository architecture diagrams, sequences, and CodeRabbit reviews for child repos!
   - Direct Repository URLs (e.g. https://github.com/owner/repo, owner/repo)
@@ -70,10 +70,10 @@ def parse_github_target(raw_input: str) -> Dict[str, Any]:
       - {"mode": "org", "owner": owner, "github_url": f"https://github.com/{owner}", "local_path": Optional[Path]}
       - {"mode": "repo", "owner": owner, "repo": repo, "github_url": f"https://github.com/{owner}/{repo}", "local_path": Optional[Path]}
     Supports:
-      - https://github.com/plusimpact
-      - https://github.com/orgs/plusimpact/repositories
-      - https://github.com/nanonigit?tab=repositories
-      - plusimpact
+      - https://github.com/example-org
+      - https://github.com/orgs/example-org/repositories
+      - https://github.com/octocat?tab=repositories
+      - example-org
       - https://github.com/owner/repo
       - owner/repo
       - /local/path
@@ -126,7 +126,7 @@ def parse_github_target(raw_input: str) -> Dict[str, Any]:
             "local_path": None,
         }
 
-    # Single segment -> Organization or User! (e.g. https://github.com/plusimpact or "plusimpact")
+    # Single segment -> Organization or User! (e.g. https://github.com/example-org or "example-org")
     if len(parts) == 1:
         owner = _validate_github_segment(parts[0], "owner")
         return {
@@ -1208,7 +1208,7 @@ def analyze_checkout(
 
     diagram_entry = {
         "id": f"gh-{owner}-{repo}-overall".lower(),
-        "repo": f"{owner}/{repo}" if owner not in ("plusimpact", "local") else repo,
+        "repo": f"{owner}/{repo}" if owner != "local" else repo,
         "repo_slug": repo,
         "category": category_label,
         "perspective": "overall-architecture",
@@ -1318,7 +1318,7 @@ def build_lightweight_repo_entry(owner: str, rmeta: Dict[str, Any], category_lab
 
     diag = {
         "id": f"gh-{owner}-{repo}-overall".lower(),
-        "repo": f"{owner}/{repo}" if owner != "plusimpact" else repo,
+        "repo": f"{owner}/{repo}",
         "repo_slug": repo,
         "category": category_label,
         "perspective": "overall-architecture",
@@ -1360,7 +1360,7 @@ def build_lightweight_repo_entry(owner: str, rmeta: Dict[str, Any], category_lab
 
 def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None) -> Dict[str, Any]:
     """
-    Analyze an entire GitHub Organization or User (parent level, e.g. https://github.com/plusimpact or https://github.com/nanonigit).
+    Analyze an entire GitHub Organization or User (parent level, e.g. https://github.com/example-org or https://github.com/octocat).
     1. Discovers all repositories under `owner`.
     2. Builds a master Ecosystem Overview diagram (`<owner> (全体エコシステム)` [ECO], `is_root: True`).
     3. Deep-analyzes locally available repositories + top recent repositories, and includes lightweight diagrams for the rest.
@@ -1571,7 +1571,7 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
 
 def analyze_any_github_target(raw_input: str) -> Dict[str, Any]:
     """
-    Entrypoint for both Organization/User URLs (`https://github.com/plusimpact`)
+    Entrypoint for both Organization/User URLs (`https://github.com/example-org`)
     and Direct Repository URLs (`https://github.com/owner/repo`).
     """
     parsed = parse_github_target(raw_input)
@@ -1720,6 +1720,6 @@ def delete_saved_diagram(diagram_id: Optional[str] = None, category: Optional[st
 
 if __name__ == "__main__":
     import sys
-    target = sys.argv[1] if len(sys.argv) > 1 else "https://github.com/plusimpact"
+    target = sys.argv[1] if len(sys.argv) > 1 else "https://github.com/example-org"
     res = analyze_any_github_target(target)
     print(f"Mode: {res.get('mode', 'repo')} | Primary Diagram: {res['diagram']['repo']} | Total Diagrams Returned: {len(res.get('diagrams', []))}")

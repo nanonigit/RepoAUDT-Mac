@@ -21,6 +21,8 @@ REPOSITORY = re.compile(
     r"https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+)/?"
 )
 COMMIT = re.compile(r"[0-9a-f]{7,40}")
+PULL_NUMBER = r"[1-9][0-9]{0,9}"
+PULL_URL = re.compile(rf"https://github\.com/([^/]+/[^/]+)/pull/({PULL_NUMBER})/?")
 ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][\w-]*)\s*=")
 
 
@@ -32,7 +34,7 @@ GITHUB_CLI_PATHS = ("/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh")
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
 REST_ENDPOINT = re.compile(
     r"repos/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+"
-    r"(?:/branches/[A-Za-z0-9_.%/-]+|/commits(?:/[0-9a-f]{7,40})?|/contents/[^?#]+)?"
+    rf"(?:/branches/[A-Za-z0-9_.%/-]+|/commits(?:/[0-9a-f]{{7,40}})?|/contents/[^?#]+|/pulls/{PULL_NUMBER})?"
     r"(?:\?[^#]*)?"
 )
 REST_MAX_BYTES = 2 * 1024 * 1024
@@ -439,7 +441,11 @@ def chat_answer(payload, evidence):
         )
     ):
         raise EvidenceError("Invalid conversation history.")
-    chosen = choose_active_llm(load_settings())
+    settings = load_settings()
+    requested_provider = str(payload.get("provider") or "").strip()
+    if requested_provider in ("openai", "claude", "gemini", "groq", "local", "copilot"):
+        settings["active_provider"] = requested_provider
+    chosen = choose_active_llm(settings)
     if not chosen:
         return {
             "ai_error": "Configure an AI provider in AI Connections to get an answer."
@@ -472,7 +478,55 @@ def chat_answer(payload, evidence):
     return {"answer": answer[:16000], "provider": chosen[0], "model": chosen[2]}
 
 
-def handle(payload, state, chat=False):
+def pull_request_status(root, reference):
+    if not isinstance(reference, str) or len(reference) > 240:
+        raise EvidenceError("Enter the pull request number or its GitHub URL.")
+    reference = reference.strip()
+    slug = root.removeprefix("repos/")
+    link = PULL_URL.fullmatch(reference)
+    if link:
+        if link[1].lower() != slug.lower():
+            raise EvidenceError("Use a pull request from the selected repository.")
+        reference = link[2]
+    if not re.fullmatch(PULL_NUMBER, reference):
+        raise EvidenceError("Enter the pull request number or its GitHub URL.")
+
+    data = github(f"{root}/pulls/{reference}")
+    number = int(reference)
+    base, head = data["base"], data["head"]
+    if (
+        data["number"] != number
+        or data["state"] not in ("open", "closed")
+        or base["repo"]["full_name"].lower() != slug.lower()
+    ):
+        raise EvidenceError("GitHub did not confirm the requested pull request.")
+    merged = data.get("merged") is True and data["state"] == "closed"
+    status = data["state"]
+    if merged:
+        status = "merged"
+    elif status == "open" and data.get("draft") is True:
+        status = "draft"
+    merge_sha = data.get("merge_commit_sha")
+    head_repo = (head.get("repo") or {}).get("full_name")
+    return {
+        "number": number,
+        "status": status,
+        "url": f"https://github.com/{slug}/pull/{number}",
+        "base_repository": slug,
+        "base_ref": base["ref"],
+        "head_repository": head_repo,
+        "head_ref": head["ref"],
+        "updated_at": data.get("updated_at"),
+        "merged_at": data.get("merged_at") if merged else None,
+        "merge_commit": (
+            merge_sha
+            if merged and isinstance(merge_sha, str) and FULL_SHA.fullmatch(merge_sha)
+            else None
+        ),
+    }
+
+
+def handle(payload, state, chat=False, *, pull_request=False):
     if not isinstance(payload, dict):
         raise EvidenceError("Invalid request.")
     repo = next(
@@ -487,6 +541,8 @@ def handle(payload, state, chat=False):
     if not url or url[1].split("/")[-1] in (".", ".."):
         raise EvidenceError("Select a saved GitHub repository first.")
     root = "repos/" + url[1]
+    if pull_request:
+        return pull_request_status(root, payload.get("pull"))
     if (repo.get("source_revision") or {}).get("kind") == "local_worktree":
         raise EvidenceError(
             "This analysis was of a local working tree. Scan the GitHub repository to compare committed evidence."

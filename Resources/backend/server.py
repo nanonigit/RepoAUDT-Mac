@@ -30,7 +30,9 @@ DEFAULT_SYNC_INTERVAL_SEC = 3600
 sys.path.insert(0, str(BACKEND_DIR))
 
 import analyzer  # noqa: E402
+import app_updater  # noqa: E402
 import audit_evidence  # noqa: E402
+import copilot_bridge  # noqa: E402
 import diff_verification  # noqa: E402
 import mcp_server  # noqa: E402
 import mcp_client  # noqa: E402
@@ -259,6 +261,20 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
             return
+        if self.path == "/api/connections/copilot/status":
+            try:
+                self._send_json(200, copilot_bridge.get_copilot_runtime_status())
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
+        if self.path == "/api/app/update/check":
+            try:
+                self._send_json(200, app_updater.check_for_updates())
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
         if self.path.startswith("/api/state"):
             state = analyzer.load_saved_analyses()
             self._send_json(200, state)
@@ -328,12 +344,58 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
             return
         body_raw = self.rfile.read(length).decode("utf-8", errors="ignore") if length > 0 else "{}"
 
-        if self.path in ("/api/audit/evidence", "/api/audit/chat", "/api/audit/verify-diff"):
-            verify_diff = self.path == "/api/audit/verify-diff"
+        if self.path == "/api/connections/copilot/install":
+            try:
+                self._send_json(200, copilot_bridge.install_or_update_copilot_sdk())
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
+        if self.path == "/api/app/update/apply":
+            try:
+                self._send_json(200, app_updater.start_update_and_relaunch())
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
+        if self.path == "/api/audit/copilot-issue":
             host = self.headers.get("Host")
             allowed_hosts = {f"127.0.0.1:{self.server_port}", f"localhost:{self.server_port}"}
             if (host not in allowed_hosts or (origin and origin != f"http://{host}")
-                    or (verify_diff and not origin)
+                    or not origin
+                    or self.headers.get_content_type() != "application/json"):
+                self._send_json(403, {"error": "This request must come from the local audit workspace."})
+                return
+            try:
+                payload = json.loads(body_raw)
+                repo_id = str(payload.get("repository") or "").strip()
+                state = analyzer.load_saved_analyses()
+                target = next(
+                    (d for d in state.get("diagrams", []) if str(d.get("id")) == repo_id),
+                    None,
+                )
+                github_url = str((target or {}).get("github_url") or payload.get("github_url") or "").strip()
+                if not github_url:
+                    self._send_json(400, {"error": "GitHub repository URL is required."})
+                    return
+                result = copilot_bridge.create_copilot_issue(
+                    github_url=github_url,
+                    title=str(payload.get("title") or ""),
+                    body=str(payload.get("body") or ""),
+                    assign_copilot=bool(payload.get("assign_copilot", True)),
+                )
+                self._send_json(200, result)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path in ("/api/audit/evidence", "/api/audit/chat", "/api/audit/verify-diff", "/api/audit/pull-request"):
+            verify_diff = self.path == "/api/audit/verify-diff"
+            pull_request = self.path == "/api/audit/pull-request"
+            host = self.headers.get("Host")
+            allowed_hosts = {f"127.0.0.1:{self.server_port}", f"localhost:{self.server_port}"}
+            if (host not in allowed_hosts or (origin and origin != f"http://{host}")
+                    or ((verify_diff or pull_request) and not origin)
                     or self.headers.get_content_type() != "application/json"):
                 self._send_json(403, {"error": "This request must come from the local audit workspace."})
                 return
@@ -343,7 +405,9 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 if verify_diff:
                     data = diff_verification.handle(payload, state, analyzer.find_existing_local_repo)
                 else:
-                    data = audit_evidence.handle(payload, state, chat=self.path.endswith("/chat"))
+                    data = audit_evidence.handle(
+                        payload, state, chat=self.path.endswith("/chat"), pull_request=pull_request
+                    )
                 self._send_json(200, data)
             except (audit_evidence.EvidenceError, diff_verification.VerificationError, json.JSONDecodeError) as exc:
                 self._send_json(400, {"error": str(exc)})
