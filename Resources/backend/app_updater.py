@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict
+
+import copilot_bridge
 
 
 def find_repo_dir() -> Path:
@@ -52,6 +56,16 @@ def check_for_updates() -> Dict[str, Any]:
 
     latest_msg = _git(repo_dir, "log", "-1", "--pretty=%s", "origin/main").stdout.strip()
     dirty = bool(_git(repo_dir, "status", "--porcelain").stdout.strip())
+    fetch_output = (fetch.stderr or fetch.stdout or "").strip()
+    log_lines = [f"Checking RepoAUDT Mac updates from {repo_dir}..."]
+    if fetch_output:
+        log_lines.append(fetch_output)
+    if behind_count == 0:
+        log_lines.append(f"Already up to date ({local_sha}).")
+    else:
+        log_lines.append(
+            f"{behind_count} new commit(s) available ({local_sha} -> {remote_sha}): {latest_msg}"
+        )
 
     return {
         "ok": True,
@@ -62,6 +76,35 @@ def check_for_updates() -> Dict[str, Any]:
         "update_available": behind_count > 0,
         "latest_message": latest_msg,
         "dirty": dirty,
+        "log": "\n".join(log_lines),
+    }
+
+
+def get_runtime_diagnostics() -> Dict[str, Any]:
+    """Return runtime environment diagnostics for the System / Update view."""
+    copilot_status = copilot_bridge.get_copilot_runtime_status()
+    gh_bin = shutil.which("gh") or ""
+    repo_info: Dict[str, Any] = {"ok": False, "repo_dir": "", "local_commit": "", "dirty": False}
+    try:
+        repo_dir = find_repo_dir()
+        repo_info = {
+            "ok": True,
+            "repo_dir": str(repo_dir),
+            "local_commit": _git(repo_dir, "rev-parse", "--short", "HEAD").stdout.strip(),
+            "dirty": bool(_git(repo_dir, "status", "--porcelain").stdout.strip()),
+        }
+    except Exception as exc:
+        repo_info["error"] = str(exc)
+
+    return {
+        "ok": True,
+        "python_executable": sys.executable,
+        "python_version": sys.version.split()[0],
+        "gh_path": gh_bin,
+        "gh_authenticated": copilot_status.get("gh_authenticated", False),
+        "copilot_sdk_installed": copilot_status.get("sdk_installed", False),
+        "copilot_sdk_version": copilot_status.get("sdk_version", ""),
+        "repo": repo_info,
     }
 
 

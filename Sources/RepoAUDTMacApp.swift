@@ -163,7 +163,7 @@ final class WebViewCoordinator: NSObject, ObservableObject, WKNavigationDelegate
         // Keep a single sidebar row for each saved repository.
         var seen = Set<String>()
         repositories = snapshot.repositories.filter { seen.insert($0.id).inserted }
-        if ![WorkspacePage.dashboard, .ai, .mcp].contains(page), let mode = snapshot.page {
+        if ![WorkspacePage.dashboard, .ai, .mcp, .system].contains(page), let mode = snapshot.page {
             switch mode {
             case "arch": page = .architecture
             case "seq": page = .sequence

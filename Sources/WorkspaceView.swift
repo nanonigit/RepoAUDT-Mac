@@ -41,7 +41,7 @@ struct WorkspaceSnapshot: Decodable {
 }
 
 enum WorkspacePage: String, CaseIterable, Identifiable {
-    case dashboard, audit, chat, architecture, sequence, ai, mcp
+    case dashboard, audit, chat, architecture, sequence, ai, mcp, system
 
     var id: String { rawValue }
     var command: String {
@@ -50,7 +50,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         case .chat: return "chat"
         case .architecture: return "arch"
         case .sequence: return "seq"
-        case .ai, .mcp: return ""
+        case .ai, .mcp, .system: return ""
         }
     }
     var symbol: String {
@@ -62,6 +62,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         case .sequence: return "point.3.connected.trianglepath.dotted"
         case .ai: return "brain"
         case .mcp: return "point.3.filled.connected.trianglepath.dotted"
+        case .system: return "wrench.and.screwdriver"
         }
     }
     func title(english: Bool) -> String {
@@ -73,6 +74,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         case .sequence: return english ? "Execution flows" : "実行フロー"
         case .ai: return english ? "AI connections" : "AI 接続"
         case .mcp: return "MCP"
+        case .system: return english ? "System & Update" : "実行環境・更新"
         }
     }
 }
@@ -102,7 +104,7 @@ struct MainContentView: View {
         let dirty: Bool
     }
 
-    private var nativePage: Bool { [.dashboard, .ai, .mcp].contains(page) }
+    private var nativePage: Bool { [.dashboard, .ai, .mcp, .system].contains(page) }
     private var english: Bool { language == "en" }
     private var page: WorkspacePage { coordinator.page }
     private var sortOrder: RepositorySortOrder {
@@ -175,6 +177,9 @@ struct MainContentView: View {
                 Section(english ? "Connections" : "接続") {
                     Label(english ? "AI connections" : "AI 接続", systemImage: "brain").tag(WorkspacePage.ai.rawValue)
                     Label("MCP", systemImage: "point.3.filled.connected.trianglepath.dotted").tag(WorkspacePage.mcp.rawValue)
+                }
+                Section(english ? "System" : "システム") {
+                    Label(english ? "Runtime & Update" : "実行環境・更新", systemImage: "wrench.and.screwdriver").tag(WorkspacePage.system.rawValue)
                 }
                 Section {
                     ForEach(repositories) { repo in
@@ -283,6 +288,8 @@ struct MainContentView: View {
                     AIConnectionView(english: english, port: backend.port)
                 } else if page == .mcp {
                     MCPConnectionView(english: english, port: backend.port)
+                } else if page == .system {
+                    SystemUpdateView(english: english, port: backend.port)
                 }
             }
             .navigationTitle(page.title(english: english))
@@ -482,6 +489,47 @@ struct MainContentView: View {
                         .buttonStyle(.borderedProminent)
                     }
                     .padding(18)
+                }
+                GroupBox {
+                    HStack(spacing: 16) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 24))
+                            .foregroundStyle(SemanticColors.role("actionText"))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(english ? "RepoAUDT Mac Update & Runtime" : "アプリのアップデート・実行環境")
+                                .font(.headline)
+                            Text(english
+                                 ? "Check GitHub for new versions or inspect Python / Copilot SDK status."
+                                 : "GitHub の最新バージョン確認や Python / Copilot SDK の状態を確認できます。")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Button(english ? "Diagnostics & Log" : "実行環境・ログ") {
+                            showPage(.system)
+                        }
+                        .disabled(!backend.isReady)
+                        Button {
+                            Task { await checkForAppUpdates() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                if checkingAppUpdate || applyingAppUpdate {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.down.circle")
+                                }
+                                Text(applyingAppUpdate
+                                     ? (english ? "Updating…" : "アップデート中…")
+                                     : (checkingAppUpdate
+                                        ? (english ? "Checking…" : "確認中…")
+                                        : (english ? "Update App" : "アプリをアップデート")))
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(checkingAppUpdate || applyingAppUpdate || !backend.isReady)
+                    }
+                    .padding(14)
                 }
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {

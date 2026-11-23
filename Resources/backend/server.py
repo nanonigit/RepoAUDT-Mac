@@ -268,6 +268,13 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": str(exc)})
             return
 
+        if self.path == "/api/app/diagnostics":
+            try:
+                self._send_json(200, app_updater.get_runtime_diagnostics())
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
         if self.path == "/api/app/update/check":
             try:
                 self._send_json(200, app_updater.check_for_updates())

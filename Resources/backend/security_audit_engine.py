@@ -1459,15 +1459,137 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
         return {"ok": False, "provider": provider, "error": str(exc)}
 
 
+DEEP_AUDIT_SYSTEM_PROMPT = """あなたはシニア・アプリケーションセキュリティエンジニア兼コード監査のプロフェッショナルです。
+提供されたコード、設定ファイル、依存関係情報、または差分（PR/Commit）を解析し、実際に悪用可能な脆弱性・設計上の欠陥・重大な品質リスクのみを高い精度で報告し、具体的な改善提案と適用可能なパッチを提示してください。
+
+## 1. 監査の基準と優先順位（Risk-First）
+以下の領域を優先的に検査してください（OWASP ASVS v5.0 / CWE Top 25 / OWASP Cheat Sheet Series 準拠）：
+1. **認証・認可・アクセス制御**: 権限チェック漏れ、IDOR、JWT/Sessionの扱い、RLS不備
+2. **インジェクション**: SQLi、OSコマンドインジェクション、XSS、SSRF、テンプレートインジェクション
+3. **CI/CD・設定ファイル（GitHub Actions等）**: `run:` ブロック内での外部入力展開、`pull_request_target` の誤用、過剰な権限（`permissions`）
+4. **機密情報管理**: ハードコードされたAPIキー・トークン・パスワード、ログへの機密出力
+5. **入力検証・ファイル処理**: スキーマ検証の欠如、パストラバーサル、安全でないデシリアライズ
+6. **堅牢性・パフォーマンス・保守性**: 例外のもみ消し、リソースリーク、競合状態（Race Condition）、N+1クエリ、重大な型安全性欠如
+
+## 2. 誤検知（False Positive）を防ぐ厳格なルール
+単なるキーワードや正規表現の一致だけで警告を出さないでください。**必ずデータフロー（Source → Sink）と実行コンテキストを追跡**してから判定してください。
+
+- **GitHub Actions の例**:
+  - `run:` 内で `${{ github.event.* }}` を直接展開している場合のみ「Script Injection」として報告する。
+  - `env:` や `with:` ブロック内で `KEY: ${{ github.event.* }}` として定義されている場合は、**すでに対策済みの安全なパターン**であるため警告しない（ただし後続の `run:` 内で `eval` 等に渡されている場合のみ警告する）。
+- **SQL / コマンドの例**:
+  - プレースホルダ（プリペアドステートメント）や引数配列渡し（`execFile` 等）が使われている場合は安全とみなす。
+- **フレームワーク保護**:
+  - ReactのJSX自動エスケープなど、フレームワーク標準の保護機構で無害化されている場合は誤検知しない。
+- **不確実な場合**:
+  - 前後のコンテキストが不足して悪用可能性を断定できない場合は、`severity` を下げて `confidence: "low"` と明記し、推測で断定しない。
+
+## 3. 依存関係・CVE評価およびパッチ情報のルール
+- ライブラリやCVEを評価する際は、理論上のCVSSスコアだけでなく、**OSV.dev / GitHub Advisory (GHSA)** の影響バージョン範囲、および **CISA KEV（悪用実績）/ EPSS（悪用確率）** の観点を考慮して現実的な優先度（Critical〜Low）を決定する。
+- **ハルシネーション厳禁**: `fixed_version` や `advisory_url` などのパッチ情報は、入力データや確実な知識から裏付けられる場合のみ記載し、**存在しないURLやバージョン番号を推測で捏造せず、不確実な場合は必ず `null` にすること**。
+
+## 4. 改善提案・修正パッチ（diff）の品質ルール
+- 修正案（`diff`）を提示する場合は、元のコードの構文（YAMLのインデント、言語の型やスコープ）を破壊しない**構文的に有効でそのまま適用可能なパッチ**のみを生成すること。
+- 汎用テンプレートの丸写しや、`// TODO`、`// ...` などのプレースホルダは絶対に出力しない。
+- 即座に改修・アップデートできない場合のための暫定回避策（`workaround`）や、修正後に安全性を確認するコマンド・テスト案（`verification`）も併記すること。
+
+## 5. 出力フォーマット
+問題が検出された場合のみ、以下のJSON配列形式で出力してください（問題がなければ空配列 `[]` を返す）。説明は簡潔かつ具体的に記述し、根拠となるファイル・行番号と攻撃/障害シナリオを必ず含めてください。
+※ JSONオブジェクト形式が必須のAPI環境では `{"findings": [...]}` の形式で返してください。
+
+```json
+[
+  {
+    "id": "一意なルールID (例: gha-script-injection, sqli-raw-query)",
+    "category": "security | reliability | performance | maintainability",
+    "severity": "critical | high | medium | low | info",
+    "confidence": "high | medium | low",
+    "cwe": "CWE-XX (該当しない場合は null)",
+    "title": "問題の簡潔なタイトル",
+    "file": "ファイルパス",
+    "line": 50,
+    "desc": "何が問題で、どのような攻撃シナリオや障害リスクが成立するかの具体的な説明",
+    "remediation": "推奨される改善・修正方針（OWASP等の根拠があれば記載）",
+    "patch_info": {
+      "fixed_version": "修正済みバージョン (依存関係の場合、不明/該当なしなら null)",
+      "advisory_url": "OSV / GHSA / CVE / 公式パッチの参照URL (不明/該当なしなら null)",
+      "workaround": "即座にアップデートや改修ができない場合の暫定回避策 (不要なら null)"
+    },
+    "diff": "構文的に有効でそのまま適用可能な修正差分（Unified Diff形式）",
+    "verification": "パッチ適用後に正常性・安全性を確認するためのテストやコマンド案"
+  }
+]
+```
+
+## 6. 対象プロジェクトの技術スタック
+- 言語 / フレームワーク: {{LANGUAGE_AND_FRAMEWORK}}
+- インフラ / CI/CD: {{INFRA_AND_CICD}}"""
+
+
+def _detect_stack_context(repo_dir: Path) -> Tuple[str, str]:
+    """Infer language/framework and infra/CI-CD labels from repository files."""
+    langs: List[str] = []
+    infra: List[str] = []
+    if (repo_dir / "package.json").exists():
+        langs.append("Node.js / JavaScript")
+    if (repo_dir / "tsconfig.json").exists():
+        langs.append("TypeScript")
+    if (repo_dir / "pyproject.toml").exists() or (repo_dir / "requirements.txt").exists():
+        langs.append("Python")
+    if (repo_dir / "composer.json").exists():
+        langs.append("PHP / Composer")
+    if (repo_dir / "go.mod").exists():
+        langs.append("Go")
+    if (repo_dir / "Cargo.toml").exists():
+        langs.append("Rust")
+    if any(repo_dir.glob("*.swift")) or (repo_dir / "Package.swift").exists() or (repo_dir / "Sources").is_dir():
+        langs.append("Swift / macOS")
+
+    if (repo_dir / ".github" / "workflows").is_dir():
+        infra.append("GitHub Actions")
+    if (repo_dir / "Dockerfile").exists() or any(repo_dir.glob("docker-compose*.yml")) or any(repo_dir.glob("docker-compose*.yaml")):
+        infra.append("Docker")
+
+    return (
+        ", ".join(langs) if langs else "マニフェスト・ソースコードから自動判定",
+        ", ".join(infra) if infra else "特記事項なし",
+    )
+
+
+def _parse_deep_audit_items(raw: str) -> List[Dict[str, Any]]:
+    """Extract a list of finding dicts from JSON array or wrapped object output."""
+    cleaned = raw.strip()
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
+    if fence:
+        cleaned = fence.group(1).strip()
+
+    parsed: Any = None
+    try:
+        parsed = json.loads(cleaned)
+    except Exception:
+        arr_match = re.search(r"\[.*\]", cleaned, re.DOTALL)
+        obj_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        candidate = arr_match.group(0) if arr_match else (obj_match.group(0) if obj_match else cleaned)
+        parsed = json.loads(candidate)
+
+    if isinstance(parsed, list):
+        return [x for x in parsed if isinstance(x, dict)]
+    if isinstance(parsed, dict):
+        for key in ("findings", "items", "results", "issues"):
+            val = parsed.get(key)
+            if isinstance(val, list):
+                return [x for x in val if isinstance(x, dict)]
+    return []
+
+
 def run_llm_deep_vulnerability_audit(
     repo_dir: Path,
     repo_name: str,
     components: List[Dict[str, Any]],
 ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
-    If an LLM API key (OpenAI, Claude, Gemini, Groq) is configured, send a compact
-    summary of the repository's manifests and source snippets to the LLM to perform
-    deep vulnerability & CodeRabbit architectural review.
+    If an LLM provider is configured, send repository manifests, CI/CD workflows,
+    and source snippets to the LLM to perform Risk-First security & quality auditing.
     Returns (llm_action_items, provider_label).
     """
     settings = load_settings()
@@ -1478,12 +1600,16 @@ def run_llm_deep_vulnerability_audit(
     provider, api_key, model = chosen
     comp_names = [c["name"] for c in components]
 
-    # Collect compact manifest + source snippets
-    snippets = []
+    # Collect compact manifest, workflow, and source snippets
+    snippets: List[str] = []
     for manifest in ("package.json", "composer.json", "requirements.txt", "pyproject.toml", "go.mod", "Cargo.toml", "Info.plist"):
         mp = repo_dir / manifest
         if mp.exists():
             snippets.append(f"=== {manifest} ===\n" + mp.read_text(encoding="utf-8", errors="ignore")[:1200])
+
+    for wf in workflow_files(repo_dir)[:3]:
+        rel_wf = str(wf.relative_to(repo_dir))
+        snippets.append(f"=== {rel_wf} ===\n" + wf.read_text(encoding="utf-8", errors="ignore")[:1200])
 
     ignore_dirs = {".git", "node_modules", "vendor", "dist", "build", "__pycache__", ".next"}
     src_files = [
@@ -1498,39 +1624,70 @@ def run_llm_deep_vulnerability_audit(
     if not snippets:
         return [], f"{provider.upper()} ({model})"
 
+    lang_fw, infra_cicd = _detect_stack_context(repo_dir)
     sys_prompt = (
-        "あなたは CodeRabbit & OWASP セキュリティ監査AIです。"
-        "与えられたリポジトリのマニフェスト（PHP/Composer, Node.js/npm, Python, Swift等）とソースコード抜粋から、"
-        "セキュリティ脆弱性・バージョンリスク・エラー処理漏れを最大2件特定し、必ず以下のJSON形式で日本語で出力してください:\n"
-        "{\"items\": [{\"severity\": \"high\", \"title\": \"指摘タイトル\", \"file\": \"対象ファイル名\", "
-        "\"target_node\": \"構成図の対象ノード名\", \"desc\": \"要対応の理由とリスク\", "
-        "\"diff\": \"- 旧コード\\n+ 推奨修正コード\", \"fix_cmd\": \"修正または確認コマンド\"}]}"
+        DEEP_AUDIT_SYSTEM_PROMPT
+        .replace("{{LANGUAGE_AND_FRAMEWORK}}", lang_fw)
+        .replace("{{INFRA_AND_CICD}}", infra_cicd)
     )
     user_prompt = (
         f"Repository: {repo_name}\n"
         f"Available Diagram Nodes: {', '.join(comp_names)}\n\n"
-        + "\n\n".join(snippets[:6])
+        + "\n\n".join(snippets[:8])
     )
 
     try:
         raw = call_llm_provider(provider, api_key, model, sys_prompt, user_prompt)
-        # Extract JSON block if wrapped in markdown
-        m = re.search(r"\{.*\}", raw, re.DOTALL)
-        parsed = json.loads(m.group(0) if m else raw)
-        items = parsed.get("items") or []
-        valid_items = []
-        for it in items[:2]:
-            if isinstance(it, dict) and it.get("title") and it.get("desc"):
-                tn = it.get("target_node") or (comp_names[0] if comp_names else repo_name)
-                valid_items.append({
-                    "severity": it.get("severity", "high"),
-                    "title": f"[{provider.upper()} AI監査] {it['title']}",
-                    "file": f"{it.get('file', 'src/')} (Target: {tn})",
-                    "target_node": tn,
-                    "desc": it["desc"],
-                    "diff": it.get("diff", ""),
-                    "fix_cmd": it.get("fix_cmd", ""),
-                })
+        items = _parse_deep_audit_items(raw)
+        valid_items: List[Dict[str, Any]] = []
+        allowed_severities = {"critical", "high", "medium", "low", "info"}
+        for it in items[:6]:
+            title = str(it.get("title") or "").strip()
+            desc = str(it.get("desc") or "").strip()
+            if not title or not desc:
+                continue
+
+            sev = str(it.get("severity") or "medium").strip().lower()
+            if sev not in allowed_severities:
+                sev = "medium"
+
+            tn = str(it.get("target_node") or "").strip() or (comp_names[0] if comp_names else repo_name)
+            file_path = str(it.get("file") or "src/").strip()
+            line_no = it.get("line")
+            loc = f"{file_path}:{line_no}" if isinstance(line_no, int) and line_no > 0 else file_path
+
+            cwe = it.get("cwe")
+            confidence = str(it.get("confidence") or "").strip().lower()
+            remediation = str(it.get("remediation") or "").strip()
+            patch_info = it.get("patch_info") if isinstance(it.get("patch_info"), dict) else {}
+            fixed_ver = patch_info.get("fixed_version")
+            advisory_url = patch_info.get("advisory_url")
+            workaround = patch_info.get("workaround")
+
+            desc_parts = [desc]
+            if remediation:
+                desc_parts.append(f"【修正方針】{remediation}")
+            if fixed_ver:
+                desc_parts.append(f"【修正済みバージョン】{fixed_ver}")
+            if workaround:
+                desc_parts.append(f"【暫定回避策】{workaround}")
+            if confidence == "low":
+                desc_parts.append("（※確信度: low — 前後のコンテキストを含めて手動確認してください）")
+
+            title_prefix = f"[{provider.upper()} AI監査]"
+            cwe_suffix = f" ({cwe})" if isinstance(cwe, str) and cwe.strip() else ""
+            entry: Dict[str, Any] = {
+                "severity": sev,
+                "title": f"{title_prefix} {title}{cwe_suffix}",
+                "file": f"{loc} (Target: {tn})",
+                "target_node": tn,
+                "desc": "\n".join(desc_parts),
+                "diff": str(it.get("diff") or ""),
+                "fix_cmd": str(it.get("verification") or it.get("fix_cmd") or ""),
+            }
+            if isinstance(advisory_url, str) and advisory_url.startswith(("https://", "http://")):
+                entry["official_source"] = advisory_url
+            valid_items.append(entry)
         return valid_items, f"{provider.upper()} ({model})"
     except Exception as exc:
         print(f"Notice: LLM deep audit skipped/failed for {repo_name}: {exc}", file=sys.stderr)

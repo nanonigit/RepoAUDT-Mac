@@ -397,3 +397,221 @@ struct MCPConnectionView: View {
         .task { store.port = port; store.loadMCP() }
     }
 }
+
+struct SystemUpdateView: View {
+    @StateObject private var store = ConnectionStore()
+    @State private var pythonPath = ""
+    @State private var pythonVersion = ""
+    @State private var ghPath = ""
+    @State private var ghAuthenticated = false
+    @State private var repoDir = ""
+    @State private var localCommit = ""
+    @State private var dirtyRepo = false
+    @State private var logText = ""
+    @State private var updateAvailable = false
+    @State private var remoteCommit = ""
+    @State private var behindCount = 0
+    let english: Bool
+    let port: Int
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(english ? "Runtime & App Update" : "実行環境の診断・アップデート")
+                        .font(.title2.bold())
+                    Text(english
+                         ? "Check Python, GitHub CLI, Copilot SDK, and update RepoAUDT Mac from GitHub."
+                         : "Python・GitHub CLI・Copilot SDK の状態確認と、GitHub からのアプリ更新を行います。")
+                        .foregroundStyle(.secondary)
+                }
+
+                GroupBox {
+                    VStack(spacing: 0) {
+                        diagnosticRow(
+                            ok: !pythonPath.isEmpty,
+                            title: "Python 3",
+                            detail: pythonPath.isEmpty ? "-" : "\(pythonPath) (\(pythonVersion))"
+                        )
+                        Divider()
+                        diagnosticRow(
+                            ok: !ghPath.isEmpty && ghAuthenticated,
+                            title: "GitHub CLI (gh)",
+                            detail: ghPath.isEmpty
+                                ? (english ? "Not installed" : "未インストール")
+                                : (ghAuthenticated ? "\(ghPath) · \(english ? "Logged in" : "ログイン済み")" : "\(ghPath) · \(english ? "Not logged in" : "未ログイン")")
+                        )
+                        Divider()
+                        HStack(spacing: 12) {
+                            Image(systemName: store.copilotInstalled ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                .foregroundStyle(SemanticColors.role(store.copilotInstalled ? "successText" : "dangerText"))
+                            Text("GitHub Copilot SDK")
+                                .font(.body.weight(.medium))
+                            Spacer()
+                            Text(store.copilotInstalled
+                                 ? (store.copilotVersion.isEmpty ? (english ? "Installed" : "インストール済み") : "v\(store.copilotVersion)")
+                                 : (english ? "Not installed" : "未インストール"))
+                                .font(.callout.monospaced())
+                                .foregroundStyle(.secondary)
+                            Button(store.copilotInstalled
+                                   ? (english ? "Update" : "更新")
+                                   : (english ? "Install" : "導入")) {
+                                runCopilotInstall()
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(store.busy)
+                        }
+                        .padding(.vertical, 10)
+                        Divider()
+                        diagnosticRow(
+                            ok: !repoDir.isEmpty,
+                            title: english ? "Local Git Repository" : "ローカル Git リポジトリ",
+                            detail: repoDir.isEmpty
+                                ? (english ? "Not found" : "見つかりません")
+                                : "\(repoDir) (\(localCommit)\(dirtyRepo ? (english ? " · uncommitted changes" : " · 未コミット変更あり") : ""))"
+                        )
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                }
+
+                HStack(spacing: 12) {
+                    Button {
+                        Task { await loadDiagnosticsAndCheckUpdate(autoUpdate: false) }
+                    } label: {
+                        Label(english ? "Re-check" : "再診断", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(store.busy)
+
+                    Button {
+                        Task { await loadDiagnosticsAndCheckUpdate(autoUpdate: true) }
+                    } label: {
+                        Label(english ? "Update App" : "アプリをアップデート", systemImage: "arrow.down.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.busy)
+
+                    if store.busy {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(english ? "Log" : "ログ")
+                        .font(.headline)
+                    ScrollView {
+                        Text(logText.isEmpty ? (english ? "Ready." : "待機中...") : logText)
+                            .font(.system(.callout, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                            .padding(12)
+                    }
+                    .frame(minHeight: 160, maxHeight: 260)
+                    .background(Color(nsColor: .textBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.6)))
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: 960, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .task {
+            store.port = port
+            await loadDiagnosticsAndCheckUpdate(autoUpdate: false)
+        }
+    }
+
+    @ViewBuilder
+    private func diagnosticRow(ok: Bool, title: String, detail: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(SemanticColors.role(ok ? "successText" : "dangerText"))
+            Text(title)
+                .font(.body.weight(.medium))
+            Spacer()
+            Text(detail)
+                .font(.callout.monospaced())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.vertical, 10)
+    }
+
+    private func appendLog(_ line: String) {
+        if logText.isEmpty {
+            logText = line
+        } else {
+            logText += "\n" + line
+        }
+    }
+
+    private func runCopilotInstall() {
+        store.busy = true
+        appendLog(english ? "Installing/updating github-copilot-sdk..." : "github-copilot-sdk を導入/更新中...")
+        Task {
+            defer { store.busy = false }
+            do {
+                let res = try await store.request("/api/connections/copilot/install", body: [:])
+                store.copilotInstalled = res["sdk_installed"] as? Bool ?? false
+                store.copilotVersion = res["sdk_version"] as? String ?? ""
+                appendLog("github-copilot-sdk v\(store.copilotVersion) ready.")
+            } catch {
+                appendLog("Error: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func loadDiagnosticsAndCheckUpdate(autoUpdate: Bool) async {
+        guard !store.busy else { return }
+        store.busy = true
+        defer { store.busy = false }
+
+        do {
+            let diag = try await store.request("/api/app/diagnostics")
+            pythonPath = diag["python_executable"] as? String ?? ""
+            pythonVersion = diag["python_version"] as? String ?? ""
+            ghPath = diag["gh_path"] as? String ?? ""
+            ghAuthenticated = diag["gh_authenticated"] as? Bool ?? false
+            store.copilotInstalled = diag["copilot_sdk_installed"] as? Bool ?? false
+            store.copilotVersion = diag["copilot_sdk_version"] as? String ?? ""
+            let repo = diag["repo"] as? [String: Any] ?? [:]
+            repoDir = repo["repo_dir"] as? String ?? ""
+            localCommit = repo["local_commit"] as? String ?? ""
+            dirtyRepo = repo["dirty"] as? Bool ?? false
+
+            if autoUpdate {
+                appendLog("Updating RepoAUDT Mac from \(repoDir.isEmpty ? "~/Git/RepoAUDT-Mac" : repoDir)...")
+            }
+            let check = try await store.request("/api/app/update/check")
+            if let log = check["log"] as? String, !log.isEmpty {
+                logText = log
+            }
+            updateAvailable = check["update_available"] as? Bool ?? false
+            remoteCommit = check["remote_commit"] as? String ?? ""
+            behindCount = check["behind_count"] as? Int ?? 0
+
+            if autoUpdate {
+                if !updateAvailable {
+                    return
+                }
+                if dirtyRepo {
+                    appendLog(english
+                              ? "Skipped auto-update: local uncommitted changes exist."
+                              : "未コミットの変更があるため自動アップデートをスキップしました。")
+                    return
+                }
+                appendLog(english
+                          ? "Pulling origin/main, rebuilding, and relaunching..."
+                          : "origin/main を取得してビルド・再起動を開始します...")
+                _ = try await store.request("/api/app/update/apply", body: [:])
+                appendLog(english
+                          ? "Update started in background. RepoAUDT Mac will relaunch automatically."
+                          : "バックグラウンドでアップデートを開始しました。完了後に自動で再起動します。")
+            }
+        } catch {
+            appendLog("Error: \(error.localizedDescription)")
+        }
+    }
+}
