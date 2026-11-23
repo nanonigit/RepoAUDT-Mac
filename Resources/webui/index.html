@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/23 09:00:44</strong>
+              <strong id="portal-sync-time">2026/11/23 09:06:05</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -8513,7 +8513,42 @@
         return;
       }
       const repo = selectedDiagram;
-      const issues = getWorkspaceIssues(repo);
+      const rawIssues = getWorkspaceIssues(repo);
+      const findingSortOrder = safeStorageGet('repoaudt_finding_sort', 'severityDesc');
+      const severityScore = sev => {
+        const s = String(sev || '').toLowerCase();
+        if (s === 'critical') return 5;
+        if (s === 'high') return 4;
+        if (s === 'medium' || s === 'warning') return 3;
+        if (s === 'low') return 2;
+        if (s === 'info' || s === 'suggestion') return 1;
+        return 0;
+      };
+      const repoAuditRawDate = repo.analyzed_at || repo.updatedAt || repo.commit_date || '';
+      const issues = [...rawIssues].sort((a, b) => {
+        if (findingSortOrder === 'severityDesc') {
+          const diff = severityScore(b.severity) - severityScore(a.severity);
+          if (diff !== 0) return diff;
+          return String(a.title || '').localeCompare(String(b.title || ''));
+        }
+        if (findingSortOrder === 'severityAsc') {
+          const diff = severityScore(a.severity) - severityScore(b.severity);
+          if (diff !== 0) return diff;
+          return String(a.title || '').localeCompare(String(b.title || ''));
+        }
+        if (findingSortOrder === 'fileAsc') {
+          return String(a.file || a.path || '').localeCompare(String(b.file || b.path || ''));
+        }
+        if (findingSortOrder === 'titleAsc') {
+          return String(a.title || '').localeCompare(String(b.title || ''));
+        }
+        if (findingSortOrder === 'dateDesc') {
+          const da = String(a.detected_at || repoAuditRawDate || '').replace(/\//g, '-');
+          const db = String(b.detected_at || repoAuditRawDate || '').replace(/\//g, '-');
+          return db.localeCompare(da);
+        }
+        return 0;
+      });
       const formatFindingDate = (raw, withYear = false) => {
         if (!raw) return '';
         const normalized = String(raw).trim().replace(/\//g, '-');
@@ -8527,13 +8562,22 @@
           ? {year: 'numeric', month: 'short', day: 'numeric'}
           : {month: 'short', day: 'numeric'});
       };
-      const repoAuditRawDate = repo.analyzed_at || repo.updatedAt || repo.commit_date || '';
       const repoAuditDateFull = formatFindingDate(repoAuditRawDate, true);
       view.innerHTML = `
         <section class="workspace-audit">
           <div class="workspace-audit-heading">
             <h2>${en ? 'Saved findings' : '保存済みの指摘'}</h2>
-            <span>${en ? `${issues.length} findings` : `${issues.length}件`}${repoAuditDateFull ? ` · ${en ? 'Audited' : '指摘日'}: ${escapeHtml(repoAuditDateFull)}` : ''}</span>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span>${en ? `${issues.length} findings` : `${issues.length}件`}${repoAuditDateFull ? ` · ${en ? 'Audited' : '指摘日'}: ${escapeHtml(repoAuditDateFull)}` : ''}</span>
+              <select id="finding-sort-select" aria-label="${en ? 'Sort findings' : '指摘の並び替え'}" style="font-size: 0.82rem; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-surface); color: var(--workspace-text);">
+                <option value="severityDesc" ${findingSortOrder === 'severityDesc' ? 'selected' : ''}>${en ? 'Highest severity first' : 'ヤバい順（重要度が高い順）'}</option>
+                <option value="severityAsc" ${findingSortOrder === 'severityAsc' ? 'selected' : ''}>${en ? 'Lowest severity first' : '低い順（重要度が低い順）'}</option>
+                <option value="dateDesc" ${findingSortOrder === 'dateDesc' ? 'selected' : ''}>${en ? 'Newest date first' : '指摘日が新しい順'}</option>
+                <option value="fileAsc" ${findingSortOrder === 'fileAsc' ? 'selected' : ''}>${en ? 'By file path' : 'ファイルパス順'}</option>
+                <option value="titleAsc" ${findingSortOrder === 'titleAsc' ? 'selected' : ''}>${en ? 'By title' : 'タイトル順'}</option>
+                <option value="default" ${findingSortOrder === 'default' ? 'selected' : ''}>${en ? 'Original order' : '検出順（元の並び）'}</option>
+              </select>
+            </div>
           </div>
           <p class="audit-note">${en ? 'Open a finding to inspect the evidence, impact and suggested fix. Results reflect the saved analysis.' : '指摘を開くと、根拠・影響・修正案を確認できます。保存された解析時点の結果です。'}</p>
           <div class="audit-color-key" aria-label="${en ? 'Severity legend' : '重要度の凡例'}">
@@ -8613,6 +8657,13 @@
             }).join('') : `<div class="audit-empty">${en ? 'No findings recorded in this analysis. Review the scan scope before drawing conclusions.' : 'この解析に保存された指摘はありません。確認範囲は解析の詳細から確認してください。'}</div>`}
           </div>
         </section>`;
+      const sortSelect = view.querySelector('#finding-sort-select');
+      if (sortSelect) {
+        sortSelect.addEventListener('change', () => {
+          safeStorageSet('repoaudt_finding_sort', sortSelect.value);
+          renderCodeRabbitView();
+        });
+      }
       for (const finding of view.querySelectorAll('.audit-issue')) {
         finding.addEventListener('toggle', () => {
           const button = finding.querySelector('[data-load-finding-source]');
