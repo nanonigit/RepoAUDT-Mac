@@ -84,6 +84,7 @@ struct MainContentView: View {
     @ObservedObject var coordinator: WebViewCoordinator
     @AppStorage("workspaceLanguage") private var language = "ja"
     @AppStorage("repositorySortOrder") private var sortOrderRaw = RepositorySortOrder.defaultOrder.rawValue
+    @AppStorage("repositoriesSectionExpanded") private var repositoriesExpanded = true
     @State private var selection: Set<String> = [WorkspacePage.dashboard.rawValue]
     @State private var query = ""
     @State private var busyRepoIDs: Set<String> = []
@@ -182,25 +183,42 @@ struct MainContentView: View {
                     Label(english ? "Runtime & Update" : "実行環境・更新", systemImage: "wrench.and.screwdriver").tag(WorkspacePage.system.rawValue)
                 }
                 Section {
-                    ForEach(repositories) { repo in
-                        HStack(spacing: 6) {
-                            Label(repo.name, systemImage: "folder")
-                                .lineLimit(1)
-                            if busyRepoIDs.contains(repo.id) {
-                                Spacer(minLength: 4)
-                                ProgressView()
-                                    .controlSize(.small)
+                    if repositoriesExpanded {
+                        ForEach(repositories) { repo in
+                            HStack(spacing: 6) {
+                                Label(repo.name, systemImage: "folder")
+                                    .lineLimit(1)
+                                if busyRepoIDs.contains(repo.id) {
+                                    Spacer(minLength: 4)
+                                    ProgressView()
+                                        .controlSize(.small)
+                                }
                             }
-                        }
-                        .help(repo.name)
-                        .tag("repo:" + repo.id)
-                        .contextMenu {
-                            repositoryContextMenu(for: repo)
+                            .help(repo.name)
+                            .tag("repo:" + repo.id)
+                            .contextMenu {
+                                repositoryContextMenu(for: repo)
+                            }
                         }
                     }
                 } header: {
                     HStack(spacing: 6) {
-                        Text(english ? "Repositories" : "リポジトリ")
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                repositoriesExpanded.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: repositoriesExpanded ? "chevron.down" : "chevron.right")
+                                    .font(.caption2.weight(.semibold))
+                                Text(english ? "Repositories (\(repositories.count))" : "リポジトリ (\(repositories.count))")
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(repositoriesExpanded
+                              ? (english ? "Collapse repositories" : "リポジトリ一覧を折りたたむ")
+                              : (english ? "Expand repositories" : "リポジトリ一覧を展開する"))
                         Spacer()
                         Menu {
                             ForEach(RepositorySortOrder.allCases) { option in
