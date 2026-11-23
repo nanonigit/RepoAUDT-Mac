@@ -872,6 +872,45 @@ struct MainContentView: View {
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.5)))
                     }
                 }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(english ? "What RepoAUDT Audits" : "実施する監査内容")
+                        .font(.headline)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        auditScopeItem(
+                            title: english ? "Dependencies & IaC (OSV + Trivy)" : "依存関係・IaC 脆弱性（OSV + Trivy）",
+                            summary: english
+                                ? "Known CVEs, EOL runtimes, and Dockerfile / IaC misconfigurations."
+                                : "パッケージの既知 CVE、ランタイム EOL、Dockerfile 等の設定ミスを検出します。",
+                            symbol: "shippingbox.fill",
+                            tint: SemanticColors.role("dangerText")
+                        )
+                        auditScopeItem(
+                            title: english ? "Source Code SAST (Semgrep + Ruff + AST)" : "ソースコード静的解析（Semgrep + Ruff + AST）",
+                            summary: english
+                                ? "Data-flow taint analysis for SQLi, XSS, command injection, and code quality."
+                                : "SQLi・XSS・コマンドインジェクション等の危険なデータフローとコード品質を解析します。",
+                            symbol: "magnifyingglass.circle.fill",
+                            tint: SemanticColors.role("warningText")
+                        )
+                        auditScopeItem(
+                            title: english ? "Secrets & Credentials (Gitleaks)" : "シークレット・鍵流出検出（Gitleaks）",
+                            summary: english
+                                ? "Detects leaked API keys and tokens with automatic value redaction."
+                                : "API キーや認証トークンの誤コミットを検出し、値は自動でマスク表示します。",
+                            symbol: "key.fill",
+                            tint: SemanticColors.role("actionText")
+                        )
+                        auditScopeItem(
+                            title: english ? "GitHub Actions CI/CD (zizmor + actionlint)" : "GitHub Actions 監査（zizmor + actionlint）",
+                            summary: english
+                                ? "Context-aware checks for script injection, write-all permissions, and syntax."
+                                : "コンテキスト解析によるインジェクション、過剰権限、未固定 Action、構文エラーを検査します。",
+                            symbol: "gearshape.2.fill",
+                            tint: SemanticColors.role("infoText")
+                        )
+                    }
+                }
             }
             .padding(32)
             .frame(maxWidth: 1100, alignment: .leading)
@@ -880,6 +919,28 @@ struct MainContentView: View {
     }
 
     @ViewBuilder
+    private func auditScopeItem(title: String, summary: String, symbol: String, tint: Color) -> some View {
+        GroupBox {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.title3)
+                    .foregroundStyle(tint)
+                    .frame(width: 24)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+        }
+    }
+
     private func summaryMetricCard(title: String, value: String, subtitle: String, symbol: String, tint: Color) -> some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
