@@ -42,6 +42,20 @@ class TestCommitMonitor(unittest.TestCase):
                             "github_url": "https://github.com/example-org/updated",
                             "commit_hash": "2222222",
                             "source_revision": {"commit_sha": "2" * 40},
+                            "coderabbit": {
+                                "action_items": [
+                                    {
+                                        "title": "Hardcoded AWS Key",
+                                        "file": "src/config.ts:5 (Target: Core)",
+                                        "severity": "critical",
+                                    },
+                                    {
+                                        "title": "Existing low warning",
+                                        "file": "src/app.ts:10",
+                                        "severity": "low",
+                                    },
+                                ]
+                            },
                         },
                     ]
                 }
@@ -60,7 +74,15 @@ class TestCommitMonitor(unittest.TestCase):
                             "id": "repo-2",
                             "repo": "example-org/updated",
                             "github_url": url,
-                            "coderabbit": {"action_items": [{"title": "x"}]},
+                            "coderabbit": {
+                                "action_items": [
+                                    {
+                                        "title": "Existing low warning",
+                                        "file": "src/app.ts:10",
+                                        "severity": "low",
+                                    }
+                                ]
+                            },
                         }
                     }
 
@@ -76,6 +98,12 @@ class TestCommitMonitor(unittest.TestCase):
                 self.assertEqual(status["detected_updates"][0]["repo"], "example-org/updated")
                 self.assertEqual(status["detected_updates"][0]["new_commit"], "3333333")
                 self.assertEqual(status["detected_updates"][0]["findings"], 1)
+                self.assertEqual(status["detected_updates"][0]["resolved_count"], 1)
+                self.assertEqual(status["detected_updates"][0]["resolved_high_count"], 1)
+                self.assertEqual(
+                    status["detected_updates"][0]["resolved_findings"][0]["title"],
+                    "Hardcoded AWS Key",
+                )
                 self.assertIn("2件確認", status["last_check_summary"])
                 self.assertIn("1件の新着コミット", status["last_check_summary"])
 

@@ -120,6 +120,24 @@ class SyncDaemon:
         self._thread = threading.Thread(target=self._run_loop, name="RepoAUDTSyncDaemon", daemon=True)
         self._thread.start()
 
+    @staticmethod
+    def _collect_finding_signatures(diagram: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
+        cr = diagram.get("coderabbit") or {}
+        items = list(cr.get("action_items") or []) + list(cr.get("findings") or [])
+        sigs: Dict[str, Dict[str, str]] = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            file_raw = str(item.get("file") or "").split(" (Target:", 1)[0].strip()
+            sev = str(item.get("severity") or "info").lower()
+            if not title:
+                continue
+            key = f"{title}|{file_raw}"
+            if key not in sigs:
+                sigs[key] = {"title": title, "file": file_raw, "severity": sev}
+        return sigs
+
     def check_once(self) -> Dict[str, Any]:
         with self._lock:
             if self.checking:
@@ -150,9 +168,23 @@ class SyncDaemon:
                     head_info = audit_evidence.repository_status(f"repos/{slug}", saved_commit)
                     latest_sha = str(head_info.get("head") or "").strip()
                     if latest_sha and not head_info.get("same_head"):
+                        before_sigs = self._collect_finding_signatures(d)
                         res = analyzer.analyze_any_github_target(url)
                         analyzer.save_analysis_result(res, respect_deleted=True)
-                        cr = (res.get("diagram") or {}).get("coderabbit") or {}
+                        new_diagram = res.get("diagram") or {}
+                        after_sigs = self._collect_finding_signatures(new_diagram)
+                        resolved_list = [
+                            info for k, info in before_sigs.items() if k not in after_sigs
+                        ]
+                        resolved_list.sort(
+                            key=lambda x: {"critical": 4, "high": 3, "medium": 2, "warning": 2, "low": 1}.get(x["severity"], 0),
+                            reverse=True,
+                        )
+                        resolved_high_count = sum(
+                            1 for r in resolved_list if r["severity"] in ("critical", "high")
+                        )
+                        new_count = sum(1 for k in after_sigs if k not in before_sigs)
+                        cr = new_diagram.get("coderabbit") or {}
                         findings_cnt = len(cr.get("action_items") or [])
                         now_local, _ = analyzer.now_timestamps()
                         updated_items.append({
@@ -160,6 +192,10 @@ class SyncDaemon:
                             "old_commit": saved_commit[:7] if saved_commit else "",
                             "new_commit": latest_sha[:7],
                             "findings": findings_cnt,
+                            "resolved_count": len(resolved_list),
+                            "resolved_high_count": resolved_high_count,
+                            "resolved_findings": resolved_list[:15],
+                            "new_count": new_count,
                             "detected_at": now_local,
                         })
                 except Exception as exc:

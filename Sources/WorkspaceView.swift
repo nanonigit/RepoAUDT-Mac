@@ -141,6 +141,27 @@ struct MainContentView: View {
     @State private var monitorLastCheckTime = ""
     @State private var monitorSummary = ""
     @State private var seenMonitorUpdateKeys: Set<String> = []
+    @State private var monitorUpdates: [MonitorUpdateEvent] = []
+
+    private struct ResolvedFindingSummary: Identifiable {
+        let id = UUID()
+        let title: String
+        let file: String
+        let severity: String
+    }
+
+    private struct MonitorUpdateEvent: Identifiable {
+        let id: String
+        let repo: String
+        let oldCommit: String
+        let newCommit: String
+        let findings: Int
+        let resolvedCount: Int
+        let resolvedHighCount: Int
+        let newCount: Int
+        let detectedAt: String
+        let resolvedFindings: [ResolvedFindingSummary]
+    }
 
     private struct SyncProgressInfo {
         let status: String
@@ -823,6 +844,9 @@ struct MainContentView: View {
 
                 if !allRepos.isEmpty {
                     commitMonitorBar()
+                    if !monitorUpdates.isEmpty {
+                        monitorUpdatesCard()
+                    }
                 }
 
                 if let progress = syncProgress {
@@ -1444,6 +1468,110 @@ struct MainContentView: View {
         }
     }
 
+    @ViewBuilder
+    private func monitorUpdatesCard() -> some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label(
+                        english ? "Resolved Risks from New Commits" : "新着コミットで解消された監査結果",
+                        systemImage: "checkmark.seal.fill"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(SemanticColors.role("successText"))
+                    Spacer()
+                    Button {
+                        monitorUpdates = []
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(english ? "Dismiss" : "閉じる")
+                }
+
+                ForEach(Array(monitorUpdates.prefix(5))) { upd in
+                    monitorUpdateRow(upd)
+                }
+            }
+            .padding(12)
+        }
+    }
+
+    @ViewBuilder
+    private func monitorUpdateRow(_ upd: MonitorUpdateEvent) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(upd.repo)
+                    .font(.subheadline.weight(.semibold))
+                if !upd.oldCommit.isEmpty || !upd.newCommit.isEmpty {
+                    Text("\(upd.oldCommit) → \(upd.newCommit)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if upd.resolvedCount > 0 {
+                    Text(english ? "✓ \(upd.resolvedCount) resolved" : "✓ \(upd.resolvedCount)件解消")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(SemanticColors.role("successText").opacity(0.16), in: Capsule())
+                        .foregroundStyle(SemanticColors.role("successText"))
+                } else {
+                    Text(english ? "Remaining: \(upd.findings)" : "残存指摘: \(upd.findings)件")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if upd.resolvedFindings.isEmpty {
+                Text(
+                    english
+                        ? "No previously flagged findings were removed in this commit."
+                        : "このコミットで解消された既存指摘はありません（現在の指摘: \(upd.findings)件）。"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(upd.resolvedFindings.prefix(8))) { item in
+                        resolvedFindingRow(item)
+                    }
+                    if upd.resolvedCount > 8 {
+                        Text(english ? "…and \(upd.resolvedCount - 8) more resolved" : "…ほか \(upd.resolvedCount - 8) 件解消")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.leading, 6)
+            }
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
+    }
+
+    @ViewBuilder
+    private func resolvedFindingRow(_ item: ResolvedFindingSummary) -> some View {
+        let sevTint = SemanticColors.severityColor(item.severity)
+        HStack(spacing: 6) {
+            Text(item.severity.uppercased())
+                .font(.caption2.weight(.bold))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(sevTint.opacity(0.16), in: Capsule())
+                .foregroundStyle(sevTint)
+            Text(item.title)
+                .font(.caption)
+                .lineLimit(1)
+            if !item.file.isEmpty {
+                Text("(\(item.file))")
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
     private func applyMonitorStatusPayload(_ json: [String: Any]) {
         if let enabled = json["enabled"] as? Bool {
             monitorEnabled = enabled
@@ -1462,32 +1590,68 @@ struct MainContentView: View {
             lastCompletedSyncAt = syncTime
         }
         if let updates = json["detected_updates"] as? [[String: Any]] {
-            var newlyDetected: [[String: Any]] = []
+            var parsedEvents: [MonitorUpdateEvent] = []
+            var newlyDetected: [MonitorUpdateEvent] = []
             for u in updates {
                 let repo = u["repo"] as? String ?? ""
+                let oldCommit = u["old_commit"] as? String ?? ""
                 let newCommit = u["new_commit"] as? String ?? ""
                 let detectedAt = u["detected_at"] as? String ?? ""
                 let key = "\(repo)|\(newCommit)|\(detectedAt)"
-                if !repo.isEmpty && !seenMonitorUpdateKeys.contains(key) {
-                    seenMonitorUpdateKeys.insert(key)
-                    newlyDetected.append(u)
+                let rawResolved = u["resolved_findings"] as? [[String: Any]] ?? []
+                let resolvedItems = rawResolved.map { rf in
+                    ResolvedFindingSummary(
+                        title: rf["title"] as? String ?? "",
+                        file: rf["file"] as? String ?? "",
+                        severity: rf["severity"] as? String ?? "info"
+                    )
                 }
+                let evt = MonitorUpdateEvent(
+                    id: key,
+                    repo: repo,
+                    oldCommit: oldCommit,
+                    newCommit: newCommit,
+                    findings: u["findings"] as? Int ?? 0,
+                    resolvedCount: u["resolved_count"] as? Int ?? resolvedItems.count,
+                    resolvedHighCount: u["resolved_high_count"] as? Int ?? 0,
+                    newCount: u["new_count"] as? Int ?? 0,
+                    detectedAt: detectedAt,
+                    resolvedFindings: resolvedItems
+                )
+                if !repo.isEmpty {
+                    parsedEvents.append(evt)
+                    if !seenMonitorUpdateKeys.contains(key) {
+                        seenMonitorUpdateKeys.insert(key)
+                        newlyDetected.append(evt)
+                    }
+                }
+            }
+            if !parsedEvents.isEmpty {
+                monitorUpdates = parsedEvents
             }
             if !newlyDetected.isEmpty {
                 coordinator.send("refresh")
                 let first = newlyDetected[0]
-                let repoName = first["repo"] as? String ?? "Repository"
-                let sha = first["new_commit"] as? String ?? ""
-                let findings = first["findings"] as? Int ?? 0
+                let bodyText: String
+                if newlyDetected.count == 1 {
+                    if first.resolvedCount > 0 {
+                        bodyText = english
+                            ? "\(first.repo) (\(first.newCommit)) — \(first.resolvedCount) findings resolved!"
+                            : "\(first.repo) (\(first.newCommit)) — \(first.resolvedCount)件の指摘が解消されました！"
+                    } else {
+                        bodyText = english
+                            ? "\(first.repo) (\(first.newCommit)) — \(first.findings) findings"
+                            : "\(first.repo) (\(first.newCommit)) を再監査しました（指摘 \(first.findings)件）"
+                    }
+                } else {
+                    let totalResolved = newlyDetected.reduce(0) { $0 + $1.resolvedCount }
+                    bodyText = english
+                        ? "\(newlyDetected.count) repositories updated (\(totalResolved) findings resolved)."
+                        : "\(newlyDetected.count) 件のリポジトリを更新・再監査しました（\(totalResolved)件解消）。"
+                }
                 AppNotificationManager.sendAnalysisCompleted(
                     title: english ? "New Commit Re-audited" : "新着コミットを検知・再監査完了",
-                    body: newlyDetected.count == 1
-                        ? (english
-                            ? "\(repoName) (\(sha)) — \(findings) findings"
-                            : "\(repoName) (\(sha)) を再監査しました（指摘 \(findings)件）")
-                        : (english
-                            ? "\(newlyDetected.count) repositories updated and re-audited."
-                            : "\(newlyDetected.count) 件のリポジトリで新着コミットを再監査しました。")
+                    body: bodyText
                 )
             }
         }
