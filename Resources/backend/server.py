@@ -12,6 +12,8 @@ Serves the interactive WebUI and provides REST endpoints:
 import binascii
 import json
 import os
+import plistlib
+import subprocess
 import sys
 import threading
 import time
@@ -50,6 +52,95 @@ def _revocations_path() -> Path:
     return analyzer.APP_SUPPORT_DIR / "secret_revocations.json"
 
 
+def _monitor_events_path() -> Path:
+    analyzer.ensure_dirs()
+    return analyzer.APP_SUPPORT_DIR / "monitor_events.json"
+
+
+LAUNCHD_MONITOR_LABEL = "com.repoaudt.mac.monitor"
+
+
+def _launchd_plist_path() -> Path:
+    return Path.home() / "Library" / "LaunchAgents" / f"{LAUNCHD_MONITOR_LABEL}.plist"
+
+
+def sync_launchd_agent(enabled: bool, interval_sec: int, *, run_launchctl: bool = True) -> Dict[str, Any]:
+    """Install/update or remove the user LaunchAgent for background commit monitoring."""
+    plist_path = _launchd_plist_path()
+    uid = os.getuid() if hasattr(os, "getuid") else 501
+    domain_target = f"gui/{uid}"
+    service_target = f"{domain_target}/{LAUNCHD_MONITOR_LABEL}"
+
+    if not enabled:
+        if run_launchctl:
+            try:
+                subprocess.run(
+                    ["/bin/launchctl", "bootout", service_target],
+                    check=False,
+                    capture_output=True,
+                    timeout=5,
+                )
+            except Exception:
+                pass
+        try:
+            if plist_path.exists():
+                plist_path.unlink()
+        except Exception:
+            pass
+        return {"launchd_installed": False, "plist_path": str(plist_path), "label": LAUNCHD_MONITOR_LABEL}
+
+    analyzer.ensure_dirs()
+    log_path = str(analyzer.APP_SUPPORT_DIR / "monitor_launchd.log")
+    plist_data = {
+        "Label": LAUNCHD_MONITOR_LABEL,
+        "ProgramArguments": [sys.executable, str(Path(__file__).resolve()), "--monitor-once"],
+        "StartInterval": max(60, int(interval_sec)),
+        "RunAtLoad": False,
+        "StandardOutPath": log_path,
+        "StandardErrorPath": log_path,
+    }
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(plist_path, "wb") as fp:
+        plistlib.dump(plist_data, fp)
+
+    if run_launchctl:
+        try:
+            subprocess.run(
+                ["/bin/launchctl", "bootout", service_target],
+                check=False,
+                capture_output=True,
+                timeout=5,
+            )
+            subprocess.run(
+                ["/bin/launchctl", "bootstrap", domain_target, str(plist_path)],
+                check=False,
+                capture_output=True,
+                timeout=5,
+            )
+        except Exception:
+            pass
+
+    return {"launchd_installed": plist_path.exists(), "plist_path": str(plist_path), "label": LAUNCHD_MONITOR_LABEL}
+
+
+def _send_headless_macos_notification(title: str, body: str) -> None:
+    """Deliver a native macOS notification when running headless via launchd."""
+    script = (
+        "on run argv\n"
+        "  display notification (item 2 of argv) with title (item 1 of argv) sound name \"default\"\n"
+        "end run\n"
+    )
+    try:
+        subprocess.run(
+            ["/usr/bin/osascript", "-e", script, str(title), str(body)],
+            check=False,
+            capture_output=True,
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+
 def _is_secret_finding(title: str) -> bool:
     low = str(title or "").lower()
     return (
@@ -86,6 +177,43 @@ class SyncDaemon:
         self._lock = threading.Lock()
         self._load_config()
         self._load_revocations()
+        self._load_events()
+
+    def _load_events(self) -> None:
+        try:
+            p = _monitor_events_path()
+            if p.exists():
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    if isinstance(data.get("detected_updates"), list):
+                        self.detected_updates = data["detected_updates"][:20]
+                    if isinstance(data.get("last_check_time"), str):
+                        self.last_check_time = data["last_check_time"]
+                    if isinstance(data.get("last_sync_time"), str):
+                        self.last_sync_time = data["last_sync_time"]
+                    if isinstance(data.get("last_check_summary"), str):
+                        self.last_check_summary = data["last_check_summary"]
+        except Exception:
+            pass
+
+    def _save_events(self) -> None:
+        try:
+            p = _monitor_events_path()
+            p.write_text(
+                json.dumps(
+                    {
+                        "detected_updates": self.detected_updates[:20],
+                        "last_check_time": self.last_check_time,
+                        "last_sync_time": self.last_sync_time,
+                        "last_check_summary": self.last_check_summary,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
 
     def _load_revocations(self) -> None:
         try:
@@ -145,6 +273,9 @@ class SyncDaemon:
             if isinstance(interval_sec, int):
                 self.interval_sec = max(60, min(86400, interval_sec))
             self._save_config()
+            cur_enabled = self.enabled
+            cur_interval = self.interval_sec
+        sync_launchd_agent(cur_enabled, cur_interval)
         self._wake_event.set()
         return self.status_dict()
 
@@ -164,6 +295,7 @@ class SyncDaemon:
                 "last_check_summary": self.last_check_summary,
                 "detected_updates": list(self.detected_updates),
                 "revocation_checks": rev_list[:30],
+                "launchd_installed": _launchd_plist_path().exists(),
             }
 
     def start(self) -> None:
@@ -291,6 +423,7 @@ class SyncDaemon:
                     )
                 else:
                     self.last_check_summary = f"{checked_count}件確認 · 新着コミットなし"
+                self._save_events()
         return self.status_dict()
 
     def trigger_check_async(self) -> Dict[str, Any]:
@@ -321,6 +454,8 @@ _SYNC_JOBS_LOCK = threading.Lock()
 def start_sync_daemon(interval_sec: Optional[int] = None) -> SyncDaemon:
     if interval_sec is not None:
         _SYNC_DAEMON.interval_sec = max(60, interval_sec)
+    if _SYNC_DAEMON.enabled and not _launchd_plist_path().exists():
+        sync_launchd_agent(True, _SYNC_DAEMON.interval_sec)
     _SYNC_DAEMON.start()
     return _SYNC_DAEMON
 
@@ -1026,6 +1161,40 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
         self._send_json(404, {"error": "Unknown API endpoint"})
 
 
+def run_monitor_once_cli(port: int) -> None:
+    """Entrypoint invoked by macOS launchd StartInterval when the app may be closed."""
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/monitor/check",
+            data=b"{}",
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=2):
+            return
+    except Exception:
+        pass
+
+    daemon = SyncDaemon()
+    if not daemon.enabled:
+        return
+    before_count = len(daemon.detected_updates)
+    status = daemon.check_once()
+    updates = status.get("detected_updates") or []
+    new_count = max(0, len(updates) - before_count)
+    if new_count > 0 or (updates and updates[0].get("detected_at") == status.get("last_sync_time")):
+        first = updates[0]
+        repo_name = first.get("repo") or "Repository"
+        sha = first.get("new_commit") or ""
+        resolved_cnt = int(first.get("resolved_count") or 0)
+        findings_cnt = int(first.get("findings") or 0)
+        if resolved_cnt > 0:
+            body = f"{repo_name} ({sha}) — {resolved_cnt}件の指摘が解消されました！（残存 {findings_cnt}件）"
+        else:
+            body = f"{repo_name} ({sha}) を再監査しました（指摘 {findings_cnt}件）"
+        _send_headless_macos_notification("RepoAUDT Mac — 新着コミット検知", body)
+
+
 def main() -> None:
     port = int(
         os.environ.get("REPOAUDT_PORT")
@@ -1033,6 +1202,9 @@ def main() -> None:
         or os.environ.get("REPOCHECKER_PORT")
         or "18765"
     )
+    if "--monitor-once" in sys.argv[1:]:
+        run_monitor_once_cli(port)
+        return
     RepoAUDTRequestHandler.server_port = port
     start_sync_daemon()
     ThreadingHTTPServer.allow_reuse_address = True

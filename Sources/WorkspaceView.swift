@@ -140,6 +140,7 @@ struct MainContentView: View {
     @State private var monitorChecking = false
     @State private var monitorLastCheckTime = ""
     @State private var monitorSummary = ""
+    @State private var monitorLaunchdInstalled = false
     @State private var seenMonitorUpdateKeys: Set<String> = []
     @State private var monitorUpdates: [MonitorUpdateEvent] = []
     @State private var revocationChecks: [SecretRevocationItem] = []
@@ -1409,6 +1410,14 @@ struct MainContentView: View {
                     HStack(spacing: 8) {
                         Text(english ? "Auto Commit Monitor" : "新着コミット監視")
                             .font(.subheadline.weight(.semibold))
+                        if monitorEnabled && monitorLaunchdInstalled {
+                            Text(english ? "Background (launchd)" : "アプリ未起動時も監視 (launchd)")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(SemanticColors.role("successText").opacity(0.14), in: Capsule())
+                                .foregroundStyle(SemanticColors.role("successText"))
+                        }
                         if !monitorLastCheckTime.isEmpty {
                             Text(
                                 english
@@ -1715,6 +1724,7 @@ struct MainContentView: View {
         if let syncTime = json["last_sync_time"] as? String, !syncTime.isEmpty {
             lastCompletedSyncAt = syncTime
         }
+        monitorLaunchdInstalled = json["launchd_installed"] as? Bool ?? false
         if let updates = json["detected_updates"] as? [[String: Any]] {
             var parsedEvents: [MonitorUpdateEvent] = []
             var newlyDetected: [MonitorUpdateEvent] = []

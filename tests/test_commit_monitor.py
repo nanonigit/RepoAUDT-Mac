@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import plistlib
 import sys
 import tempfile
 import unittest
@@ -20,8 +21,10 @@ class TestCommitMonitor(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cfg_file = Path(tmp) / "commit_monitor.json"
             rev_file = Path(tmp) / "secret_revocations.json"
+            ev_file = Path(tmp) / "monitor_events.json"
             with mock.patch.object(server, "_monitor_config_path", return_value=cfg_file), \
-                 mock.patch.object(server, "_revocations_path", return_value=rev_file):
+                 mock.patch.object(server, "_revocations_path", return_value=rev_file), \
+                 mock.patch.object(server, "_monitor_events_path", return_value=ev_file):
                 daemon = server.SyncDaemon(interval_sec=300)
 
                 saved_state = {
@@ -119,15 +122,38 @@ class TestCommitMonitor(unittest.TestCase):
     def test_configure_persists_enabled_and_interval(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             cfg_file = Path(tmp) / "commit_monitor.json"
-            with mock.patch.object(server, "_monitor_config_path", return_value=cfg_file):
+            ev_file = Path(tmp) / "monitor_events.json"
+            plist_file = Path(tmp) / "com.repoaudt.mac.monitor.plist"
+            with mock.patch.object(server, "_monitor_config_path", return_value=cfg_file), \
+                 mock.patch.object(server, "_monitor_events_path", return_value=ev_file), \
+                 mock.patch.object(server, "_launchd_plist_path", return_value=plist_file), \
+                 mock.patch.object(server, "sync_launchd_agent") as mock_sync:
                 daemon = server.SyncDaemon()
                 res = daemon.configure(enabled=False, interval_sec=300)
                 self.assertFalse(res["enabled"])
                 self.assertEqual(res["interval_sec"], 300)
+                mock_sync.assert_called_once_with(False, 300)
 
                 reloaded = server.SyncDaemon()
                 self.assertFalse(reloaded.enabled)
                 self.assertEqual(reloaded.interval_sec, 300)
+
+    def test_sync_launchd_agent_writes_and_removes_plist(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            plist_file = Path(tmp) / "LaunchAgents" / "com.repoaudt.mac.monitor.plist"
+            with mock.patch.object(server, "_launchd_plist_path", return_value=plist_file):
+                res_on = server.sync_launchd_agent(True, 10800, run_launchctl=False)
+                self.assertTrue(res_on["launchd_installed"])
+                self.assertTrue(plist_file.exists())
+                with open(plist_file, "rb") as fp:
+                    loaded = plistlib.load(fp)
+                self.assertEqual(loaded["Label"], server.LAUNCHD_MONITOR_LABEL)
+                self.assertEqual(loaded["StartInterval"], 10800)
+                self.assertEqual(loaded["ProgramArguments"][-1], "--monitor-once")
+
+                res_off = server.sync_launchd_agent(False, 10800, run_launchctl=False)
+                self.assertFalse(res_off["launchd_installed"])
+                self.assertFalse(plist_file.exists())
 
 
 if __name__ == "__main__":
