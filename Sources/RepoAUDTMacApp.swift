@@ -192,6 +192,20 @@ final class WebViewCoordinator: NSObject, ObservableObject, WKNavigationDelegate
             }
             return
         }
+        if message.name == "navigate" {
+            if let dict = message.body as? [String: Any], let target = dict["page"] as? String {
+                switch target {
+                case "system": page = .system
+                case "ai": page = .ai
+                case "mcp": page = .mcp
+                case "settings":
+                    page = .audit
+                    send("settings")
+                default: break
+                }
+            }
+            return
+        }
         guard message.name == "workspace",
               let data = try? JSONSerialization.data(withJSONObject: message.body),
               let snapshot = try? JSONDecoder().decode(WorkspaceSnapshot.self, from: data) else { return }
@@ -298,6 +312,7 @@ struct PortalWebView: NSViewRepresentable {
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         config.userContentController.add(coordinator, name: "workspace")
         config.userContentController.add(coordinator, name: "notify")
+        config.userContentController.add(coordinator, name: "navigate")
         config.userContentController.addUserScript(WKUserScript(
             source: "document.documentElement.classList.add('native-host')",
             injectionTime: .atDocumentStart, forMainFrameOnly: true))

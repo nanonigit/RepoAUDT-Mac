@@ -128,6 +128,9 @@ struct MainContentView: View {
     @State private var triggerSidebarAppUpdate = false
     @State private var headerCommit = ""
     @State private var lastUpdateCheckLabel = ""
+    @State private var githubConnectionIssue: String?
+    @State private var githubConnectionGuide: String?
+    @State private var checkingGithubHealth = false
 
     private struct AppUpdateInfo {
         let localCommit: String
@@ -676,6 +679,56 @@ struct MainContentView: View {
                 }
                 .task {
                     await refreshDashboardVersionHeader()
+                    await refreshGithubHealthStatus()
+                }
+                if let ghIssue = githubConnectionIssue {
+                    GroupBox {
+                        HStack(alignment: .top, spacing: 14) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.title2)
+                                .foregroundStyle(SemanticColors.role("dangerText"))
+                                .padding(.top, 2)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(ghIssue)
+                                    .font(.headline)
+                                    .foregroundStyle(SemanticColors.role("dangerText"))
+                                if let ghGuide = githubConnectionGuide {
+                                    Text(ghGuide)
+                                        .font(.callout)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                HStack(spacing: 10) {
+                                    Button {
+                                        showPage(.ai)
+                                    } label: {
+                                        Label(english ? "Open AI / Token Settings" : "AI・GitHub トークン設定を開く", systemImage: "key.fill")
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    Button {
+                                        showPage(.system)
+                                    } label: {
+                                        Label(english ? "Check GitHub CLI" : "実行環境・GitHub CLI を確認", systemImage: "wrench.and.screwdriver")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    Button {
+                                        Task { await refreshGithubHealthStatus() }
+                                    } label: {
+                                        if checkingGithubHealth {
+                                            ProgressView().controlSize(.small)
+                                        } else {
+                                            Label(english ? "Retry" : "接続を再確認", systemImage: "arrow.clockwise")
+                                        }
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .disabled(checkingGithubHealth)
+                                }
+                                .padding(.top, 4)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(14)
+                    }
                 }
                 GroupBox {
                     HStack(spacing: 20) {
@@ -722,9 +775,11 @@ struct MainContentView: View {
                         tint: SemanticColors.role("warningText")
                     )
                     summaryMetricCard(
-                        title: english ? "Critical / High Repos" : "重大・高リスク対象",
-                        value: "\(highRiskRepos.count) / \(allRepos.count)",
-                        subtitle: english ? "\(highRiskFindings) findings in these repos" : "該当リポジトリの指摘合計 \(highRiskFindings)件",
+                        title: english ? "Critical / High" : "重大・高リスク",
+                        value: english ? "\(highRiskRepos.count) repos" : "\(highRiskRepos.count) リポジトリ",
+                        subtitle: english
+                            ? "Out of \(allRepos.count) total · \(highRiskFindings) findings"
+                            : "全\(allRepos.count)件中 · 該当指摘 \(highRiskFindings)件",
                         symbol: "shield.lefthalf.filled.badge.checkmark",
                         tint: SemanticColors.role("dangerText")
                     )
@@ -1056,6 +1111,50 @@ struct MainContentView: View {
             coordinator.send("refresh")
         } catch {
             repoActionError = error.localizedDescription
+        }
+    }
+
+    private func refreshGithubHealthStatus() async {
+        guard backend.isReady, !checkingGithubHealth else { return }
+        checkingGithubHealth = true
+        defer { checkingGithubHealth = false }
+        do {
+            let json = try await requestJSON("/api/health")
+            let services = json["services"] as? [[String: Any]] ?? []
+            let apiSvc = services.first { ($0["id"] as? String) == "github_api" }
+            let cliSvc = services.first { ($0["id"] as? String) == "gh_cli" }
+
+            let apiStatus = (apiSvc?["status"] as? String ?? "ONLINE").uppercased()
+            let apiDetails = apiSvc?["details"] as? String ?? ""
+            let cliStatus = (cliSvc?["status"] as? String ?? "ONLINE").uppercased()
+            let credStatus = cliSvc?["credential_status"] as? String ?? ""
+
+            if apiStatus != "ONLINE" {
+                githubConnectionIssue = english
+                    ? "Cannot connect to GitHub (\(apiStatus))"
+                    : "GitHub に接続できません（\(apiStatus)）"
+                githubConnectionGuide = english
+                    ? "Check your internet connection, VPN, or proxy settings. Detail: \(apiDetails)"
+                    : "インターネット接続・VPN・プロキシ設定を確認してください。また、ターミナルで `gh auth login` を実行するか「AI 接続」画面で GitHub トークンを設定できます。（詳細: \(apiDetails)）"
+            } else if cliStatus != "ONLINE" {
+                githubConnectionIssue = english
+                    ? "GitHub CLI (gh) is not connected"
+                    : "GitHub CLI (gh) が GitHub に接続できていません"
+                if credStatus == "not_installed" {
+                    githubConnectionGuide = english
+                        ? "Install GitHub CLI and sign in via Terminal: `brew install gh && gh auth login`, or configure a GitHub Token in AI Connections."
+                        : "ターミナルで `brew install gh && gh auth login` を実行してサインインするか、「AI 接続」画面で GitHub トークンを設定してください。"
+                } else {
+                    githubConnectionGuide = english
+                        ? "Run `gh auth login` in Terminal to connect your GitHub account, or set a GitHub Token in AI Connections."
+                        : "ターミナルで `gh auth login` を実行して GitHub アカウントに接続するか、「AI 接続」画面で GitHub トークンを設定してください。"
+                }
+            } else {
+                githubConnectionIssue = nil
+                githubConnectionGuide = nil
+            }
+        } catch {
+            // Keep silent if backend health is still warming up.
         }
     }
 

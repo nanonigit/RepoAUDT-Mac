@@ -428,25 +428,161 @@ function sourceComparison(info) {
   </div>`;
 }
 
+function openNativeOrSettingsPage(targetPage) {
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.navigate) {
+    window.webkit.messageHandlers.navigate.postMessage({page: targetPage});
+    return;
+  }
+  if (typeof openSettingsModal === 'function') {
+    openSettingsModal();
+  }
+}
+
+function renderEvidenceErrorBanner(resultEl, errorMessage, retryFn) {
+  const msg = String(errorMessage || 'Unknown error');
+  const isGhConnectError = /github|gh\b|connect|auth|token|resolve|certificate|signed in|installed|permission/i.test(msg);
+  const heading = isGhConnectError
+    ? auditLabel('GitHub CLI could not connect to GitHub', 'GitHub CLI が GitHub に接続できません')
+    : auditLabel('Re-scan failed', '再スキャンに失敗しました');
+  const guidance = isGhConnectError
+    ? auditLabel(
+        'Check your network/VPN or GitHub CLI (`gh auth login`) and GitHub Token settings.',
+        'ネットワーク接続・GitHub CLI（gh auth login）または GitHub トークン設定を確認してください。'
+      )
+    : '';
+
+  resultEl.innerHTML = '';
+  const box = document.createElement('div');
+  box.setAttribute('role', 'alert');
+  Object.assign(box.style, {
+    marginTop: '10px',
+    padding: '12px 14px',
+    borderRadius: '8px',
+    border: '1px solid rgba(248, 113, 113, 0.55)',
+    background: 'rgba(127, 29, 29, 0.28)',
+    color: '#fecaca',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px'
+  });
+
+  const titleEl = document.createElement('div');
+  titleEl.style.fontWeight = '700';
+  titleEl.style.fontSize = '0.9rem';
+  titleEl.style.color = '#fca5a5';
+  titleEl.textContent = `⚠️ ${heading}`;
+  box.appendChild(titleEl);
+
+  const detailEl = document.createElement('div');
+  detailEl.style.fontSize = '0.82rem';
+  detailEl.style.color = '#fee2e2';
+  detailEl.textContent = guidance ? `${msg} — ${guidance}` : msg;
+  box.appendChild(detailEl);
+
+  const actions = document.createElement('div');
+  actions.style.display = 'flex';
+  actions.style.flexWrap = 'wrap';
+  actions.style.gap = '8px';
+
+  if (isGhConnectError) {
+    const connectBtn = document.createElement('button');
+    connectBtn.type = 'button';
+    connectBtn.textContent = auditLabel('🔗 Open GitHub / AI Connection', '🔗 GitHub / AI 接続設定を開く');
+    Object.assign(connectBtn.style, {
+      padding: '6px 12px',
+      borderRadius: '6px',
+      border: '1px solid rgba(96, 165, 250, 0.65)',
+      background: 'rgba(37, 99, 235, 0.35)',
+      color: '#eff6ff',
+      fontSize: '0.8rem',
+      fontWeight: '600',
+      cursor: 'pointer'
+    });
+    connectBtn.addEventListener('click', () => openNativeOrSettingsPage('ai'));
+    actions.appendChild(connectBtn);
+
+    const sysBtn = document.createElement('button');
+    sysBtn.type = 'button';
+    sysBtn.textContent = auditLabel('⚙️ Check GitHub CLI Status', '⚙️ 実行環境・GitHub CLI を確認');
+    Object.assign(sysBtn.style, {
+      padding: '6px 12px',
+      borderRadius: '6px',
+      border: '1px solid rgba(148, 163, 184, 0.45)',
+      background: 'rgba(30, 41, 59, 0.7)',
+      color: '#e2e8f0',
+      fontSize: '0.8rem',
+      cursor: 'pointer'
+    });
+    sysBtn.addEventListener('click', () => openNativeOrSettingsPage('system'));
+    actions.appendChild(sysBtn);
+  }
+
+  if (typeof retryFn === 'function') {
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.textContent = auditLabel('🔄 Retry', '🔄 再試行');
+    Object.assign(retryBtn.style, {
+      padding: '6px 12px',
+      borderRadius: '6px',
+      border: '1px solid rgba(255, 255, 255, 0.2)',
+      background: 'rgba(255, 255, 255, 0.08)',
+      color: '#f8fafc',
+      fontSize: '0.8rem',
+      cursor: 'pointer'
+    });
+    retryBtn.addEventListener('click', retryFn);
+    actions.appendChild(retryBtn);
+  }
+
+  box.appendChild(actions);
+  resultEl.appendChild(box);
+}
+
+function setIssueRescanSpinning(issueEl, spinning) {
+  if (!issueEl) return;
+  const summary = issueEl.querySelector('summary');
+  if (!summary) return;
+  summary.querySelector('.finding-rescan-spinner')?.remove();
+  if (spinning) {
+    const spinner = document.createElement('span');
+    spinner.className = 'audit-spinner finding-rescan-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    spinner.style.marginLeft = '8px';
+    spinner.style.flexShrink = '0';
+    const chevron = summary.querySelector('.issue-chevron');
+    if (chevron) {
+      summary.insertBefore(spinner, chevron);
+    } else {
+      summary.appendChild(spinner);
+    }
+  }
+}
+
 async function loadFindingSource(button) {
   const panel = button.closest('.finding-source');
+  const issueEl = button.closest('.audit-issue');
   const result = panel.querySelector('[data-evidence-result]');
+  const origHtml = button.innerHTML;
   button.disabled = true;
-  result.textContent = auditLabel('Comparing GitHub commits…', 'GitHub のコミットを照合中…');
+  button.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px;"><span class="audit-spinner" aria-hidden="true"></span><span>${auditLabel('Re-scanning…', '再スキャン中…')}</span></span>`;
+  setIssueRescanSpinning(issueEl, true);
+  result.innerHTML = `<p class="audit-chat-pending" role="status"><span class="audit-spinner" aria-hidden="true"></span><span>${auditLabel('Comparing GitHub commits…', 'GitHub のコミットを照合中…')}</span></p>`;
   try {
     const info = await auditRequest('evidence', JSON.parse(panel.dataset.context));
     result.innerHTML = sourceComparison(info);
     if (info.false_positive) {
       panel.parentElement.querySelector('.saved-finding-description').hidden = true;
-      const summary = panel.closest('.audit-issue').querySelector('summary');
+      const summary = issueEl.querySelector('summary');
       summary.querySelector('.issue-severity').textContent = auditLabel('False positive', '誤検知');
       summary.querySelector('.issue-severity').className = 'issue-severity info';
       summary.querySelector('.issue-title').textContent = auditLabel('Secrets Manager reference', 'Secrets Manager の参照');
     }
   } catch (error) {
-    result.textContent = error.message;
+    renderEvidenceErrorBanner(result, error.message, () => loadFindingSource(button));
   } finally {
     button.disabled = false;
+    button.innerHTML = origHtml;
+    setIssueRescanSpinning(issueEl, false);
   }
 }
 
@@ -717,6 +853,7 @@ async function rescanSingleFinding(issueEl) {
   const searchTerm = !hasExplicitLine && osvPkgMatch ? osvPkgMatch[1] : '';
   const looksLikeFile = Boolean(rawPath && !rawPath.includes('未記録') && rawPath !== 'Location' && (rawPath.includes('.') || rawPath.includes('/')));
   resultEl.innerHTML = `<p class="audit-chat-pending" role="status"><span class="audit-spinner" aria-hidden="true"></span><span>${auditLabel('Checking latest GitHub status for this finding…', 'この指摘の最新状態を GitHub で確認中…')}</span></p>`;
+  setIssueRescanSpinning(issueEl, true);
   try {
     let info;
     if (looksLikeFile) {
@@ -733,7 +870,9 @@ async function rescanSingleFinding(issueEl) {
     }
     resultEl.innerHTML = info.path ? sourceComparison(info) : `<div class="audit-comparison">${repositoryFacts(info)}</div>`;
   } catch (error) {
-    resultEl.textContent = auditLabel('Re-scan failed: ', '再スキャンに失敗しました：') + error.message;
+    renderEvidenceErrorBanner(resultEl, error.message, () => rescanSingleFinding(issueEl));
+  } finally {
+    setIssueRescanSpinning(issueEl, false);
   }
 }
 
