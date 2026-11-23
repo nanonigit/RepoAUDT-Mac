@@ -1430,9 +1430,12 @@ struct MainContentView: View {
                     Text(english ? "15m" : "15分").tag(900)
                     Text(english ? "30m" : "30分").tag(1800)
                     Text(english ? "1h" : "1時間").tag(3600)
+                    Text(english ? "3h" : "3時間").tag(10800)
+                    Text(english ? "6h" : "6時間").tag(21600)
+                    Text(english ? "24h" : "24時間").tag(86400)
                 }
                 .labelsHidden()
-                .frame(width: 86)
+                .frame(width: 96)
                 .disabled(!backend.isReady)
 
                 Toggle("", isOn: Binding(
