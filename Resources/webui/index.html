@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/20 14:49:47</strong>
+              <strong id="portal-sync-time">2026/11/20 15:33:53</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -6846,7 +6846,9 @@
       const origText = btnEl ? btnEl.innerHTML : '';
       if (btnEl) {
         btnEl.disabled = true;
-        btnEl.innerHTML = isEn ? '⏳ Scanning...' : '⏳ 再スキャン中...';
+        btnEl.innerHTML = isEn
+          ? '<span style="display:inline-flex;align-items:center;gap:6px;"><span class="audit-spinner" aria-hidden="true"></span><span>Scanning…</span></span>'
+          : '<span style="display:inline-flex;align-items:center;gap:6px;"><span class="audit-spinner" aria-hidden="true"></span><span>再スキャン中…</span></span>';
       }
       showToast(isEn ? `🔄 Re-scanning ${targetUrl}...` : `🔄 「${targetUrl}」を最新状態に再スキャンしています...`, 'info');
       await runGitHubRepoAnalysis(targetUrl);
@@ -8533,12 +8535,27 @@
               const name = encodeURIComponent(repo.repo || '').replace(/'/g, '%27');
               const prompt = encodeURIComponent(buildAiAgentFixPrompt(repo.repo, issue)).replace(/'/g, '%27');
               let sourceLink = '';
+              const inferredSourceUrl = (() => {
+                if (issue.official_source) return issue.official_source;
+                const combined = `${issue.title || ''} ${issue.desc || ''} ${issue.comment || ''}`;
+                const ghsa = combined.match(/(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})/i);
+                if (ghsa) return `https://osv.dev/vulnerability/${ghsa[1]}`;
+                const cve = combined.match(/(CVE-\d{4}-\d{4,})/i);
+                if (cve) return `https://nvd.nist.gov/vuln/detail/${cve[1].toUpperCase()}`;
+                return '';
+              })();
               try {
-                const source = new URL(issue.official_source);
-                if (source.protocol === 'https:' || source.protocol === 'http:') {
-                  sourceLink = `<a href="${escapeHtml(source.href)}" target="_blank" rel="noopener noreferrer">${en ? 'View source' : '出典を確認'} ↗</a>`;
+                if (inferredSourceUrl) {
+                  const source = new URL(inferredSourceUrl);
+                  if (source.protocol === 'https:' || source.protocol === 'http:') {
+                    sourceLink = `<a href="${escapeHtml(source.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.href)} ↗</a>`;
+                  }
                 }
               } catch (_) { /* A finding can legitimately have no external advisory. */ }
+              const osvPkgMatch = String(issue.title || '').match(/\[OSV[^\]]*\]\s+([^\s(]+)/);
+              const evidenceCmd = osvPkgMatch
+                ? `grep -n '"${osvPkgMatch[1]}"' ${String(file || 'package.json').split(' ')[0].split(':')[0]}`
+                : '';
               return `<details class="audit-issue">
                 <summary>
                   <span class="issue-severity ${tone}"><span aria-hidden="true">${tone === 'danger' ? '⛔' : tone === 'warning' ? '△' : tone === 'info' ? 'ⓘ' : '—'}</span> ${escapeHtml(severity.toUpperCase())}</span>
@@ -8552,6 +8569,12 @@
                   <div class="saved-finding-description">
                   <h3>${en ? 'Recorded evidence and reason' : '保存された根拠と理由'}</h3>
                   <p>${escapeHtml((en && issue.desc_en) || issue.desc || issue.comment || issue.summary || (en ? 'No additional evidence recorded.' : '追加の根拠は記録されていません。'))}</p>
+                  ${evidenceCmd ? `<p style="font-size: 0.82rem; color: var(--workspace-muted);">
+                    ${en ? 'Detected from manifest:' : 'バージョン検出元:'} <code>${escapeHtml(String(file || 'package.json').split(' ')[0])}</code> · <code>${escapeHtml(evidenceCmd)}</code>
+                  </p>` : ''}
+                  ${sourceLink ? `<p style="font-size: 0.82rem; word-break: break-all;">
+                    ${en ? 'Advisory URL:' : '脆弱性情報 URL:'} ${sourceLink}
+                  </p>` : ''}
                   ${!String(issue.scanner || '').startsWith('runtime-') ? `<h3>${en ? 'Potential impact' : '想定される影響'}</h3>
                   <p>${escapeHtml(explainWhatCouldHappen(issue, en))}</p>` : ''}
                   ${issue.diff ? `<h3>${en ? 'Suggested change' : '修正案'}</h3><pre>${escapeHtml(issue.diff)}</pre>` : ''}
@@ -8563,6 +8586,7 @@
                   ` : ''}
                   <div class="issue-actions">
                     ${issue.scanner !== 'runtime-inventory' ? `<button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${prompt}">${en ? 'Copy fix prompt' : '修正プロンプトをコピー'}</button>` : ''}
+                    <button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${report}">${en ? 'Copy report' : 'レポートをコピー'}</button>
                     <button type="button" class="table-view-btn" onclick="downloadSingleActionReport('${report}', '${name}')">${en ? 'Save report' : 'レポートを保存'}</button>
                     ${sourceLink}
                   </div>
@@ -11574,8 +11598,51 @@ function renderNativeInspector() {
 
 /* Read-only GitHub evidence and contextual conversation in the native workspace. */
 const auditRepositoryStatuses = new Map();
+const AUDIT_CONVERSATIONS_STORAGE_KEY = 'repoaudt_audit_conversations_v1';
 let auditConversation = null;
+let auditConversations = loadAuditConversations();
 let auditLLMConfig = null;
+
+function loadAuditConversations() {
+  try {
+    const raw = localStorage.getItem(AUDIT_CONVERSATIONS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveAuditConversations() {
+  if (!auditConversation || !auditConversation.id) return;
+  auditConversation.updatedAt = new Date().toISOString();
+  const idx = auditConversations.findIndex(c => c.id === auditConversation.id);
+  const snapshot = {
+    ...auditConversation,
+    pending: false
+  };
+  if (idx >= 0) {
+    auditConversations[idx] = snapshot;
+  } else {
+    auditConversations.unshift(snapshot);
+  }
+  auditConversations.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  if (auditConversations.length > 50) auditConversations.length = 50;
+  try {
+    localStorage.setItem(AUDIT_CONVERSATIONS_STORAGE_KEY, JSON.stringify(auditConversations));
+  } catch (_) {}
+}
+
+function buildConversationTitle(repo, context) {
+  const repoName = repo?.is_root ? '' : (repo?.repo || '');
+  if (context && context.title) {
+    return context.title;
+  }
+  if (context && context.path) {
+    return `${context.path}${context.line ? ':' + context.line : ''}`;
+  }
+  return repoName || auditLabel('Repository Audit Chat', 'リポジトリ監査チャット');
+}
 
 const AUDIT_PROVIDER_LABELS = {
   openai: 'OpenAI',
@@ -11990,20 +12057,61 @@ function closeAuditChat() {
   document.getElementById('app-workspace')?.removeAttribute('inert');
 }
 
+function jumpToAuditRepoPage(repoId, findingTitle = '') {
+  if (typeof diagrams !== 'undefined' && Array.isArray(diagrams) && repoId) {
+    const idx = diagrams.findIndex(d => String(d.id) === String(repoId));
+    if (idx >= 0 && typeof selectDiagram === 'function' && String(selectedDiagram?.id || '') !== String(repoId)) {
+      selectDiagram(idx);
+    }
+  }
+  closeAuditChat();
+  if (typeof switchViewMode === 'function') {
+    switchViewMode('coderabbit');
+  }
+  publishNativeWorkspace('coderabbit');
+
+  if (findingTitle) {
+    setTimeout(() => {
+      const targetNorm = findingTitle.trim().toLowerCase();
+      const issues = Array.from(document.querySelectorAll('.audit-issue'));
+      const match = issues.find(el => {
+        const t = (el.querySelector('.issue-title')?.textContent || '').trim().toLowerCase();
+        return t === targetNorm || (targetNorm && t.includes(targetNorm));
+      });
+      if (match) {
+        match.open = true;
+        match.scrollIntoView({behavior: 'smooth', block: 'center'});
+      }
+    }, 80);
+  }
+}
+
 function buildAuditStarter(repo, context) {
-  if (!repo || repo.is_root) return {greeting: '', suggestions: []};
+  if (!repo || repo.is_root) return {greeting: '', greetingHtml: '', suggestions: []};
   const issues = typeof getWorkspaceIssues === 'function' ? getWorkspaceIssues(repo) : [];
+  const repoId = String(repo.id || '');
+  const repoBtn = `<button type="button" class="table-view-btn" style="padding: 2px 8px; font-size: 0.85rem;" data-jump-repo="${escapeHtml(repoId)}">${escapeHtml(repo.repo)}</button>`;
+
   if (context && (context.title || context.path)) {
     const sev = context.severity ? `[${String(context.severity).toUpperCase()}] ` : '';
     const loc = context.path ? `${context.path}${context.line ? ':' + context.line : ''}` : '';
     const desc = context.desc ? `\n${context.desc}` : '';
+    const findingName = context.title || loc || '';
     const greeting = auditLabel(
-      `Loaded finding for ${repo.repo}:\n${sev}${context.title || loc}${loc && context.title ? ' (' + loc + ')' : ''}${desc}\n\nWhat would you like to do with this finding?`,
-      `「${repo.repo}」の指摘を読み込みました：\n${sev}${context.title || loc}${loc && context.title ? ' (' + loc + ')' : ''}${desc}\n\nこの指摘について何をしますか？`
+      `Loaded finding for ${repo.repo}:\n${sev}${findingName}${loc && context.title ? ' (' + loc + ')' : ''}${desc}\n\nWhat would you like to do with this finding?`,
+      `「${repo.repo}」の指摘を読み込みました：\n${sev}${findingName}${loc && context.title ? ' (' + loc + ')' : ''}${desc}\n\nこの指摘について何をしますか？`
     );
+    const findingLink = `<button type="button" class="table-view-btn" style="text-align: left; white-space: normal; padding: 4px 8px;" data-jump-repo="${escapeHtml(repoId)}" data-jump-finding="${escapeHtml(context.title || '')}">${escapeHtml(sev + findingName)}${loc && context.title ? ` <code>${escapeHtml(loc)}</code>` : ''}</button>`;
+    const greetingHtml = `
+      <div>${repoBtn} ${auditLabel('— Loaded finding:', 'の指摘を読み込みました：')}</div>
+      <div style="margin: 6px 0;">${findingLink}</div>
+      ${context.desc ? `<div style="color: var(--workspace-muted); white-space: pre-wrap; margin-bottom: 6px;">${escapeHtml(context.desc)}</div>` : ''}
+      <div>${auditLabel('What would you like to do with this finding?', 'この指摘について何をしますか？')}</div>
+    `;
     const targetLabel = context.title || loc || 'this finding';
     return {
       greeting,
+      greetingHtml,
       suggestions: [
         {
           label: auditLabel('🛠️ Propose a safe code fix', '🛠️ 安全な修正案を提案して'),
@@ -12030,7 +12138,8 @@ function buildAuditStarter(repo, context) {
     };
   }
 
-  const topList = issues.slice(0, 3).map(i => `• [${String(i.severity || 'info').toUpperCase()}] ${i.title || ''}`).join('\n');
+  const topIssues = issues.slice(0, 3);
+  const topList = topIssues.map(i => `• [${String(i.severity || 'info').toUpperCase()}] ${i.title || ''}`).join('\n');
   const greeting = issues.length > 0
     ? auditLabel(
         `Loaded "${repo.repo}" (${issues.length} saved findings):\n${topList}\n\nWhat would you like to ask or check?`,
@@ -12040,6 +12149,21 @@ function buildAuditStarter(repo, context) {
         `Loaded "${repo.repo}". What would you like to ask or check?`,
         `「${repo.repo}」を読み込みました。このリポジトリについて何を確認・相談しますか？`
       );
+  const greetingHtml = issues.length > 0
+    ? `
+      <div>${repoBtn} ${auditLabel(`(${issues.length} saved findings):`, `を読み込みました（保存済みの指摘 ${issues.length}件）：`)}</div>
+      <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 8px 0;">
+        ${topIssues.map(i => {
+          const t = String(i.title || '');
+          const s = String(i.severity || 'info').toUpperCase();
+          return `<button type="button" class="table-view-btn" style="text-align: left; white-space: normal; padding: 4px 8px;" data-jump-repo="${escapeHtml(repoId)}" data-jump-finding="${escapeHtml(t)}">• [${escapeHtml(s)}] ${escapeHtml(t)}</button>`;
+        }).join('')}
+      </div>
+      <div>${auditLabel('What would you like to ask or check?', 'このリポジトリについて何を確認・相談しますか？')}</div>
+    `
+    : `
+      <div>${repoBtn} ${auditLabel('— What would you like to ask or check?', 'を読み込みました。このリポジトリについて何を確認・相談しますか？')}</div>
+    `;
 
   const suggestions = [
     ...(issues.length > 0 ? [{
@@ -12064,30 +12188,85 @@ function buildAuditStarter(repo, context) {
       )
     }
   ];
-  return {greeting, suggestions};
+  return {greeting, greetingHtml, suggestions};
 }
 
-function openAuditChat(context = null, preferredProvider = '') {
+function openAuditChat(context = null, preferredProvider = '', forceNew = false) {
   const id = String(selectedDiagram?.id || '');
-  if (!auditConversation || auditConversation.repository !== id || context || preferredProvider) {
-    const starter = buildAuditStarter(selectedDiagram, context);
-    auditConversation = {
-      repository: id,
-      context,
-      messages: [],
-      greeting: starter.greeting,
-      suggestions: starter.suggestions,
-      pending: false,
-      draft: '',
-      path: context?.path || '',
-      line: context?.line ? String(context.line) : '',
-      selectedProvider: preferredProvider || ''
-    };
+  const repoName = selectedDiagram?.is_root ? '' : (selectedDiagram?.repo || '');
+  const hasContext = Boolean(context && (context.title || context.path));
+
+  if (!forceNew && !hasContext && !preferredProvider && auditConversation && auditConversation.repository === id) {
+    renderAuditChat();
+    loadAuditLLMConfig(true).then(() => {
+      if (auditChatVisible()) renderAuditChat();
+    });
+    return;
   }
+
+  // If reopening the same repo without a specific finding and a conversation with messages already exists, resume it unless forceNew.
+  if (!forceNew && !hasContext) {
+    const existing = auditConversations.find(c => c.repository === id && !c.context);
+    if (existing) {
+      auditConversation = {
+        ...existing,
+        pending: false,
+        selectedProvider: preferredProvider || existing.selectedProvider || ''
+      };
+      renderAuditChat();
+      loadAuditLLMConfig(true).then(() => {
+        if (auditChatVisible()) renderAuditChat();
+      });
+      return;
+    }
+  }
+
+  const starter = buildAuditStarter(selectedDiagram, context);
+  auditConversation = {
+    id: 'conv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    title: buildConversationTitle(selectedDiagram, context),
+    repoName,
+    repository: id,
+    context,
+    messages: [],
+    greeting: starter.greeting,
+    greetingHtml: starter.greetingHtml,
+    suggestions: starter.suggestions,
+    pending: false,
+    draft: '',
+    path: context?.path || '',
+    line: context?.line ? String(context.line) : '',
+    selectedProvider: preferredProvider || '',
+    updatedAt: new Date().toISOString()
+  };
+  saveAuditConversations();
   renderAuditChat();
   loadAuditLLMConfig(true).then(() => {
     if (auditChatVisible()) renderAuditChat();
   });
+}
+
+function selectAuditConversationById(convId) {
+  const target = auditConversations.find(c => c.id === convId);
+  if (!target) return;
+  auditConversation = {...target, pending: false};
+  if (typeof diagrams !== 'undefined' && Array.isArray(diagrams)) {
+    const idx = diagrams.findIndex(d => String(d.id) === String(target.repository));
+    if (idx >= 0 && typeof selectDiagram === 'function' && String(selectedDiagram?.id || '') !== String(target.repository)) {
+      selectDiagram(idx);
+    }
+  }
+  renderAuditChat();
+}
+
+function extractCleanFindingDesc(panel, issueEl) {
+  const rawDataDesc = panel?.dataset?.findingDesc || '';
+  if (rawDataDesc.trim()) return rawDataDesc.trim();
+  const descEl = issueEl?.querySelector('.saved-finding-description');
+  if (!descEl) return '';
+  const clone = descEl.cloneNode(true);
+  clone.querySelectorAll('.issue-actions, button').forEach(el => el.remove());
+  return (clone.textContent || '').trim();
 }
 
 function chatAboutFinding(button, preferredProvider = '') {
@@ -12098,14 +12277,62 @@ function chatAboutFinding(button, preferredProvider = '') {
     ...baseContext,
     title: panel?.dataset.findingTitle || issueEl?.querySelector('.issue-title')?.textContent?.trim() || '',
     severity: panel?.dataset.findingSeverity || issueEl?.querySelector('.issue-severity')?.textContent?.trim() || '',
-    desc: panel?.dataset.findingDesc || issueEl?.querySelector('.saved-finding-description')?.textContent?.trim() || ''
+    desc: extractCleanFindingDesc(panel, issueEl)
   };
-  openAuditChat(context, preferredProvider);
+  openAuditChat(context, preferredProvider, true);
   publishNativeWorkspace('chat');
 }
 
 function closeFindingContextMenu() {
   document.getElementById('finding-context-menu')?.remove();
+}
+
+async function rescanSingleFinding(issueEl) {
+  if (!issueEl) return;
+  issueEl.open = true;
+  const loadBtn = issueEl.querySelector('[data-load-finding-source]');
+  if (loadBtn) {
+    await loadFindingSource(loadBtn);
+    return;
+  }
+  const repoId = String(selectedDiagram?.id || '');
+  if (!repoId) return;
+  const bodyEl = issueEl.querySelector('.issue-body') || issueEl;
+  let resultEl = issueEl.querySelector('[data-evidence-result]');
+  if (!resultEl) {
+    resultEl = document.createElement('div');
+    resultEl.setAttribute('data-evidence-result', '');
+    resultEl.setAttribute('aria-live', 'polite');
+    bodyEl.prepend(resultEl);
+  }
+  const rawPathText = (issueEl.querySelector('.issue-path')?.textContent || '').trim();
+  const pathMatch = rawPathText.match(/^([^\s:]+)(?::(\d+))?/);
+  const rawPath = pathMatch ? pathMatch[1] : '';
+  const hasExplicitLine = Boolean(pathMatch && pathMatch[2]);
+  const rawLine = hasExplicitLine ? Number(pathMatch[2]) : null;
+  const titleText = (issueEl.querySelector('.issue-title')?.textContent || '').trim();
+  const osvPkgMatch = titleText.match(/\[OSV[^\]]*\]\s+([^\s(]+)/);
+  const searchTerm = !hasExplicitLine && osvPkgMatch ? osvPkgMatch[1] : '';
+  const looksLikeFile = Boolean(rawPath && !rawPath.includes('未記録') && rawPath !== 'Location' && (rawPath.includes('.') || rawPath.includes('/')));
+  resultEl.innerHTML = `<p class="audit-chat-pending" role="status"><span class="audit-spinner" aria-hidden="true"></span><span>${auditLabel('Checking latest GitHub status for this finding…', 'この指摘の最新状態を GitHub で確認中…')}</span></p>`;
+  try {
+    let info;
+    if (looksLikeFile) {
+      try {
+        const reqPayload = rawLine
+          ? {repository: repoId, path: rawPath, line: rawLine}
+          : (searchTerm ? {repository: repoId, path: rawPath, search: searchTerm} : {repository: repoId, path: rawPath, line: 1});
+        info = await auditRequest('evidence', reqPayload);
+      } catch (_) {
+        info = await auditRequest('evidence', {repository: repoId});
+      }
+    } else {
+      info = await auditRequest('evidence', {repository: repoId});
+    }
+    resultEl.innerHTML = info.path ? sourceComparison(info) : `<div class="audit-comparison">${repositoryFacts(info)}</div>`;
+  } catch (error) {
+    resultEl.textContent = auditLabel('Re-scan failed: ', '再スキャンに失敗しました：') + error.message;
+  }
 }
 
 function showFindingContextMenu(event, issueEl) {
@@ -12116,8 +12343,8 @@ function showFindingContextMenu(event, issueEl) {
   const baseContext = panel ? JSON.parse(panel.dataset.context) : {};
   const titleText = panel?.dataset.findingTitle || issueEl.querySelector('.issue-title')?.textContent?.trim() || '';
   const severityText = panel?.dataset.findingSeverity || issueEl.querySelector('.issue-severity')?.textContent?.trim() || '';
-  const metaText = issueEl.querySelector('.issue-file')?.textContent?.trim() || '';
-  const descText = panel?.dataset.findingDesc || issueEl.querySelector('.saved-finding-description')?.textContent?.trim() || '';
+  const metaText = issueEl.querySelector('.issue-path, .issue-file')?.textContent?.trim() || '';
+  const descText = extractCleanFindingDesc(panel, issueEl);
   const context = {...baseContext, title: titleText, severity: severityText, desc: descText};
 
   const menu = document.createElement('div');
@@ -12165,12 +12392,11 @@ function showFindingContextMenu(event, issueEl) {
   };
 
   menu.append(
-    makeItem(auditLabel('🤖 Ask Copilot about this finding', '🤖 Copilot にこの指摘を相談'), () => {
-      openAuditChat(context, 'copilot');
-      publishNativeWorkspace('chat');
+    makeItem(auditLabel('🔄 Re-scan this finding', '🔄 この指摘だけを再スキャン'), () => {
+      rescanSingleFinding(issueEl);
     }),
-    makeItem(auditLabel('💬 Ask AI Chat', '💬 監査チャットに相談'), () => {
-      openAuditChat(context, '');
+    makeItem(auditLabel('💬 Ask AI / Copilot about this finding', '💬 AI / Copilot にこの指摘を相談'), () => {
+      openAuditChat(context, '', true);
       publishNativeWorkspace('chat');
     }),
     makeItem(auditLabel('📋 Copy finding details', '📋 指摘内容をコピー'), () => {
@@ -12242,9 +12468,32 @@ function renderAuditChat() {
             </label>
           </div>`;
 
+  const displayRepo = state.repoName || (selectedDiagram?.is_root ? '' : (selectedDiagram?.repo || ''));
+  const displayTitle = state.title || buildConversationTitle(selectedDiagram, context);
+  const historyOptionsHtml = auditConversations.length > 0
+    ? `<div class="issue-actions" style="margin-top: 6px; align-items: center; flex-wrap: wrap;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
+          <span>💬 ${auditLabel('Chat history', 'チャット履歴')}</span>
+          <select id="audit-chat-history" style="max-width: 440px;">
+            ${auditConversations.map(c => {
+              const labelRepo = c.repoName ? `[${c.repoName}] ` : '';
+              const msgCount = Array.isArray(c.messages) ? c.messages.length : 0;
+              const suffix = msgCount > 0 ? ` (${msgCount})` : '';
+              return `<option value="${escapeHtml(c.id)}" ${c.id === state.id ? 'selected' : ''}>${escapeHtml(labelRepo + (c.title || 'Chat') + suffix)}</option>`;
+            }).join('')}
+          </select>
+        </label>
+        <button type="button" id="audit-chat-new" class="table-view-btn">${auditLabel('+ New chat', '＋ 新しいチャット')}</button>
+      </div>`
+    : '';
+
   section.innerHTML = `<div class="audit-chat-inner">
-    <header><h2>${auditLabel('Audit chat', '監査チャット')}</h2>
-      <p>${escapeHtml(selectedDiagram?.is_root ? '' : (selectedDiagram?.repo || ''))}</p>
+    <header>
+      <h2>${escapeHtml(displayTitle)}</h2>
+      <p style="font-size: 0.88rem; margin-top: 2px;">
+        ${auditLabel('Audit chat', '監査チャット')}${displayRepo ? ` · <strong>${escapeHtml(displayRepo)}</strong>` : ''}
+      </p>
+      ${historyOptionsHtml}
       ${aiStatusHtml}
     </header>
     ${!selectedDiagram || selectedDiagram.is_root ? `<p>${auditLabel('Select a saved repository from the sidebar.', 'サイドバーから保存済みのリポジトリを選択してください。')}</p>` : `
@@ -12256,9 +12505,9 @@ function renderAuditChat() {
           <input name="line" type="number" min="1" max="1000000" value="${escapeHtml(state.line)}"></label>
       </div>`}
     <div class="audit-chat-messages" aria-live="polite">
-      ${state.greeting ? `<article>
+      ${(state.greetingHtml || state.greeting) ? `<article>
         <strong>${escapeHtml(state.selectedProvider === 'copilot' ? 'GitHub Copilot' : 'AI')}</strong>
-        <p style="white-space: pre-line;">${escapeHtml(state.greeting)}</p>
+        ${state.greetingHtml ? `<div style="margin-top: 6px;">${state.greetingHtml}</div>` : `<p style="white-space: pre-line;">${escapeHtml(state.greeting)}</p>`}
       </article>` : ''}
       ${state.latest ? `<details><summary>${auditLabel('Latest GitHub evidence', '最新のGitHub確認結果')}</summary>
         ${state.latest.path ? sourceComparison(state.latest) : repositoryFacts(state.latest)}</details>` : ''}
@@ -12287,9 +12536,23 @@ function renderAuditChat() {
       <p class="audit-note">${auditLabel('Your question, recent conversation and evidence metadata are sent to the configured AI provider.', '質問・直近の会話・監査の比較結果を設定済みAIに送ります。')}</p>
     </form>`}
   </div>`;
+  const historySelect = section.querySelector('#audit-chat-history');
+  if (historySelect) {
+    historySelect.onchange = () => selectAuditConversationById(historySelect.value);
+  }
+  const newChatBtn = section.querySelector('#audit-chat-new');
+  if (newChatBtn) {
+    newChatBtn.onclick = () => openAuditChat(null, state.selectedProvider || '', true);
+  }
   const providerSelect = section.querySelector('#audit-chat-provider');
   if (providerSelect) {
-    providerSelect.onchange = () => { state.selectedProvider = providerSelect.value; };
+    providerSelect.onchange = () => {
+      state.selectedProvider = providerSelect.value;
+      saveAuditConversations();
+    };
+  }
+  for (const btn of section.querySelectorAll('[data-jump-repo]')) {
+    btn.onclick = () => jumpToAuditRepoPage(btn.dataset.jumpRepo, btn.dataset.jumpFinding || '');
   }
   for (const btn of section.querySelectorAll('[data-audit-suggestion]')) {
     btn.onclick = () => {
@@ -12303,6 +12566,12 @@ function renderAuditChat() {
   const input = section.querySelector('textarea');
   if (!input) return;
   input.oninput = () => { state.draft = input.value; };
+  input.onkeydown = event => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
+      event.preventDefault();
+      sendAuditQuestion(state);
+    }
+  };
   for (const field of section.querySelectorAll('.audit-chat-location input')) {
     field.oninput = () => { state[field.name] = field.value; };
   }
@@ -12328,10 +12597,22 @@ async function sendAuditQuestion(state) {
   state.error = '';
   state.draft = '';
   state.messages.push({role: 'user', text: question});
+  saveAuditConversations();
   renderAuditChat();
   try {
+    const findingPayload = state.context && (state.context.title || state.context.desc)
+      ? {
+          finding: {
+            title: state.context.title || '',
+            severity: state.context.severity || '',
+            path: state.context.path || '',
+            line: state.context.line || '',
+            desc: state.context.desc || ''
+          }
+        }
+      : {};
     const response = await auditRequest('chat', {
-      repository: state.repository, ...location, question, history, language: currentLang,
+      repository: state.repository, ...location, ...findingPayload, question, history, language: currentLang,
       ...(state.selectedProvider ? {provider: state.selectedProvider} : {})
     });
     state.latest = response;
@@ -12349,6 +12630,7 @@ async function sendAuditQuestion(state) {
     state.messages.pop();
   } finally {
     state.pending = false;
+    saveAuditConversations();
     if (auditConversation === state && auditChatVisible()) renderAuditChat();
   }
 }

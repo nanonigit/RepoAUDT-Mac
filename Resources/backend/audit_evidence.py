@@ -424,7 +424,7 @@ def recorded_source(revision, path, number, items):
     return None
 
 
-def chat_answer(payload, evidence):
+def chat_answer(payload, evidence, repo=None):
     prompt = payload.get("question")
     history = payload.get("history", [])
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 4000:
@@ -455,6 +455,50 @@ def chat_answer(payload, evidence):
     for key in line_keys:
         if evidence.get(key):
             facts[key] = {k: v for k, v in evidence[key].items() if k != "text"}
+    if isinstance(repo, dict):
+        cr = repo.get("coderabbit") or {}
+        raw_findings = list(cr.get("action_items") or []) + list(cr.get("findings") or [])
+        seen_titles = set()
+        summarized_findings = []
+        for item in raw_findings:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            if not title or title in seen_titles:
+                continue
+            seen_titles.add(title)
+            summarized_findings.append(
+                {
+                    "severity": item.get("severity"),
+                    "title": title,
+                    "file": item.get("file"),
+                    "desc": str(item.get("desc") or item.get("comment") or "")[:500],
+                }
+            )
+            if len(summarized_findings) >= 15:
+                break
+        if summarized_findings:
+            facts["saved_findings"] = summarized_findings
+        advisories = (repo.get("deps") or {}).get("security_advisories") or []
+        if advisories:
+            facts["security_advisories"] = [
+                {
+                    "cve": a.get("cve") or a.get("id"),
+                    "pkg": a.get("pkg"),
+                    "installed": a.get("installed"),
+                    "fixed_in": a.get("fixed_in"),
+                    "severity": a.get("severity"),
+                    "summary": str(a.get("summary") or "")[:400],
+                }
+                for a in advisories[:15]
+                if isinstance(a, dict)
+            ]
+    if isinstance(payload.get("finding"), dict):
+        facts["selected_finding"] = {
+            k: v
+            for k, v in payload["finding"].items()
+            if k in ("title", "severity", "path", "line", "desc") and v
+        }
     system = (
         "You are a defensive repository audit assistant. Answer in "
         + ("English" if payload.get("language") == "en" else "Japanese")
@@ -549,6 +593,9 @@ def handle(payload, state, chat=False, *, pull_request=False):
         )
     saved = str(repo.get("commit_hash", ""))
     path, number = payload.get("path"), payload.get("line")
+    search_term = payload.get("search")
+    if search_term is not None and (not isinstance(search_term, str) or len(search_term) > 120):
+        raise EvidenceError("Invalid search term.")
     if path is not None and (
         not isinstance(path, str)
         or not path
@@ -556,8 +603,10 @@ def handle(payload, state, chat=False, *, pull_request=False):
         or "\\" in path
         or any(ord(c) < 32 for c in path)
         or any(p in ("", ".", "..") for p in path.split("/"))
-        or type(number) is not int
-        or not 1 <= number <= 1_000_000
+        or (
+            not (isinstance(search_term, str) and search_term.strip() and number is None)
+            and (type(number) is not int or not 1 <= number <= 1_000_000)
+        )
     ):
         raise EvidenceError(
             "Enter a repository-relative source path and a valid line number."
@@ -601,6 +650,22 @@ def handle(payload, state, chat=False, *, pull_request=False):
         }
     status["repository_url"] = "https://github.com/" + url[1]
     if path and not status.get("latest_unavailable"):
+        if number is None and isinstance(search_term, str) and search_term.strip():
+            needle = search_term.strip().lower()
+            probe_sha = status.get("head") or status.get("saved_sha")
+            probe_lines = read_file(root, path, probe_sha) if probe_sha else None
+            if probe_lines:
+                matched_line = next(
+                    (
+                        idx
+                        for idx, text in enumerate(probe_lines, 1)
+                        if f'"{needle}"' in text.lower() or needle in text.lower()
+                    ),
+                    None,
+                )
+                number = matched_line or 1
+            else:
+                number = 1
         legacy_alert = payload.get("legacy_password_alert") is not False and any(
             "Database / Hardcoded Password" in str(item.get("title", ""))
             and "シークレット漏洩検知" in str(item.get("title", ""))
@@ -630,4 +695,4 @@ def handle(payload, state, chat=False, *, pull_request=False):
         )
         if legacy_alert:
             status["saved_rule"] = "generic hardcoded password"
-    return {**status, **chat_answer(payload, status)} if chat else status
+    return {**status, **chat_answer(payload, status, repo=repo)} if chat else status

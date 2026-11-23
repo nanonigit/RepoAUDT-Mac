@@ -6960,7 +6960,9 @@ def build_portal_html(data, is_shareable=False):
       const origText = btnEl ? btnEl.innerHTML : '';
       if (btnEl) {
         btnEl.disabled = true;
-        btnEl.innerHTML = isEn ? '⏳ Scanning...' : '⏳ 再スキャン中...';
+        btnEl.innerHTML = isEn
+          ? '<span style="display:inline-flex;align-items:center;gap:6px;"><span class="audit-spinner" aria-hidden="true"></span><span>Scanning…</span></span>'
+          : '<span style="display:inline-flex;align-items:center;gap:6px;"><span class="audit-spinner" aria-hidden="true"></span><span>再スキャン中…</span></span>';
       }
       showToast(isEn ? `🔄 Re-scanning ${targetUrl}...` : `🔄 「${targetUrl}」を最新状態に再スキャンしています...`, 'info');
       await runGitHubRepoAnalysis(targetUrl);
@@ -8647,12 +8649,27 @@ def build_portal_html(data, is_shareable=False):
               const name = encodeURIComponent(repo.repo || '').replace(/'/g, '%27');
               const prompt = encodeURIComponent(buildAiAgentFixPrompt(repo.repo, issue)).replace(/'/g, '%27');
               let sourceLink = '';
+              const inferredSourceUrl = (() => {
+                if (issue.official_source) return issue.official_source;
+                const combined = `${issue.title || ''} ${issue.desc || ''} ${issue.comment || ''}`;
+                const ghsa = combined.match(/\b(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\b/i);
+                if (ghsa) return `https://osv.dev/vulnerability/${ghsa[1]}`;
+                const cve = combined.match(/\b(CVE-\d{4}-\d{4,})\b/i);
+                if (cve) return `https://nvd.nist.gov/vuln/detail/${cve[1].toUpperCase()}`;
+                return '';
+              })();
               try {
-                const source = new URL(issue.official_source);
-                if (source.protocol === 'https:' || source.protocol === 'http:') {
-                  sourceLink = `<a href="${escapeHtml(source.href)}" target="_blank" rel="noopener noreferrer">${en ? 'View source' : '出典を確認'} ↗</a>`;
+                if (inferredSourceUrl) {
+                  const source = new URL(inferredSourceUrl);
+                  if (source.protocol === 'https:' || source.protocol === 'http:') {
+                    sourceLink = `<a href="${escapeHtml(source.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.href)} ↗</a>`;
+                  }
                 }
               } catch (_) { /* A finding can legitimately have no external advisory. */ }
+              const osvPkgMatch = String(issue.title || '').match(/\[OSV[^\]]*\]\s+([^\s(]+)/);
+              const evidenceCmd = osvPkgMatch
+                ? `grep -n '"${osvPkgMatch[1]}"' ${String(file || 'package.json').split(' ')[0].split(':')[0]}`
+                : '';
               return `<details class="audit-issue">
                 <summary>
                   <span class="issue-severity ${tone}"><span aria-hidden="true">${tone === 'danger' ? '⛔' : tone === 'warning' ? '△' : tone === 'info' ? 'ⓘ' : '—'}</span> ${escapeHtml(severity.toUpperCase())}</span>
@@ -8666,6 +8683,12 @@ def build_portal_html(data, is_shareable=False):
                   <div class="saved-finding-description">
                   <h3>${en ? 'Recorded evidence and reason' : '保存された根拠と理由'}</h3>
                   <p>${escapeHtml((en && issue.desc_en) || issue.desc || issue.comment || issue.summary || (en ? 'No additional evidence recorded.' : '追加の根拠は記録されていません。'))}</p>
+                  ${evidenceCmd ? `<p style="font-size: 0.82rem; color: var(--workspace-muted);">
+                    ${en ? 'Detected from manifest:' : 'バージョン検出元:'} <code>${escapeHtml(String(file || 'package.json').split(' ')[0])}</code> · <code>${escapeHtml(evidenceCmd)}</code>
+                  </p>` : ''}
+                  ${sourceLink ? `<p style="font-size: 0.82rem; word-break: break-all;">
+                    ${en ? 'Advisory URL:' : '脆弱性情報 URL:'} ${sourceLink}
+                  </p>` : ''}
                   ${!String(issue.scanner || '').startsWith('runtime-') ? `<h3>${en ? 'Potential impact' : '想定される影響'}</h3>
                   <p>${escapeHtml(explainWhatCouldHappen(issue, en))}</p>` : ''}
                   ${issue.diff ? `<h3>${en ? 'Suggested change' : '修正案'}</h3><pre>${escapeHtml(issue.diff)}</pre>` : ''}
@@ -8677,6 +8700,7 @@ def build_portal_html(data, is_shareable=False):
                   ` : ''}
                   <div class="issue-actions">
                     ${issue.scanner !== 'runtime-inventory' ? `<button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${prompt}">${en ? 'Copy fix prompt' : '修正プロンプトをコピー'}</button>` : ''}
+                    <button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${report}">${en ? 'Copy report' : 'レポートをコピー'}</button>
                     <button type="button" class="table-view-btn" onclick="downloadSingleActionReport('${report}', '${name}')">${en ? 'Save report' : 'レポートを保存'}</button>
                     ${sourceLink}
                   </div>

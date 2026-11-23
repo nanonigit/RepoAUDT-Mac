@@ -462,14 +462,7 @@ struct MainContentView: View {
 
     private var dashboard: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(english ? "Understand your code. Plan the next fix." : "コードを把握して、次の修正へ")
-                        .font(.title.bold())
-                    Text(english ? "Review saved analyses or add a GitHub repository." :
-                            "保存済みの解析を確認するか、GitHub リポジトリを追加してください。")
-                        .font(.body).foregroundStyle(.secondary)
-                }
+            VStack(alignment: .leading, spacing: 24) {
                 GroupBox {
                     HStack(spacing: 20) {
                         Image(systemName: "checkmark.shield").font(.system(size: 32)).foregroundStyle(SemanticColors.role("actionText"))
@@ -600,7 +593,7 @@ struct MainContentView: View {
                 coordinator.page = .chat
                 coordinator.send("copilot-chat", value: repo.id)
             } label: {
-                Label(english ? "Ask Copilot" : "Copilot に相談", systemImage: "bubble.left.and.bubble.right")
+                Label(english ? "Ask AI / Copilot" : "AI / Copilot に相談", systemImage: "bubble.left.and.bubble.right")
             }
         }
 
