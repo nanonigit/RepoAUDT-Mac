@@ -8831,10 +8831,25 @@ def build_portal_html(data, is_shareable=False):
       const kpiCardStyle = active => `padding: 10px 12px; border-radius: 10px; border: 1px solid ${active ? 'var(--workspace-accent)' : 'var(--workspace-border)'}; background: var(--workspace-surface); cursor: pointer; text-align: left; display: grid; gap: 4px;`;
       const tabBtnStyle = active => `padding: 6px 12px; border-radius: 8px; border: 1px solid ${active ? 'var(--workspace-accent)' : 'var(--workspace-border)'}; background: ${active ? 'rgba(56, 189, 248, 0.14)' : 'transparent'}; color: var(--workspace-text); font-size: 0.84rem; font-weight: ${active ? '600' : '500'}; cursor: pointer;`;
 
+      const posture = repo.github_posture || null;
+      const postureBadgesHtml = posture ? [
+        posture.visibility && posture.visibility !== 'unknown'
+          ? `<span class="issue-severity ${posture.visibility === 'PUBLIC' ? 'danger' : 'neutral'}" style="font-weight:700;">${escapeHtml(posture.visibility)}</span>`
+          : '',
+        posture.default_branch_protected === true
+          ? `<span class="issue-severity info">🛡️ Branch Protected</span>`
+          : (posture.default_branch_protected === false ? `<span class="issue-severity warning">⚠️ Unprotected Branch</span>` : ''),
+        posture.secret_scanning_enabled === true ? `<span class="issue-severity neutral">🔑 Secret Scanning</span>` : '',
+        posture.dependabot_alerts_enabled === true ? `<span class="issue-severity neutral">📦 Dependabot</span>` : ''
+      ].filter(Boolean).join('') : '';
+
       view.innerHTML = `
         <section class="workspace-audit">
           <div class="workspace-audit-heading">
-            <h2>${en ? 'Security Triage & Findings' : 'セキュリティ監査・トリアージ'}</h2>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <h2>${en ? 'Security Triage & Findings' : 'セキュリティ監査・トリアージ'}</h2>
+              ${postureBadgesHtml}
+            </div>
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
               <span>${en ? `${issues.length} shown / ${enrichedIssues.length} total` : `表示 ${issues.length}件 / 全${enrichedIssues.length}件`}${repoAuditDateFull ? ` · ${en ? 'Audited' : '指摘日'}: ${escapeHtml(repoAuditDateFull)}` : ''}</span>
               <select id="finding-sort-select" aria-label="${en ? 'Sort findings' : '指摘の並び替え'}" style="font-size: 0.82rem; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-surface); color: var(--workspace-text);">

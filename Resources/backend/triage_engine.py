@@ -134,8 +134,13 @@ def annotate_windows_cve_reachability(item: Dict[str, Any], is_linux_repo: bool)
 
 
 def classify_category(item: Dict[str, Any]) -> str:
-    """Classify finding into Secrets, Dependencies (SCA), CI/CD, IaC, or SAST."""
+    """Classify finding into malware, eol, Secrets, Dependencies (SCA), CI/CD, IaC, or SAST."""
     title = str(item.get("title") or "").lower()
+    explicit_cat = str(item.get("category") or "").strip().lower()
+    if item.get("is_malware") or explicit_cat == "malware" or "マルウェアパッケージ検出" in title:
+        return "malware"
+    if explicit_cat == "eol" or "[eol検出]" in title:
+        return "eol"
     scanner = str(item.get("scanner") or "").lower()
     file_loc = str(item.get("file") or "").lower()
     if (
@@ -201,7 +206,9 @@ def classify_priority_tier(item: Dict[str, Any], kev_set: Optional[Set[str]] = N
     if in_kev:
         item["in_cisa_kev"] = True
 
-    # P0: Real secret leaks or committed .env files
+    # P0: Malicious packages (MAL-*) or real secret leaks / committed .env files
+    if item.get("is_malware") or str(item.get("category") or "").lower() == "malware" or "マルウェアパッケージ検出" in title:
+        return "P0", "OpenSSF Malicious Package (MAL-*) — 即時アンインストール・侵害調査が必要"
     if (
         "シークレット設定ファイル漏洩" in title
         or "シークレット漏洩検知" in title

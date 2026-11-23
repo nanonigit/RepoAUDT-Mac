@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 ENDOFLIFE_API_TEMPLATE = "https://endoflife.date/api/{product}.json"
-CACHE_TTL_SECONDS = 12 * 3600
+CACHE_TTL_SECONDS = 24 * 3600
 DEFAULT_TIMEOUT_SECONDS = 2.5
 
 PRODUCT_ALIASES: Dict[str, str] = {
@@ -23,6 +23,9 @@ PRODUCT_ALIASES: Dict[str, str] = {
     "node": "nodejs",
     "nodejs": "nodejs",
     "node.js": "nodejs",
+    "next": "nextjs",
+    "nextjs": "nextjs",
+    "react": "react",
     "go": "go",
     "golang": "go",
     "php": "php",
@@ -33,7 +36,7 @@ PRODUCT_ALIASES: Dict[str, str] = {
     "java": "java",
 }
 
-MAJOR_ONLY_PRODUCTS = {"nodejs", "postgresql", "java"}
+MAJOR_ONLY_PRODUCTS = {"nodejs", "postgresql", "java", "nextjs", "react"}
 
 # Minimal offline fallback so air-gapped environments still get accurate baseline EOL warnings.
 STATIC_EOL_FALLBACK: Dict[str, List[Dict[str, Any]]] = {
@@ -65,6 +68,18 @@ STATIC_EOL_FALLBACK: Dict[str, List[Dict[str, Any]]] = {
         {"cycle": "1.23", "eol": False, "latest": "1.23.7"},
         {"cycle": "1.22", "eol": "2025-02-11", "latest": "1.22.12"},
         {"cycle": "1.21", "eol": "2024-08-13", "latest": "1.21.13"},
+    ],
+    "nextjs": [
+        {"cycle": "16", "eol": False, "latest": "16.4.5"},
+        {"cycle": "15", "eol": False, "latest": "15.5.29"},
+        {"cycle": "14", "eol": "2025-10-26", "latest": "14.2.35"},
+        {"cycle": "13", "eol": "2024-10-25", "latest": "13.5.8"},
+        {"cycle": "12", "eol": "2023-10-26", "latest": "12.3.4"},
+    ],
+    "react": [
+        {"cycle": "19", "eol": False, "latest": "19.1.0"},
+        {"cycle": "18", "eol": False, "latest": "18.3.1"},
+        {"cycle": "17", "eol": "2022-06-14", "latest": "17.0.2"},
     ],
 }
 
@@ -220,6 +235,13 @@ def evaluate_runtime_eol(
         )
         eol_val = matched.get("eol")
         is_eol = _is_cycle_eol(eol_val, today_iso)
+        eol_over_1y = False
+        if is_eol and isinstance(eol_val, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", eol_val.strip()):
+            try:
+                days_past = (date.fromisoformat(today_iso) - date.fromisoformat(eol_val.strip())).days
+                eol_over_1y = days_past >= 365
+            except ValueError:
+                pass
         results.append(
             {
                 "product": slug,
@@ -227,9 +249,67 @@ def evaluate_runtime_eol(
                 "cycle": str(matched.get("cycle", "")),
                 "eol": eol_val,
                 "is_eol": is_eol,
+                "eol_over_1y": eol_over_1y,
                 "latest": matched.get("latest"),
                 "latest_active_cycle": str(latest_active.get("cycle", "")) if latest_active else None,
                 "source": source,
             }
         )
     return results
+
+
+def extract_repo_runtime_and_framework_versions(repo_dir: Path) -> Dict[str, str]:
+    """Extract major runtime/framework versions from package.json, .nvmrc, Dockerfile, and pyproject.toml."""
+    found: Dict[str, str] = {}
+    if not repo_dir or not repo_dir.exists():
+        return found
+
+    pkg_json = repo_dir / "package.json"
+    if pkg_json.is_file():
+        try:
+            pdata = json.loads(pkg_json.read_text(encoding="utf-8", errors="ignore"))
+            engines = pdata.get("engines") or {}
+            if engines.get("node"):
+                found["nodejs"] = str(engines["node"])
+            deps = {}
+            deps.update(pdata.get("dependencies") or {})
+            deps.update(pdata.get("devDependencies") or {})
+            if deps.get("next"):
+                found["nextjs"] = str(deps["next"])
+            if deps.get("react"):
+                found["react"] = str(deps["react"])
+        except Exception:
+            pass
+
+    nvmrc = repo_dir / ".nvmrc"
+    if nvmrc.is_file() and "nodejs" not in found:
+        try:
+            txt = nvmrc.read_text(encoding="utf-8", errors="ignore").strip()
+            if txt:
+                found["nodejs"] = txt
+        except OSError:
+            pass
+
+    pyproject = repo_dir / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            txt = pyproject.read_text(encoding="utf-8", errors="ignore")
+            m_py = re.search(r'requires-python\s*=\s*["\']([^"\']+)["\']', txt)
+            if m_py:
+                found["python"] = m_py.group(1)
+        except OSError:
+            pass
+
+    for df in repo_dir.rglob("Dockerfile*"):
+        if not df.is_file():
+            continue
+        try:
+            txt = df.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for m_node in re.finditer(r"^\s*FROM\s+(?:node):(\d+(?:\.\d+)?)", txt, re.MULTILINE | re.IGNORECASE):
+            found.setdefault("nodejs", m_node.group(1))
+        for m_py in re.finditer(r"^\s*FROM\s+(?:python):(\d+\.\d+)", txt, re.MULTILINE | re.IGNORECASE):
+            found.setdefault("python", m_py.group(1))
+
+    return found

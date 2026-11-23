@@ -926,6 +926,7 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
     """Group OSV/Trivy advisories by (manifest_dir, ecosystem, package_name) into one remediation item."""
     from source_scanners import select_safe_upgrade_version
 
+    malware_items: List[Dict[str, Any]] = []
     groups: Dict[tuple[str, str, str], Dict[str, Any]] = {}
     order: List[tuple[str, str, str]] = []
     manifest_names = ("package.json", "requirements.txt", "pyproject.toml", "go.mod", "composer.json", "cargo.toml")
@@ -943,6 +944,33 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
         installed = str(adv.get("installed") or adv.get("installed_version") or "").strip()
         rem_preview = build_advisory_remediation(adv)
         target_file = str(adv.get("target") or "").removeprefix("./").strip() or rem_preview["file"]
+
+        if adv.get("is_malware") or str(adv.get("category") or "").lower() == "malware" or str(adv.get("osv_id") or "").startswith("MAL-"):
+            mal_id = str(adv.get("osv_id") or adv.get("cve") or "MAL-UNKNOWN")
+            if eco_low == "pypi":
+                uninstall_cmd = f"pip uninstall -y {pkg_name}"
+            elif eco_low == "npm":
+                uninstall_cmd = f"npm uninstall {pkg_name}"
+            else:
+                uninstall_cmd = f"# Immediately remove malicious package {pkg_name} from {target_file}"
+            malware_items.append({
+                "severity": "critical",
+                "priority_tier": "P0",
+                "category": "malware",
+                "is_malware": True,
+                "package_name": pkg_name,
+                "title": adv.get("title") or f"🚨 [マルウェアパッケージ検出] {pkg_name}@{installed} ({mal_id})",
+                "file": target_file,
+                "desc": adv.get("summary") or (
+                    f"`{pkg_name}` ({mal_id}) は悪意あるマルウェアパッケージです。"
+                    " バージョン上げではなく、直ちにアンインストールし、ビルド環境・認証情報の侵害有無を確認してください。"
+                ),
+                "diff": "",
+                "fix_cmd": uninstall_cmd,
+                "official_source": (adv.get("sources") or [{}])[0].get("url", "") if isinstance(adv.get("sources"), list) and adv.get("sources") else "",
+            })
+            continue
+
         manifest_dir = str(Path(target_file).parent)
         key = (manifest_dir, eco_low, pkg_name.lower())
 
@@ -1026,7 +1054,7 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
             "package_name": pkg_name,
             **({"epss_score": g["epss_score"]} if g.get("epss_score") is not None else {}),
         })
-    return grouped_items
+    return malware_items + grouped_items
 
 
 def run_coderabbit_static_audit(
@@ -1287,6 +1315,110 @@ def extract_data_models_from_repo(repo_dir: Path, repo_name: str) -> Dict[str, A
     return schemas
 
 
+def fetch_github_posture(
+    owner_repo: str,
+    *,
+    gh_runner: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Fetch GitHub repository posture (visibility, branch protection, secret scanning, dependabot)."""
+    posture: Dict[str, Any] = {
+        "visibility": "unknown",
+        "default_branch_protected": "unknown",
+        "secret_scanning_enabled": "unknown",
+        "dependabot_alerts_enabled": "unknown",
+    }
+    if not owner_repo or "/" not in owner_repo:
+        return posture
+
+    def _run_gh_json(endpoint: str) -> Optional[Any]:
+        if gh_runner is not None:
+            return gh_runner(endpoint)
+        gh_bin = next((p for p in ("/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh") if os.access(p, os.X_OK)), None)
+        if not gh_bin:
+            return None
+        try:
+            proc = subprocess.run(
+                [gh_bin, "api", endpoint],
+                capture_output=True,
+                text=True,
+                timeout=6,
+                check=False,
+            )
+            if proc.returncode != 0 or not proc.stdout.strip():
+                return None
+            return json.loads(proc.stdout)
+        except Exception:
+            return None
+
+    repo_data = _run_gh_json(f"repos/{owner_repo}")
+    if not isinstance(repo_data, dict):
+        return posture
+
+    vis = str(repo_data.get("visibility") or "").upper()
+    if vis in ("PUBLIC", "PRIVATE", "INTERNAL"):
+        posture["visibility"] = vis
+    elif isinstance(repo_data.get("private"), bool):
+        posture["visibility"] = "PRIVATE" if repo_data["private"] else "PUBLIC"
+
+    sec_analysis = repo_data.get("security_and_analysis")
+    if isinstance(sec_analysis, dict):
+        ss = sec_analysis.get("secret_scanning")
+        if isinstance(ss, dict) and ss.get("status") in ("enabled", "disabled"):
+            posture["secret_scanning_enabled"] = ss["status"] == "enabled"
+        dep = sec_analysis.get("dependabot_security_updates")
+        if isinstance(dep, dict) and dep.get("status") in ("enabled", "disabled"):
+            posture["dependabot_alerts_enabled"] = dep["status"] == "enabled"
+
+    default_branch = str(repo_data.get("default_branch") or "").strip()
+    if default_branch:
+        prot = _run_gh_json(f"repos/{owner_repo}/branches/{default_branch}/protection")
+        if isinstance(prot, dict):
+            if "url" in prot or "required_status_checks" in prot or "enforce_admins" in prot:
+                posture["default_branch_protected"] = True
+            elif "Branch not protected" in str(prot.get("message") or ""):
+                posture["default_branch_protected"] = False
+        elif prot is False:
+            posture["default_branch_protected"] = False
+
+    return posture
+
+
+def apply_github_posture_to_audit(
+    coderabbit_obj: Dict[str, Any],
+    posture: Dict[str, Any],
+    repo_name: str,
+) -> None:
+    """Link GitHub posture risks (PUBLIC secret exposure alert, unprotected default branch P2)."""
+    if not isinstance(coderabbit_obj, dict) or not isinstance(posture, dict):
+        return
+    is_public = posture.get("visibility") == "PUBLIC"
+    for lst_key in ("action_items", "findings"):
+        items = coderabbit_obj.get(lst_key) or []
+        if is_public:
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                if it.get("category") == "Secrets" or "シークレット" in str(it.get("title") or ""):
+                    desc = str(it.get("desc") or "")
+                    warn_prefix = "⚠️ 公開（PUBLIC）リポジトリのため即時侵害リスクあり — "
+                    if warn_prefix not in desc:
+                        it["desc"] = warn_prefix + desc
+        if posture.get("default_branch_protected") is False:
+            already = any("Branch Protection" in str(it.get("title") or "") for it in items if isinstance(it, dict))
+            if not already:
+                items.append({
+                    "severity": "medium",
+                    "priority_tier": "P2",
+                    "priority_reason": "デフォルトブランチ保護が無効（直接push/強制上書きリスク）",
+                    "category": "CI/CD",
+                    "title": "[GitHub設定監査] デフォルトブランチの保護（Branch Protection）が無効です",
+                    "file": ".github/settings (Branch Protection)",
+                    "desc": f"`{repo_name}` のデフォルトブランチに Branch Protection Rules が設定されていません。直接 push 防止と必須レビュー/CIチェックの有効化を推奨します。",
+                    "official_source": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches",
+                })
+                coderabbit_obj[lst_key] = items
+
+
 def analyze_repository(
     raw_url_or_slug: str,
     category_label: str = "GitHub Analyzed",
@@ -1415,10 +1547,19 @@ def analyze_checkout(
     if not desc:
         desc = f"{owner}/{repo} の自動解析アーキテクチャ構成図・シーケンスフロー・CodeRabbit監査レポート"
 
+    github_posture = fetch_github_posture(f"{owner}/{repo}") if owner != "local" else {
+        "visibility": "unknown",
+        "default_branch_protected": "unknown",
+        "secret_scanning_enabled": "unknown",
+        "dependabot_alerts_enabled": "unknown",
+    }
+    apply_github_posture_to_audit(coderabbit, github_posture, f"{owner}/{repo}")
+
     diagram_entry = {
         "id": f"gh-{owner}-{repo}-overall".lower(),
         "repo": f"{owner}/{repo}" if owner != "local" else repo,
         "repo_slug": repo,
+        "github_posture": github_posture,
         "category": category_label,
         "perspective": "overall-architecture",
         "diagram": mermaid_code,

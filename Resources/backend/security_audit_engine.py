@@ -22,7 +22,7 @@ import copilot_bridge
 from workflow_audit import MAX_FILES, find_template_injections_in_workflow, read_small_file, run_actionlint, run_zizmor, workflow_files
 from source_scanners import scan_semgrep_and_trivy, scan_source
 from runtime_patches import scan_runtime_patches
-from eol_checker import evaluate_runtime_eol
+from eol_checker import evaluate_runtime_eol, extract_repo_runtime_and_framework_versions
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -242,6 +242,100 @@ def _extract_osv_fixed_version(
     return chosen or None
 
 
+def _build_osv_advisory_entries(
+    eco: str,
+    pkg_name: str,
+    clean_ver: str,
+    vulns: List[Dict[str, Any]],
+    *,
+    fetch_details: bool = True,
+) -> List[Dict[str, Any]]:
+    """Convert OSV vulnerabilities for a package into advisory dicts, separating MAL-* malware."""
+    if not vulns:
+        return []
+    entries: List[Dict[str, Any]] = []
+    mal_vulns = [v for v in vulns if str(v.get("id") or "").startswith("MAL-")]
+    cve_vulns = [v for v in vulns if not str(v.get("id") or "").startswith("MAL-")]
+
+    for mv in mal_vulns:
+        mal_id = str(mv.get("id") or "MAL-UNKNOWN")
+        entries.append({
+            "package_name": pkg_name,
+            "ecosystem": eco,
+            "pkg": f"{pkg_name} ({eco})",
+            "installed": clean_ver,
+            "fixed_version": None,
+            "safe_version": None,
+            "cve": mal_id,
+            "osv_id": mal_id,
+            "is_malware": True,
+            "category": "malware",
+            "priority_tier": "P0",
+            "severity": "CRITICAL",
+            "title": f"🚨 [マルウェアパッケージ検出] {pkg_name}@{clean_ver} ({mal_id})",
+            "summary": (
+                f"OpenSSF Malicious Packages ({mal_id}) により `{pkg_name}@{clean_ver}` ({eco}) が悪意あるマルウェアとして報告されています。"
+                " バージョン上げではなく、直ちにアンインストールし、ビルド環境・認証情報の侵害有無を確認してください。"
+            ),
+            "impact": "依存パッケージインストール時の任意コード実行・認証情報窃取・サプライチェーン侵害の危険があります。",
+            "sources": [
+                {"name": f"OSV.dev ({mal_id})", "url": f"https://osv.dev/vulnerability/{mal_id}"},
+            ],
+        })
+
+    if cve_vulns:
+        v0 = cve_vulns[0]
+        vid = v0.get("id", "OSV-VULN")
+        aliases = list(v0.get("aliases") or [])
+        osv_summary = str(v0.get("summary") or "").strip()
+        osv_details = str(v0.get("details") or "").strip()
+        fixed_ver = _extract_osv_fixed_version(v0, pkg_name, eco, installed=clean_ver)
+        if fetch_details and (not osv_summary or not fixed_ver):
+            try:
+                vreq = urllib.request.Request(
+                    f"https://api.osv.dev/v1/vulns/{vid}",
+                    headers={"User-Agent": "RepoAUDT-SecuritySkill"},
+                )
+                with urllib.request.urlopen(vreq, timeout=4) as vresp:
+                    if getattr(vresp, "status", 200) == 200:
+                        vfull = json.loads(vresp.read().decode("utf-8", errors="ignore"))
+                        if not osv_summary:
+                            osv_summary = str(vfull.get("summary") or "").strip()
+                        if not osv_details:
+                            osv_details = str(vfull.get("details") or "").strip()
+                        if not fixed_ver:
+                            fixed_ver = _extract_osv_fixed_version(vfull, pkg_name, eco, installed=clean_ver)
+                        for al in vfull.get("aliases") or []:
+                            if al not in aliases:
+                                aliases.append(al)
+            except Exception:
+                pass
+        cve_alias = next((a for a in aliases if str(a).startswith("CVE-")), None)
+        display_cve = f"{vid} ({cve_alias})" if (cve_alias and cve_alias != vid) else (cve_alias or vid)
+        clean_details = re.sub(r"[#*`]+", "", osv_details).strip()
+        first_sentence = clean_details.split("\n\n")[0].replace("\n", " ")[:240] if clean_details else ""
+        detail_suffix = f" 脆弱性の内容: {osv_summary} ({first_sentence})" if osv_summary else ""
+        entries.append({
+            "package_name": pkg_name,
+            "ecosystem": eco,
+            "pkg": f"{pkg_name} ({eco})",
+            "installed": clean_ver,
+            "fixed_version": fixed_ver,
+            "safe_version": fixed_ver,
+            "cve": display_cve,
+            "osv_id": vid,
+            "severity": "HIGH",
+            "title": f"[OSV脆弱性検出] {pkg_name} v{clean_ver} ({display_cve})" + (f" — {osv_summary}" if osv_summary else ""),
+            "summary": f"OSV.dev 脆弱性データベースにおいて `{pkg_name}` ({eco}) バージョン `{clean_ver}` に既知の脆弱性 `{display_cve}` (計 {len(cve_vulns)} 件) が報告されています。{detail_suffix}",
+            "impact": first_sentence or osv_summary or "放置すると外部からの不正リクエストによって認証回避・情報漏洩・サービス妨害 (DoS) 等に悪用される危険があります。",
+            "sources": [
+                {"name": f"OSV.dev ({vid})", "url": f"https://osv.dev/vulnerability/{vid}"},
+                {"name": "GitHub Advisory", "url": f"https://github.com/advisories?query={pkg_name}"},
+            ],
+        })
+    return entries
+
+
 def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]]:
     """
     Query OSV.dev (Google Open Source Vulnerability MCP/API) for real CVEs across
@@ -282,55 +376,11 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                 for (eco, pkg_name, clean_ver), res_obj in zip(valid_pkgs, results):
                     vulns = res_obj.get("vulns") or []
                     if vulns:
-                        v0 = vulns[0]
-                        vid = v0.get("id", "OSV-VULN")
-                        aliases = list(v0.get("aliases") or [])
-                        osv_summary = str(v0.get("summary") or "").strip()
-                        osv_details = str(v0.get("details") or "").strip()
-                        fixed_ver = _extract_osv_fixed_version(v0, pkg_name, eco, installed=clean_ver)
-                        if (not osv_summary or not fixed_ver) and len(advisories) < 8:
-                            try:
-                                vreq = urllib.request.Request(
-                                    f"https://api.osv.dev/v1/vulns/{vid}",
-                                    headers={"User-Agent": "RepoAUDT-SecuritySkill"},
-                                )
-                                with urllib.request.urlopen(vreq, timeout=4) as vresp:
-                                    if getattr(vresp, "status", 200) == 200:
-                                        vfull = json.loads(vresp.read().decode("utf-8", errors="ignore"))
-                                        if not osv_summary:
-                                            osv_summary = str(vfull.get("summary") or "").strip()
-                                        if not osv_details:
-                                            osv_details = str(vfull.get("details") or "").strip()
-                                        if not fixed_ver:
-                                            fixed_ver = _extract_osv_fixed_version(vfull, pkg_name, eco, installed=clean_ver)
-                                        for al in vfull.get("aliases") or []:
-                                            if al not in aliases:
-                                                aliases.append(al)
-                            except Exception:
-                                pass
-                        cve_alias = next((a for a in aliases if str(a).startswith("CVE-")), None)
-                        display_cve = f"{vid} ({cve_alias})" if (cve_alias and cve_alias != vid) else (cve_alias or vid)
-                        clean_details = re.sub(r"[#*`]+", "", osv_details).strip()
-                        first_sentence = clean_details.split("\n\n")[0].replace("\n", " ")[:240] if clean_details else ""
-                        detail_suffix = f" 脆弱性の内容: {osv_summary} ({first_sentence})" if osv_summary else ""
-                        advisories.append({
-                            "package_name": pkg_name,
-                            "ecosystem": eco,
-                            "pkg": f"{pkg_name} ({eco})",
-                            "installed": clean_ver,
-                            "fixed_version": fixed_ver,
-                            "safe_version": fixed_ver,
-                            "cve": display_cve,
-                            "osv_id": vid,
-                            "severity": "HIGH",
-                            "title": f"[OSV脆弱性検出] {pkg_name} v{clean_ver} ({display_cve})" + (f" — {osv_summary}" if osv_summary else ""),
-                            "summary": f"OSV.dev 脆弱性データベースにおいて `{pkg_name}` ({eco}) バージョン `{clean_ver}` に既知の脆弱性 `{display_cve}` (計 {len(vulns)} 件) が報告されています。{detail_suffix}",
-                            "impact": first_sentence or osv_summary or "放置すると外部からの不正リクエストによって認証回避・情報漏洩・サービス妨害 (DoS) 等に悪用される危険があります。",
-                            "sources": [
-                                {"name": f"OSV.dev ({vid})", "url": f"https://osv.dev/vulnerability/{vid}"},
-                                {"name": "GitHub Advisory", "url": f"https://github.com/advisories?query={pkg_name}"},
-                            ],
-                        })
+                        advisories.extend(
+                            _build_osv_advisory_entries(
+                                eco, pkg_name, clean_ver, vulns, fetch_details=len(advisories) < 8
+                            )
+                        )
     except Exception as exc:
         print(f"Notice: OSV vulnerability query skipped/failed: {exc}", file=sys.stderr)
 
@@ -1077,7 +1127,28 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     source_scan = {**source_scan, **ext_scan}
     security_advisories = enrich_advisories_with_epss(security_advisories)
 
-    runtime_eol = evaluate_runtime_eol(runtime_info) if runtime_info else []
+    extracted_versions = extract_repo_runtime_and_framework_versions(Path(repo_dir))
+    merged_runtime = {**extracted_versions, **runtime_info}
+    runtime_eol = evaluate_runtime_eol(merged_runtime) if merged_runtime else []
+    for eol_item in runtime_eol:
+        if eol_item.get("is_eol"):
+            prod = eol_item["product"]
+            cyc = eol_item["cycle"]
+            eol_date = eol_item.get("eol")
+            latest_cyc = eol_item.get("latest_active_cycle") or "latest"
+            sev_eol = "high" if eol_item.get("eol_over_1y") else "medium"
+            sast_findings.append({
+                "severity": sev_eol,
+                "category": "eol",
+                "title": f"[EOL検出] {prod} {cyc} はサポート終了済みです (EOL: {eol_date})",
+                "file": f"package.json / Dockerfile (Target: {match_comp('package.json')})",
+                "target_node": match_comp("package.json"),
+                "desc": (
+                    f"`{prod}` の宣言バージョン `{eol_item.get('declared')}` (サイクル `{cyc}`) は {eol_date} にサポート終了 (EOL) しています。"
+                    f"セキュリティパッチが提供されないため、サポート中の `{latest_cyc}` 系へのアップグレードを推奨します。"
+                ),
+                "official_source": f"https://endoflife.date/{prod}",
+            })
 
     return {
         "frameworks": frameworks,
