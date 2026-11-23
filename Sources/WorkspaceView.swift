@@ -609,9 +609,13 @@ struct MainContentView: View {
                     Text(repo.name).font(.body.weight(.medium)).lineLimit(1)
                     HStack(spacing: 6) {
                         Text(repo.commit.isEmpty ? (english ? "Commit not recorded" : "コミット未記録") : String(repo.commit.prefix(10)))
-                        if let analyzedLabel = formattedAnalysisDate(repo.analyzedAt ?? repo.updatedAt) {
-                            Text("·")
+                        Text("·")
+                        if let analyzedLabel = formattedAnalysisDate(repo.analyzedAt) {
                             Text(english ? "Analyzed: \(analyzedLabel)" : "解析日時: \(analyzedLabel)")
+                        } else if let ghUpdated = formattedAnalysisDate(repo.updatedAt) {
+                            Text(english ? "Analysis date not recorded (GitHub updated: \(ghUpdated))" : "解析日時未記録 (GitHub更新: \(ghUpdated))")
+                        } else {
+                            Text(english ? "Analysis date not recorded" : "解析日時未記録")
                         }
                     }
                     .font(.caption.monospaced()).foregroundStyle(.secondary)
