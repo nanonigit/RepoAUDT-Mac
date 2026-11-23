@@ -1689,6 +1689,54 @@ def _is_legacy_dummy_lightweight_finding(item: Any) -> bool:
     return False
 
 
+def _is_legacy_noise_finding(item: Any) -> bool:
+    """Detect legacy false-positive findings that should be cleansed from saved state."""
+    if _is_legacy_dummy_lightweight_finding(item):
+        return True
+    if not isinstance(item, dict):
+        return False
+    title = str(item.get("title") or "")
+    file_loc = str(item.get("file") or "").split(" (Target:", 1)[0].split(":", 1)[0].strip().lower().replace("\\", "/")
+    base_name = file_loc.rsplit("/", 1)[-1]
+    is_example_env = (
+        base_name.startswith((".env.example", "env.example", "env.e2e.example"))
+        or base_name.endswith((".example", ".example.txt"))
+    )
+    is_test_file = (
+        any(seg in f"/{file_loc}" for seg in ("/__tests__/", "/tests/", "/test/"))
+        or ".test." in base_name
+        or ".spec." in base_name
+    )
+    if "Database / Hardcoded Password" in title and (is_test_file or is_example_env):
+        return True
+    if "Private Cryptographic Key" in title and is_example_env:
+        return True
+    if "(generic-api-key)" in title and (
+        is_example_env
+        or is_test_file
+        or ".docs." in base_name
+        or file_loc.endswith("source-manifest.json")
+        or "/seeds/" in f"/{file_loc}"
+    ):
+        return True
+    return False
+
+
+def _repair_legacy_remediation_fields(item: Dict[str, Any]) -> bool:
+    """Fix legacy hardcoded ^1.7.4 diffs and (npm)@latest commands in saved findings."""
+    changed = False
+    diff_val = str(item.get("diff") or "")
+    if ': "old"' in diff_val and ': "^1.7.4"' in diff_val:
+        item["diff"] = ""
+        changed = True
+    fix_cmd = str(item.get("fix_cmd") or "")
+    cleaned_cmd = re.sub(r"\s*\((?:npm|PyPI|Go|Packagist|crates\.io)\)@", "@", fix_cmd)
+    if cleaned_cmd != fix_cmd:
+        item["fix_cmd"] = cleaned_cmd
+        changed = True
+    return changed
+
+
 def _load_saved_analyses_unlocked() -> Dict[str, Any]:
     ensure_dirs()
     bak_file = STATE_FILE.with_suffix(STATE_FILE.suffix + ".bak")
@@ -1719,10 +1767,12 @@ def _load_saved_analyses_unlocked() -> Dict[str, Any]:
                 if isinstance(cr, dict):
                     raw_acts = cr.get("action_items") or []
                     raw_findings = cr.get("findings") or []
-                    acts = [a for a in raw_acts if not _is_legacy_dummy_lightweight_finding(a)]
-                    cleaned_findings = [f for f in raw_findings if not _is_legacy_dummy_lightweight_finding(f)]
+                    acts = [a for a in raw_acts if not _is_legacy_noise_finding(a)]
+                    cleaned_findings = [f for f in raw_findings if not _is_legacy_noise_finding(f)]
+                    repaired = any(_repair_legacy_remediation_fields(a) for a in acts if isinstance(a, dict))
+                    repaired = any(_repair_legacy_remediation_fields(f) for f in cleaned_findings if isinstance(f, dict)) or repaired
                     removed_dummy = (len(acts) != len(raw_acts)) or (len(cleaned_findings) != len(raw_findings))
-                    if removed_dummy:
+                    if removed_dummy or repaired:
                         cr["action_items"] = acts
                         cr["findings"] = cleaned_findings
                     st = cr.setdefault("stats", {})

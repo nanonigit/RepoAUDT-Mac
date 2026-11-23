@@ -104,7 +104,7 @@ def stage_sources(repo, directory, environment, *, python_only):
     return files, partial
 
 
-_DOC_OR_TEST_DIRS = {"__tests__", "tests", "test", "fixtures", "__fixtures__", "docs"}
+_DOC_OR_TEST_DIRS = {"__tests__", "tests", "test", "fixtures", "__fixtures__", "docs", "e2e", "seeds", "migrations"}
 _DOC_OR_TEST_PLACEHOLDERS = (
     "...",
     "unit-test-",
@@ -119,9 +119,18 @@ _DOC_OR_TEST_PLACEHOLDERS = (
 
 
 def _is_benign_generic_api_key(directory: Path, relative: str, line: int) -> bool:
-    """Return True if a generic-api-key hit is an obvious doc/test example or ellipsis sample."""
+    """Return True if a generic-api-key hit is an obvious doc/test/example/seed entry."""
+    rel_low = relative.lower().replace("\\", "/")
     parts = [p.lower() for p in Path(relative).parts]
     name = parts[-1] if parts else ""
+    if (
+        name.startswith((".env.example", "env.example", "env.e2e.example"))
+        or name.endswith((".example", ".example.txt"))
+        or rel_low.endswith("source-manifest.json")
+        or "/seeds/" in f"/{rel_low}"
+        or name.endswith((".test.ts", ".test.js", ".spec.ts", ".spec.js", ".docs.ts", ".docs.js"))
+    ):
+        return True
     is_doc_or_test = (
         any(p in _DOC_OR_TEST_DIRS for p in parts[:-1])
         or ".docs." in name
@@ -242,6 +251,13 @@ def scan_source(repo, match_component, *, include_quality=True):
             'description = "Ignore truncated JWT header-only documentation examples ending in ellipsis"\n'
             "regexes = [\n"
             "  '''eyJ[A-Za-z0-9_-]{10,}\\.\\.\\.'''\n"
+            "]\n\n"
+            "[[allowlists]]\n"
+            'description = "Ignore env example templates and integrity manifest hashes"\n'
+            "paths = [\n"
+            "  '''(^|/)\\.env(\\..+)?\\.example$''',\n"
+            "  '''(^|/)env(\\.e2e)?\\.example(\\.txt)?$''',\n"
+            "  '''\\.github/astra_review/source-manifest\\.json$'''\n"
             "]\n",
             encoding="utf-8",
         )

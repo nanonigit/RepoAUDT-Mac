@@ -598,6 +598,13 @@ def scan_secrets_and_credentials(
             except Exception:
                 rel_path = file_path.name
 
+            low_name = file_path.name.lower()
+            if (
+                low_name.startswith((".env.example", "env.example", "env.e2e.example"))
+                or low_name.endswith((".example", ".example.txt"))
+            ):
+                continue
+
             # Special check: committed .env or .env.local file
             if file_path.name in (".env", ".env.local", ".env.production", ".env.stage", "secrets.yml", "credentials.json"):
                 target_node = match_comp(rel_path)
