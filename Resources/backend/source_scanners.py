@@ -104,6 +104,45 @@ def stage_sources(repo, directory, environment, *, python_only):
     return files, partial
 
 
+_DOC_OR_TEST_DIRS = {"__tests__", "tests", "test", "fixtures", "__fixtures__", "docs"}
+_DOC_OR_TEST_PLACEHOLDERS = (
+    "...",
+    "unit-test-",
+    "example-",
+    "dummy-",
+    "mock-",
+    "fake-",
+    "placeholder",
+    "your_",
+    "changeme",
+)
+
+
+def _is_benign_generic_api_key(directory: Path, relative: str, line: int) -> bool:
+    """Return True if a generic-api-key hit is an obvious doc/test example or ellipsis sample."""
+    parts = [p.lower() for p in Path(relative).parts]
+    name = parts[-1] if parts else ""
+    is_doc_or_test = (
+        any(p in _DOC_OR_TEST_DIRS for p in parts[:-1])
+        or ".docs." in name
+        or ".test." in name
+        or ".spec." in name
+    )
+    if not is_doc_or_test:
+        return False
+    try:
+        lines = (directory / relative).read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return False
+    if not 1 <= line <= len(lines):
+        return False
+    stripped = lines[line - 1].strip()
+    low = stripped.lower()
+    is_comment = stripped.startswith(("*", "//", "#", "/*"))
+    has_placeholder = any(marker in low for marker in _DOC_OR_TEST_PLACEHOLDERS)
+    return is_comment or has_placeholder
+
+
 def parse_findings(scanner, raw, directory, files, match_component):
     data = json.loads(raw)
     if data is None and scanner == "gitleaks":
@@ -144,6 +183,8 @@ def parse_findings(scanner, raw, directory, files, match_component):
         if key in seen:
             continue
         seen.add(key)
+        if scanner == "gitleaks" and rule == "generic-api-key" and _is_benign_generic_api_key(directory, relative, line):
+            continue
         component = match_component(relative)
         findings.append(
             {
@@ -194,7 +235,16 @@ def scan_source(repo, match_component, *, include_quality=True):
             return [], statuses
 
         config = root / "gitleaks.toml"
-        config.write_text("[extend]\nuseDefault = true\n")
+        config.write_text(
+            "[extend]\n"
+            "useDefault = true\n\n"
+            "[[allowlists]]\n"
+            'description = "Ignore truncated JWT header-only documentation examples ending in ellipsis"\n'
+            "regexes = [\n"
+            "  '''eyJ[A-Za-z0-9_-]{10,}\\.\\.\\.'''\n"
+            "]\n",
+            encoding="utf-8",
+        )
         ignore = root / "gitleaksignore"
         ignore.touch()
         findings = []

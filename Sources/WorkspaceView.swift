@@ -133,6 +133,8 @@ struct MainContentView: View {
     @State private var githubConnectionIssue: String?
     @State private var githubConnectionGuide: String?
     @State private var checkingGithubHealth = false
+    @State private var copyingHighRiskReport = false
+    @State private var highRiskCopyStatus: String?
 
     private struct SyncProgressInfo {
         let status: String
@@ -850,10 +852,34 @@ struct MainContentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
+                    HStack(spacing: 10) {
                         Text(english ? "Top Priority Repositories" : "優先対応リポジトリ（危険度順）")
                             .font(.headline)
                         Spacer()
+                        if let copyStatus = highRiskCopyStatus {
+                            Text(copyStatus)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(SemanticColors.role("successText"))
+                        }
+                        if !highRiskRepos.isEmpty {
+                            Button {
+                                Task { await copyHighRiskReport() }
+                            } label: {
+                                if copyingHighRiskReport {
+                                    HStack(spacing: 6) {
+                                        ProgressView().controlSize(.small)
+                                        Text(english ? "Preparing…" : "作成中…")
+                                    }
+                                } else {
+                                    Label(
+                                        english ? "Copy High-Risk Report" : "重大・高リスクを一括コピー",
+                                        systemImage: "doc.on.doc"
+                                    )
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(copyingHighRiskReport || !backend.isReady)
+                        }
                         Button {
                             showPage(.audit)
                         } label: {
@@ -1494,6 +1520,100 @@ struct MainContentView: View {
             )
         } catch {
             listRefreshNote = error.localizedDescription
+        }
+    }
+
+    private func copyHighRiskReport() async {
+        guard !copyingHighRiskReport else { return }
+        copyingHighRiskReport = true
+        highRiskCopyStatus = nil
+        defer { copyingHighRiskReport = false }
+
+        do {
+            let state = try await requestJSON("/api/state")
+            let diagrams = state["diagrams"] as? [[String: Any]] ?? []
+            var sections: [String] = []
+            var totalHighFindings = 0
+            var affectedRepos = 0
+
+            for d in diagrams {
+                if (d["is_root"] as? Bool) == true { continue }
+                let repoName = (d["repo"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let githubUrl = (d["github_url"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let rev = d["source_revision"] as? [String: Any]
+                let commitHash = (rev?["commit_sha"] as? String) ?? (d["commit_hash"] as? String ?? "")
+                let cr = d["coderabbit"] as? [String: Any]
+                let actionItems = cr?["action_items"] as? [[String: Any]] ?? []
+                let findings = cr?["findings"] as? [[String: Any]] ?? []
+
+                var seenKeys = Set<String>()
+                var highItems: [[String: Any]] = []
+                for item in actionItems + findings {
+                    let sev = (item["severity"] as? String ?? "").lowercased()
+                    guard sev == "critical" || sev == "high" else { continue }
+                    let title = item["title"] as? String ?? ""
+                    let file = item["file"] as? String ?? ""
+                    let key = "\(title)|\(file)"
+                    if seenKeys.contains(key) { continue }
+                    seenKeys.insert(key)
+                    highItems.append(item)
+                }
+
+                guard !highItems.isEmpty else { continue }
+                affectedRepos += 1
+                totalHighFindings += highItems.count
+
+                var repoLines: [String] = []
+                repoLines.append("## \(repoName.isEmpty ? githubUrl : repoName) (\(highItems.count))")
+                if !githubUrl.isEmpty { repoLines.append("- **Repository URL**: \(githubUrl)") }
+                if !commitHash.isEmpty { repoLines.append("- **Commit**: `\(commitHash)`") }
+
+                for (idx, item) in highItems.enumerated() {
+                    let sev = (item["severity"] as? String ?? "high").uppercased()
+                    let title = item["title"] as? String ?? "Finding"
+                    let file = item["file"] as? String ?? ""
+                    let desc = item["desc"] as? String ?? (item["comment"] as? String ?? "")
+                    let diff = item["diff"] as? String ?? ""
+                    let fixCmd = item["fix_cmd"] as? String ?? ""
+                    let officialSource = item["official_source"] as? String ?? ""
+
+                    repoLines.append("")
+                    repoLines.append("### \(idx + 1). [\(sev)] \(title)")
+                    if !file.isEmpty { repoLines.append("- **File**: `\(file)`") }
+                    if !officialSource.isEmpty { repoLines.append("- **Reference**: \(officialSource)") }
+                    if !desc.isEmpty { repoLines.append("- **Details**: \(desc)") }
+                    if !diff.isEmpty {
+                        repoLines.append("```diff\n\(diff)\n```")
+                    }
+                    if !fixCmd.isEmpty {
+                        repoLines.append("```bash\n\(fixCmd)\n```")
+                    }
+                }
+                sections.append(repoLines.joined(separator: "\n"))
+            }
+
+            let header = english
+                ? "# 🛡️ RepoAUDT Mac — Critical & High-Risk Audit Report\n\n- **Affected Repositories**: \(affectedRepos)\n- **Total Critical / High Findings**: \(totalHighFindings)\n"
+                : "# 🛡️ RepoAUDT Mac — 重大・高リスク一括監査レポート\n\n- **対象リポジトリ数**: \(affectedRepos) 件\n- **重大・高リスク指摘合計**: \(totalHighFindings) 件\n"
+            let report = sections.isEmpty
+                ? header + (english ? "\nNo Critical or High findings." : "\n重大・高リスクの指摘はありません。")
+                : header + "\n---\n\n" + sections.joined(separator: "\n\n---\n\n")
+
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(report, forType: .string)
+
+            highRiskCopyStatus = english
+                ? "✓ Copied (\(totalHighFindings) findings)"
+                : "✓ コピーしました (\(totalHighFindings)件)"
+            Task {
+                try? await Task.sleep(for: .seconds(4))
+                if highRiskCopyStatus != nil {
+                    highRiskCopyStatus = nil
+                }
+            }
+        } catch {
+            highRiskCopyStatus = error.localizedDescription
         }
     }
 

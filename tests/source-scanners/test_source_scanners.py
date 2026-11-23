@@ -51,6 +51,44 @@ class SourceScannerTests(unittest.TestCase):
             result, ([], {"ruff": "not_installed", "gitleaks": "not_installed"})
         )
 
+    def test_gitleaks_ignores_truncated_jwt_in_docs_and_keeps_real_keys(self):
+        docs_rel = "src/features/admin/auth/auth.docs.ts"
+        prod_rel = "src/config/keys.ts"
+        docs_file = self.root / docs_rel
+        prod_file = self.root / prod_rel
+        docs_file.parent.mkdir(parents=True, exist_ok=True)
+        prod_file.parent.mkdir(parents=True, exist_ok=True)
+        docs_file.write_text(
+            '/**\n *                     token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."\n */\n',
+            encoding="utf-8",
+        )
+        prod_file.write_text(
+            'export const AWS_KEY = "AKIA1234567890EXAMPLE";\n'
+            'export const API_SECRET = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";\n',
+            encoding="utf-8",
+        )
+        raw = json.dumps(
+            [
+                {"File": docs_rel, "StartLine": 2, "RuleID": "generic-api-key"},
+                {"File": prod_rel, "StartLine": 1, "RuleID": "aws-access-token"},
+                {"File": prod_rel, "StartLine": 2, "RuleID": "generic-api-key"},
+            ]
+        )
+        findings = source_scanners.parse_findings(
+            "gitleaks",
+            raw,
+            self.root,
+            {docs_rel: 3, prod_rel: 2},
+            lambda _: "Core",
+        )
+        self.assertEqual(len(findings), 2)
+        self.assertTrue(all(f["severity"] == "high" for f in findings))
+        self.assertEqual(
+            [f["rule_id"] for f in findings],
+            ["aws-access-token", "generic-api-key"],
+        )
+        self.assertNotIn("eyJhbGci", json.dumps(findings))
+
     def test_parser_rejects_files_outside_staging(self):
         raw = json.dumps([{"File": "../outside", "StartLine": 1, "RuleID": "test"}])
         with self.assertRaises(ValueError):
