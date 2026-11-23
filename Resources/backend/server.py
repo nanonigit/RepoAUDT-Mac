@@ -32,6 +32,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 import analyzer  # noqa: E402
 import app_updater  # noqa: E402
 import audit_evidence  # noqa: E402
+import audit_evidence  # noqa: E402
 import copilot_bridge  # noqa: E402
 import diff_verification  # noqa: E402
 import mcp_server  # noqa: E402
@@ -39,8 +40,13 @@ import mcp_client  # noqa: E402
 import security_audit_engine  # noqa: E402
 
 
+def _monitor_config_path() -> Path:
+    analyzer.ensure_dirs()
+    return analyzer.APP_SUPPORT_DIR / "commit_monitor.json"
+
+
 class SyncDaemon:
-    """Background daemon that periodically refreshes registered repositories."""
+    """Background worker that periodically checks HEAD commits and re-audits only changed repos."""
 
     def __init__(self, interval_sec: Optional[int] = None) -> None:
         raw_env = os.environ.get("REPOAUDT_SYNC_INTERVAL", str(DEFAULT_SYNC_INTERVAL_SEC))
@@ -48,10 +54,64 @@ class SyncDaemon:
             parsed_interval = int(raw_env)
         except ValueError:
             parsed_interval = DEFAULT_SYNC_INTERVAL_SEC
+        self.enabled: bool = True
         self.interval_sec: int = max(60, interval_sec if interval_sec is not None else parsed_interval)
         self.last_sync_time: Optional[str] = None
+        self.last_check_time: Optional[str] = None
+        self.last_check_summary: str = ""
+        self.checking: bool = False
+        self.detected_updates: List[Dict[str, Any]] = []
         self.running: bool = False
         self._thread: Optional[threading.Thread] = None
+        self._wake_event = threading.Event()
+        self._lock = threading.Lock()
+        self._load_config()
+
+    def _load_config(self) -> None:
+        try:
+            cfg_path = _monitor_config_path()
+            if cfg_path.exists():
+                data = json.loads(cfg_path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    if isinstance(data.get("enabled"), bool):
+                        self.enabled = data["enabled"]
+                    if isinstance(data.get("interval_sec"), int):
+                        self.interval_sec = max(60, min(86400, data["interval_sec"]))
+        except Exception:
+            pass
+
+    def _save_config(self) -> None:
+        try:
+            cfg_path = _monitor_config_path()
+            cfg_path.write_text(
+                json.dumps({"enabled": self.enabled, "interval_sec": self.interval_sec}, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+
+    def configure(self, *, enabled: Optional[bool] = None, interval_sec: Optional[int] = None) -> Dict[str, Any]:
+        with self._lock:
+            if isinstance(enabled, bool):
+                self.enabled = enabled
+            if isinstance(interval_sec, int):
+                self.interval_sec = max(60, min(86400, interval_sec))
+            self._save_config()
+        self._wake_event.set()
+        return self.status_dict()
+
+    def status_dict(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "enabled": self.enabled,
+                "running": self.running,
+                "checking": self.checking,
+                "interval_sec": self.interval_sec,
+                "last_check_time": self.last_check_time,
+                "last_sync_time": self.last_sync_time,
+                "last_check_summary": self.last_check_summary,
+                "detected_updates": list(self.detected_updates),
+            }
 
     def start(self) -> None:
         if self.running:
@@ -60,25 +120,83 @@ class SyncDaemon:
         self._thread = threading.Thread(target=self._run_loop, name="RepoAUDTSyncDaemon", daemon=True)
         self._thread.start()
 
+    def check_once(self) -> Dict[str, Any]:
+        with self._lock:
+            if self.checking:
+                return self.status_dict()
+            self.checking = True
+
+        checked_count = 0
+        updated_items: List[Dict[str, Any]] = []
+        try:
+            state = analyzer.load_saved_analyses()
+            diagrams = state.get("diagrams", [])
+            processed = set()
+            for d in diagrams:
+                if not isinstance(d, dict) or d.get("is_root"):
+                    continue
+                url = analyzer.automatic_refresh_url(d)
+                if not url or url in processed:
+                    continue
+                processed.add(url)
+                slug = url.removeprefix("https://github.com/").strip("/")
+                saved_commit = str(
+                    (d.get("source_revision") or {}).get("commit_sha")
+                    or d.get("commit_hash")
+                    or ""
+                ).strip()
+                checked_count += 1
+                try:
+                    head_info = audit_evidence.repository_status(f"repos/{slug}", saved_commit)
+                    latest_sha = str(head_info.get("head") or "").strip()
+                    if latest_sha and not head_info.get("same_head"):
+                        res = analyzer.analyze_any_github_target(url)
+                        analyzer.save_analysis_result(res, respect_deleted=True)
+                        cr = (res.get("diagram") or {}).get("coderabbit") or {}
+                        findings_cnt = len(cr.get("action_items") or [])
+                        now_local, _ = analyzer.now_timestamps()
+                        updated_items.append({
+                            "repo": str(d.get("repo") or slug),
+                            "old_commit": saved_commit[:7] if saved_commit else "",
+                            "new_commit": latest_sha[:7],
+                            "findings": findings_cnt,
+                            "detected_at": now_local,
+                        })
+                except Exception as exc:
+                    print(f"Notice: commit monitor skipped {url}: {exc}", file=sys.stderr)
+        finally:
+            now_local, _ = analyzer.now_timestamps()
+            with self._lock:
+                self.checking = False
+                self.last_check_time = now_local
+                if updated_items:
+                    self.last_sync_time = now_local
+                    self.detected_updates = (updated_items + self.detected_updates)[:20]
+                    self.last_check_summary = (
+                        f"{checked_count}件確認 · {len(updated_items)}件の新着コミットを再監査"
+                    )
+                else:
+                    self.last_check_summary = f"{checked_count}件確認 · 新着コミットなし"
+        return self.status_dict()
+
+    def trigger_check_async(self) -> Dict[str, Any]:
+        with self._lock:
+            already = self.checking
+        if not already:
+            threading.Thread(target=self.check_once, name="RepoAUDTCommitCheck", daemon=True).start()
+        return self.status_dict()
+
     def _run_loop(self) -> None:
         while self.running:
-            time.sleep(self.interval_sec)
-            try:
-                state = analyzer.load_saved_analyses()
-                diagrams = state.get("diagrams", [])
-                processed = set()
-                for d in diagrams:
-                    url = analyzer.automatic_refresh_url(d)
-                    if url and url not in processed:
-                        processed.add(url)
-                        try:
-                            res = analyzer.analyze_any_github_target(url)
-                            analyzer.save_analysis_result(res, respect_deleted=True)
-                        except Exception as exc:
-                            print(f"Notice: background sync skipped {url}: {exc}", file=sys.stderr)
-                self.last_sync_time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-            except Exception as exc:
-                print(f"Warning in SyncDaemon loop: {exc}", file=sys.stderr)
+            self._wake_event.wait(timeout=self.interval_sec)
+            self._wake_event.clear()
+            if not self.running:
+                break
+            if self.enabled:
+                try:
+                    self.check_once()
+                except Exception as exc:
+                    print(f"Warning in SyncDaemon loop: {exc}", file=sys.stderr)
 
 
 _SYNC_DAEMON = SyncDaemon()
@@ -319,6 +437,9 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 return
             self._send_json(200, security_audit_engine.generate_sarif_report(matched))
             return
+        if self.path.startswith("/api/monitor/status"):
+            self._send_json(200, _SYNC_DAEMON.status_dict())
+            return
         if self.path.startswith("/api/sync/status"):
             parsed_url = urllib.parse.urlparse(self.path)
             qs = urllib.parse.parse_qs(parsed_url.query)
@@ -453,6 +574,21 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(200, {"ok": not res.get("isError", False), "result": res})
                 return
             self._send_json(400, {"error": "Provide a JSON-RPC 2.0 request or {'tool': '<name>', 'arguments': {...}}"})
+            return
+
+        if self.path.startswith("/api/monitor/config"):
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                enabled = body.get("enabled") if isinstance(body.get("enabled"), bool) else None
+                interval_raw = body.get("interval_sec")
+                interval_sec = int(interval_raw) if isinstance(interval_raw, (int, float)) else None
+                self._send_json(200, _SYNC_DAEMON.configure(enabled=enabled, interval_sec=interval_sec))
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path.startswith("/api/monitor/check"):
+            self._send_json(200, _SYNC_DAEMON.trigger_check_async())
             return
 
         if self.path.startswith("/api/sync"):

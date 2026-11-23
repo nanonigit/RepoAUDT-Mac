@@ -135,6 +135,12 @@ struct MainContentView: View {
     @State private var checkingGithubHealth = false
     @State private var copyingHighRiskReport = false
     @State private var highRiskCopyStatus: String?
+    @State private var monitorEnabled = true
+    @State private var monitorIntervalSec = 900
+    @State private var monitorChecking = false
+    @State private var monitorLastCheckTime = ""
+    @State private var monitorSummary = ""
+    @State private var seenMonitorUpdateKeys: Set<String> = []
 
     private struct SyncProgressInfo {
         let status: String
@@ -704,6 +710,14 @@ struct MainContentView: View {
                 .task {
                     await refreshDashboardVersionHeader()
                     await refreshGithubHealthStatus()
+                    await fetchMonitorStatus()
+                }
+                .task(id: backend.isReady) {
+                    guard backend.isReady else { return }
+                    while !Task.isCancelled {
+                        await fetchMonitorStatus()
+                        try? await Task.sleep(for: .seconds(15))
+                    }
                 }
                 if let ghIssue = githubConnectionIssue {
                     GroupBox {
@@ -805,6 +819,10 @@ struct MainContentView: View {
                         }
                     }
                     .padding(18)
+                }
+
+                if !allRepos.isEmpty {
+                    commitMonitorBar()
                 }
 
                 if let progress = syncProgress {
@@ -1337,6 +1355,176 @@ struct MainContentView: View {
         } catch {
             // Keep silent in background header check.
         }
+    }
+
+    @ViewBuilder
+    private func commitMonitorBar() -> some View {
+        GroupBox {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(monitorEnabled ? SemanticColors.role("successText") : Color.secondary.opacity(0.5))
+                    .frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text(english ? "Auto Commit Monitor" : "新着コミット監視")
+                            .font(.subheadline.weight(.semibold))
+                        if !monitorLastCheckTime.isEmpty {
+                            Text(
+                                english
+                                    ? "Last checked: \(monitorLastCheckTime)"
+                                    : "最終確認: \(monitorLastCheckTime)"
+                            )
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                    if !monitorSummary.isEmpty {
+                        Text(monitorSummary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Text(
+                            english
+                                ? "Checks GitHub HEAD commits periodically and re-audits only updated repositories."
+                                : "定期的に GitHub の HEAD コミットを確認し、更新があったリポジトリだけ自動再監査します。"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                Picker("", selection: Binding(
+                    get: { monitorIntervalSec },
+                    set: { newInterval in
+                        monitorIntervalSec = newInterval
+                        Task { await updateMonitorConfig(enabled: monitorEnabled, intervalSec: newInterval) }
+                    }
+                )) {
+                    Text(english ? "5m" : "5分").tag(300)
+                    Text(english ? "15m" : "15分").tag(900)
+                    Text(english ? "30m" : "30分").tag(1800)
+                    Text(english ? "1h" : "1時間").tag(3600)
+                }
+                .labelsHidden()
+                .frame(width: 86)
+                .disabled(!backend.isReady)
+
+                Toggle("", isOn: Binding(
+                    get: { monitorEnabled },
+                    set: { newEnabled in
+                        monitorEnabled = newEnabled
+                        Task { await updateMonitorConfig(enabled: newEnabled, intervalSec: monitorIntervalSec) }
+                    }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .disabled(!backend.isReady)
+
+                Button {
+                    Task { await triggerMonitorCheckNow() }
+                } label: {
+                    if monitorChecking {
+                        HStack(spacing: 5) {
+                            ProgressView().controlSize(.small)
+                            Text(english ? "Checking…" : "確認中…")
+                        }
+                    } else {
+                        Label(english ? "Check now" : "今すぐ確認", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(monitorChecking || !backend.isReady)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func applyMonitorStatusPayload(_ json: [String: Any]) {
+        if let enabled = json["enabled"] as? Bool {
+            monitorEnabled = enabled
+        }
+        if let interval = json["interval_sec"] as? Int {
+            monitorIntervalSec = interval
+        }
+        monitorChecking = json["checking"] as? Bool ?? false
+        if let checkTime = json["last_check_time"] as? String {
+            monitorLastCheckTime = checkTime
+        }
+        if let summary = json["last_check_summary"] as? String {
+            monitorSummary = summary
+        }
+        if let syncTime = json["last_sync_time"] as? String, !syncTime.isEmpty {
+            lastCompletedSyncAt = syncTime
+        }
+        if let updates = json["detected_updates"] as? [[String: Any]] {
+            var newlyDetected: [[String: Any]] = []
+            for u in updates {
+                let repo = u["repo"] as? String ?? ""
+                let newCommit = u["new_commit"] as? String ?? ""
+                let detectedAt = u["detected_at"] as? String ?? ""
+                let key = "\(repo)|\(newCommit)|\(detectedAt)"
+                if !repo.isEmpty && !seenMonitorUpdateKeys.contains(key) {
+                    seenMonitorUpdateKeys.insert(key)
+                    newlyDetected.append(u)
+                }
+            }
+            if !newlyDetected.isEmpty {
+                coordinator.send("refresh")
+                let first = newlyDetected[0]
+                let repoName = first["repo"] as? String ?? "Repository"
+                let sha = first["new_commit"] as? String ?? ""
+                let findings = first["findings"] as? Int ?? 0
+                AppNotificationManager.sendAnalysisCompleted(
+                    title: english ? "New Commit Re-audited" : "新着コミットを検知・再監査完了",
+                    body: newlyDetected.count == 1
+                        ? (english
+                            ? "\(repoName) (\(sha)) — \(findings) findings"
+                            : "\(repoName) (\(sha)) を再監査しました（指摘 \(findings)件）")
+                        : (english
+                            ? "\(newlyDetected.count) repositories updated and re-audited."
+                            : "\(newlyDetected.count) 件のリポジトリで新着コミットを再監査しました。")
+                )
+            }
+        }
+    }
+
+    private func fetchMonitorStatus() async {
+        guard backend.isReady else { return }
+        if let json = try? await requestJSON("/api/monitor/status") {
+            applyMonitorStatusPayload(json)
+        }
+    }
+
+    private func updateMonitorConfig(enabled: Bool, intervalSec: Int) async {
+        guard backend.isReady else { return }
+        if let json = try? await requestJSON("/api/monitor/config", body: [
+            "enabled": enabled,
+            "interval_sec": intervalSec,
+        ]) {
+            applyMonitorStatusPayload(json)
+        }
+    }
+
+    private func triggerMonitorCheckNow() async {
+        guard backend.isReady && !monitorChecking else { return }
+        monitorChecking = true
+        if let json = try? await requestJSON("/api/monitor/check", body: [:]) {
+            applyMonitorStatusPayload(json)
+        }
+        for _ in 0..<60 {
+            try? await Task.sleep(for: .seconds(1))
+            guard let status = try? await requestJSON("/api/monitor/status") else { break }
+            applyMonitorStatusPayload(status)
+            if !(status["checking"] as? Bool ?? false) {
+                break
+            }
+        }
+        monitorChecking = false
     }
 
     @ViewBuilder
