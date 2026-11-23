@@ -15,6 +15,7 @@ MAX_FILES = 25
 MAX_FILE_BYTES = 256 * 1024
 MAX_REPORT_BYTES = 4 * 1024 * 1024
 ZIZMOR_PATHS = (Path("/opt/homebrew/bin/zizmor"), Path("/usr/local/bin/zizmor"))
+ACTIONLINT_PATHS = (Path("/opt/homebrew/bin/actionlint"), Path("/usr/local/bin/actionlint"))
 RULE = re.compile(r"zizmor/([a-z0-9-]{1,80})")
 LEVELS = {"error": "high", "warning": "medium", "note": "low"}
 
@@ -138,6 +139,91 @@ def run_zizmor(files, match_component):
                 if len(raw) > MAX_REPORT_BYTES:
                     return None, "output_limit"
             return parse_sarif(raw, staged, match_component), "complete"
+    except subprocess.TimeoutExpired:
+        return None, "timeout"
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        return None, "tool_error"
+
+
+def parse_actionlint(raw: bytes, staged: Dict[str, int], match_component: Any) -> List[Dict[str, Any]]:
+    """Parse actionlint JSON output into normalized workflow findings."""
+    text = raw.decode("utf-8", errors="ignore").strip()
+    if not text:
+        return []
+    entries = json.loads(text)
+    if not isinstance(entries, list):
+        raise ValueError("Unexpected actionlint JSON format")
+    findings: List[Dict[str, Any]] = []
+    seen = set()
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("filepath") or "").removeprefix("./")
+        line = item.get("line")
+        kind = str(item.get("kind") or "syntax")
+        message = str(item.get("message") or "").strip()
+        if path not in staged or type(line) is not int or not 1 <= line <= staged[path]:
+            continue
+        key = (kind, path, line)
+        if key in seen:
+            continue
+        seen.add(key)
+        severity = "medium" if kind in ("credentials", "runner-label", "shellcheck") else "low"
+        component = match_component(path)
+        findings.append({
+            "severity": severity,
+            "title": f"[actionlint] {kind}: {message[:80]} ({Path(path).name}:{line})",
+            "file": f"{path}:{line} (Target: {component})",
+            "target_node": component,
+            "desc": message or f"actionlint detected `{kind}` issue at this location.",
+            "official_source": "https://github.com/rhysd/actionlint/blob/main/docs/checks.md",
+            "scanner": "actionlint",
+            "rule_id": f"actionlint-{kind}",
+        })
+    return findings
+
+
+def run_actionlint(files: List[Path], match_component: Any) -> Tuple[Optional[List[Dict[str, Any]]], str]:
+    """Run actionlint (with shellcheck) on workflow files in an isolated temp directory."""
+    if not files:
+        return [], "no_workflows"
+    binary = next(
+        (str(path) for path in ACTIONLINT_PATHS if os.access(path, os.X_OK)), None
+    )
+    if not binary:
+        return None, "not_installed"
+    if len(files) > MAX_FILES:
+        return None, "input_limit"
+    try:
+        with tempfile.TemporaryDirectory(prefix="repoaudt-actionlint-") as tmp:
+            directory = Path(tmp)
+            (directory / WORKFLOWS).mkdir(parents=True)
+            staged: Dict[str, int] = {}
+            for path in files:
+                content = read_small_file(path)
+                if content is None:
+                    return None, "input_limit"
+                relative = (WORKFLOWS / path.name).as_posix()
+                (directory / relative).write_bytes(content)
+                staged[relative] = len(content.splitlines())
+            with tempfile.TemporaryFile() as report:
+                result = subprocess.run(
+                    [binary, "-format", "{{json .}}", *staged],
+                    cwd=directory,
+                    env={"HOME": tmp, "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin", "LANG": "en_US.UTF-8"},
+                    stdin=subprocess.DEVNULL,
+                    stdout=report,
+                    stderr=subprocess.DEVNULL,
+                    timeout=20,
+                    check=False,
+                )
+                if result.returncode not in (0, 1):
+                    return None, "tool_error"
+                report.seek(0)
+                raw = report.read(MAX_REPORT_BYTES + 1)
+                if len(raw) > MAX_REPORT_BYTES:
+                    return None, "output_limit"
+            return parse_actionlint(raw, staged, match_component), "complete"
     except subprocess.TimeoutExpired:
         return None, "timeout"
     except (OSError, ValueError, KeyError, IndexError, TypeError):

@@ -117,3 +117,70 @@ class SourceScannerTests(unittest.TestCase):
         )
         self.assertFalse(any(f["file"].startswith("reference.tf:1") for f in findings))
         self.assertNotIn(SYNTHETIC_TOKEN, json.dumps(findings))
+
+    def test_semgrep_and_trivy_missing_tools_fallback(self):
+        with patch.object(source_scanners, "TOOL_DIRS", ()):
+            sast, advs, statuses = source_scanners.scan_semgrep_and_trivy(self.repo, str)
+        self.assertEqual(sast, [])
+        self.assertEqual(advs, [])
+        self.assertEqual(statuses, {"semgrep": "not_installed", "trivy": "not_installed"})
+
+    def test_parse_semgrep_and_trivy_outputs(self):
+        semgrep_raw = json.dumps({
+            "results": [
+                {
+                    "check_id": "javascript.express.security.audit.xss.direct-response-write",
+                    "path": "src/app.ts",
+                    "start": {"line": 12},
+                    "extra": {"severity": "ERROR", "message": "Potential XSS"},
+                },
+                {
+                    "check_id": "outside.rule",
+                    "path": "../secret.ts",
+                    "start": {"line": 1},
+                    "extra": {"severity": "ERROR", "message": "Outside"},
+                },
+            ]
+        }).encode("utf-8")
+        sast = source_scanners.parse_semgrep(semgrep_raw, self.root, {"src/app.ts": 30}, lambda _: "App")
+        self.assertEqual(len(sast), 1)
+        self.assertEqual(sast[0]["scanner"], "semgrep")
+        self.assertEqual(sast[0]["severity"], "high")
+
+        trivy_raw = json.dumps({
+            "Results": [
+                {
+                    "Target": "package-lock.json",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": "CVE-2024-99999",
+                            "PkgName": "lodash",
+                            "InstalledVersion": "4.17.20",
+                            "FixedVersion": "4.17.21",
+                            "Severity": "HIGH",
+                            "Title": "Prototype Pollution",
+                        }
+                    ],
+                },
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [
+                        {
+                            "ID": "AVD-DS-0002",
+                            "Title": "Image user should not be root",
+                            "Severity": "HIGH",
+                            "Description": "Running as root",
+                            "Resolution": "Add USER nonroot",
+                            "CauseMetadata": {"StartLine": 5},
+                        }
+                    ],
+                },
+            ]
+        }).encode("utf-8")
+        misconfs, vulns = source_scanners.parse_trivy(
+            trivy_raw, {"package-lock.json": 100, "Dockerfile": 20}, lambda _: "Infra"
+        )
+        self.assertEqual(len(misconfs), 1)
+        self.assertEqual(misconfs[0]["scanner"], "trivy")
+        self.assertEqual(len(vulns), 1)
+        self.assertEqual(vulns[0]["cve"], "CVE-2024-99999")

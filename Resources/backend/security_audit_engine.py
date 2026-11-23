@@ -19,8 +19,8 @@ import urllib.error
 import urllib.request
 from connection_utils import validate_endpoint, open_endpoint
 import copilot_bridge
-from workflow_audit import MAX_FILES, find_template_injections_in_workflow, read_small_file, run_zizmor, workflow_files
-from source_scanners import scan_source
+from workflow_audit import MAX_FILES, find_template_injections_in_workflow, read_small_file, run_actionlint, run_zizmor, workflow_files
+from source_scanners import scan_semgrep_and_trivy, scan_source
 from runtime_patches import scan_runtime_patches
 import uuid
 from datetime import datetime, timezone
@@ -833,23 +833,70 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     if skills_cfg.get("owasp_sast_skill", True):
         files = workflow_files(Path(repo_dir))
         gha_findings, status = run_zizmor(files, match_comp)
+        actionlint_findings, actionlint_status = run_actionlint(files, match_comp)
         builtin_findings = scan_github_actions_workflows(repo_dir, match_comp)
-        external_keys = {(item["rule_id"], item["file"]) for item in (gha_findings or [])}
-        sast_findings.extend(gha_findings or [])
-        sast_findings.extend(
-            item for item in builtin_findings if (item["rule_id"], item["file"]) not in external_keys
-        )
-        scanner = "builtin+zizmor" if status == "complete" else "builtin" if files else None
-        workflow_scan = {"scanner": scanner, "status": status}
+
+        def _loc_key(item: Dict[str, Any]) -> str:
+            return str(item.get("file") or "").split(" (", 1)[0]
+
+        seen_wf_locs = set()
+        for src_list in (gha_findings or [], actionlint_findings or [], builtin_findings):
+            for item in src_list:
+                loc = _loc_key(item)
+                key = (item.get("rule_id"), loc)
+                # Deduplicate identical rule+location or same workflow line already flagged by a stronger scanner
+                if key in seen_wf_locs or (src_list is not (gha_findings or []) and loc in {k[1] for k in seen_wf_locs}):
+                    continue
+                seen_wf_locs.add(key)
+                sast_findings.append(item)
+
+        active_wf_scanners = []
+        if files:
+            active_wf_scanners.append("builtin")
+        if status == "complete":
+            active_wf_scanners.append("zizmor")
+        if actionlint_status == "complete":
+            active_wf_scanners.append("actionlint")
+        scanner = "+".join(active_wf_scanners) if active_wf_scanners else None
+        workflow_scan = {"scanner": scanner, "status": status, "actionlint_status": actionlint_status}
 
     source_findings, source_scan = scan_source(
         Path(repo_dir), match_comp, include_quality=skills_cfg.get("owasp_sast_skill", True)
     )
+    ext_sast_findings, trivy_advisories, ext_scan = scan_semgrep_and_trivy(
+        Path(repo_dir),
+        match_comp,
+        include_sast=skills_cfg.get("owasp_sast_skill", True),
+        include_vuln=skills_cfg.get("osv_mcp", True),
+    )
+    if trivy_advisories:
+        existing_cves = {
+            (str(a.get("cve") or "").upper(), str(a.get("pkg") or "").lower())
+            for a in security_advisories
+        }
+        for adv in trivy_advisories:
+            cve_key = (str(adv.get("cve") or "").upper(), str(adv.get("pkg") or "").lower())
+            if cve_key not in existing_cves:
+                existing_cves.add(cve_key)
+                security_advisories.append(adv)
+
     runtime_findings, runtime_patch_scan = ([], {"status": "disabled"})
     if skills_cfg.get("php_node_runtime_audit", True):
         runtime_findings, runtime_patch_scan = scan_runtime_patches(Path(repo_dir), match_comp)
     secret_findings = scan_secrets_and_credentials(repo_dir, match_comp)
-    sast_findings = secret_findings + runtime_findings + source_findings + sast_findings
+
+    combined_sast = secret_findings + runtime_findings + source_findings + ext_sast_findings + sast_findings
+    deduped_sast: List[Dict[str, Any]] = []
+    seen_sast_locs = set()
+    for item in combined_sast:
+        loc = str(item.get("file") or "").split(" (", 1)[0]
+        key = (loc, str(item.get("rule_id") or ""))
+        if key in seen_sast_locs:
+            continue
+        seen_sast_locs.add(key)
+        deduped_sast.append(item)
+    sast_findings = deduped_sast
+    source_scan = {**source_scan, **ext_scan}
     security_advisories = enrich_advisories_with_epss(security_advisories)
 
     return {

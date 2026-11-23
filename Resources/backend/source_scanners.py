@@ -256,3 +256,239 @@ def scan_source(repo, match_component, *, include_quality=True):
             except (OSError, ValueError, KeyError, TypeError):
                 statuses[name] = "tool_error"
         return findings, statuses
+
+
+_SEMGREP_SEVERITY = {"ERROR": "high", "WARNING": "medium", "INFO": "low"}
+_TRIVY_SEVERITY = {"CRITICAL": "critical", "HIGH": "high", "MEDIUM": "medium", "LOW": "low"}
+
+
+def parse_semgrep(raw, directory, files, match_component):
+    """Parse Semgrep JSON output into normalized SAST findings."""
+    text = raw.decode("utf-8", errors="ignore").strip() if isinstance(raw, (bytes, bytearray)) else str(raw).strip()
+    if not text:
+        return []
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError("Unexpected Semgrep JSON output")
+    results = data.get("results") or []
+    findings = []
+    seen = set()
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        check_id = str(item.get("check_id") or "semgrep-rule")
+        raw_path = str(item.get("path") or "")
+        start = item.get("start") or {}
+        line = start.get("line")
+        extra = item.get("extra") or {}
+        sev_raw = str(extra.get("severity") or "WARNING").upper()
+        message = str(extra.get("message") or "").strip()
+        path = Path(raw_path)
+        if path.is_absolute():
+            path = path.relative_to(directory)
+        relative = path.as_posix().removeprefix("./")
+        if relative not in files or type(line) is not int or not 1 <= line <= files[relative]:
+            continue
+        key = (check_id, relative, line)
+        if key in seen:
+            continue
+        seen.add(key)
+        component = match_component(relative)
+        short_rule = check_id.rsplit(".", 1)[-1]
+        findings.append({
+            "severity": _SEMGREP_SEVERITY.get(sev_raw, "medium"),
+            "title": f"[semgrep] {short_rule} ({Path(relative).name}:{line})",
+            "file": f"{relative}:{line} (Target: {component})",
+            "target_node": component,
+            "desc": message or f"Semgrep rule `{check_id}` flagged this code pattern.",
+            "official_source": f"https://semgrep.dev/r/{check_id}",
+            "scanner": "semgrep",
+            "rule_id": check_id,
+        })
+    return findings
+
+
+def parse_trivy(raw, files, match_component):
+    """Parse Trivy FS JSON output into (misconfig_findings, vulnerability_advisories)."""
+    text = raw.decode("utf-8", errors="ignore").strip() if isinstance(raw, (bytes, bytearray)) else str(raw).strip()
+    if not text:
+        return [], []
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError("Unexpected Trivy JSON output")
+    results = data.get("Results") or []
+    findings = []
+    advisories = []
+    seen_misconf = set()
+    seen_vulns = set()
+
+    for res in results:
+        if not isinstance(res, dict):
+            continue
+        target = str(res.get("Target") or "").removeprefix("./")
+        if target not in files:
+            continue
+        component = match_component(target)
+
+        for vuln in res.get("Vulnerabilities") or []:
+            if not isinstance(vuln, dict):
+                continue
+            cve = str(vuln.get("VulnerabilityID") or "").strip()
+            pkg = str(vuln.get("PkgName") or "").strip()
+            if not cve or (cve, pkg) in seen_vulns:
+                continue
+            seen_vulns.add((cve, pkg))
+            sev = _TRIVY_SEVERITY.get(str(vuln.get("Severity") or "MEDIUM").upper(), "medium")
+            installed = str(vuln.get("InstalledVersion") or "")
+            fixed = str(vuln.get("FixedVersion") or "")
+            title = str(vuln.get("Title") or f"{pkg} ({installed}) vulnerability {cve}").strip()
+            desc = str(vuln.get("Description") or title).strip()
+            ref_url = str(vuln.get("PrimaryURL") or f"https://avd.aquasec.com/nvd/{cve.lower()}")
+            advisories.append({
+                "cve": cve,
+                "severity": sev.upper(),
+                "pkg": pkg,
+                "installed_version": installed,
+                "fixed_version": fixed,
+                "title": f"[Trivy] {pkg}: {title}",
+                "summary": desc,
+                "target": target,
+                "scanner": "trivy",
+                "sources": [{"name": "Trivy/AVD", "url": ref_url}],
+            })
+
+        for misconf in res.get("Misconfigurations") or []:
+            if not isinstance(misconf, dict):
+                continue
+            rule_id = str(misconf.get("ID") or misconf.get("AVDID") or "trivy-misconfig")
+            cause = misconf.get("CauseMetadata") or {}
+            line = cause.get("StartLine")
+            line_int = line if type(line) is int and 1 <= line <= files[target] else 1
+            key = (rule_id, target, line_int)
+            if key in seen_misconf:
+                continue
+            seen_misconf.add(key)
+            sev = _TRIVY_SEVERITY.get(str(misconf.get("Severity") or "MEDIUM").upper(), "medium")
+            title = str(misconf.get("Title") or rule_id).strip()
+            desc = str(misconf.get("Description") or misconf.get("Message") or title).strip()
+            resolution = str(misconf.get("Resolution") or "").strip()
+            if resolution:
+                desc = f"{desc} 修正案: {resolution}"
+            ref_url = str(misconf.get("PrimaryURL") or "https://avd.aquasec.com/")
+            findings.append({
+                "severity": sev,
+                "title": f"[trivy] {title} ({Path(target).name}:{line_int})",
+                "file": f"{target}:{line_int} (Target: {component})",
+                "target_node": component,
+                "desc": desc,
+                "official_source": ref_url,
+                "scanner": "trivy",
+                "rule_id": rule_id,
+            })
+
+    return findings, advisories
+
+
+def scan_semgrep_and_trivy(repo, match_component, *, include_sast=True, include_vuln=True):
+    """Run Semgrep and Trivy on tracked working-tree files with bounded timeouts."""
+    binaries = {
+        "semgrep": executable("semgrep") if include_sast else None,
+        "trivy": executable("trivy") if (include_sast or include_vuln) else None,
+    }
+    statuses = {name: "not_installed" for name in binaries}
+    if not include_sast:
+        statuses["semgrep"] = "disabled"
+    if not (include_sast or include_vuln):
+        statuses["trivy"] = "disabled"
+    if not any(binaries.values()):
+        return [], [], statuses
+
+    with tempfile.TemporaryDirectory(prefix="repoaudt-ext-") as temp:
+        root = Path(temp).resolve()
+        directory = root / "source"
+        directory.mkdir()
+        real_home = str(Path.home())
+        base_env = {
+            "HOME": real_home,
+            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+            "LANG": "en_US.UTF-8",
+            "SEMGREP_SEND_METRICS": "off",
+            "SEMGREP_USER_LOG_FILE": str(root / "semgrep.log"),
+        }
+        try:
+            files, partial = stage_sources(
+                repo.resolve(),
+                directory,
+                {"HOME": temp, "PATH": "/usr/bin:/bin", "LANG": "en_US.UTF-8"},
+                python_only=False,
+            )
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            statuses.update({name: "source_unavailable" for name, b in binaries.items() if b})
+            return [], [], statuses
+
+        if not files:
+            for name, b in binaries.items():
+                if b:
+                    statuses[name] = "partial" if partial else "no_files"
+            return [], [], statuses
+
+        sast_findings = []
+        advisories = []
+
+        if binaries["semgrep"]:
+            cmd = [
+                binaries["semgrep"],
+                "scan",
+                "--config",
+                "auto",
+                "--json",
+                "--quiet",
+                "--no-git-ignore",
+                "--metrics=off",
+                "--timeout",
+                "10",
+                "--max-target-bytes",
+                "262144",
+                ".",
+            ]
+            try:
+                raw = run_read_only(cmd, directory, base_env, allowed=(0, 1), timeout=35)
+                sast_findings.extend(parse_semgrep(raw, directory, files, match_component))
+                statuses["semgrep"] = "partial" if partial else "complete"
+            except subprocess.TimeoutExpired:
+                statuses["semgrep"] = "timeout"
+            except (OSError, ValueError, KeyError, TypeError):
+                statuses["semgrep"] = "tool_error"
+
+        if binaries["trivy"]:
+            scanners = []
+            if include_vuln:
+                scanners.append("vuln")
+            if include_sast:
+                scanners.append("misconfig")
+            cmd = [
+                binaries["trivy"],
+                "fs",
+                "--scanners",
+                ",".join(scanners),
+                "--format",
+                "json",
+                "--quiet",
+                "--timeout",
+                "30s",
+                ".",
+            ]
+            try:
+                raw = run_read_only(cmd, directory, base_env, allowed=(0,), timeout=35)
+                misconfs, vulns = parse_trivy(raw, files, match_component)
+                if include_sast:
+                    sast_findings.extend(misconfs)
+                if include_vuln:
+                    advisories.extend(vulns)
+                statuses["trivy"] = "partial" if partial else "complete"
+            except subprocess.TimeoutExpired:
+                statuses["trivy"] = "timeout"
+            except (OSError, ValueError, KeyError, TypeError):
+                statuses["trivy"] = "tool_error"
+
+        return sast_findings, advisories, statuses

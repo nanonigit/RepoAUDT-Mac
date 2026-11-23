@@ -722,9 +722,9 @@ struct MainContentView: View {
                         tint: SemanticColors.role("warningText")
                     )
                     summaryMetricCard(
-                        title: english ? "Critical / High" : "重大・高リスク",
-                        value: "\(highRiskRepos.count)",
-                        subtitle: english ? "\(highRiskFindings) findings" : "該当指摘 \(highRiskFindings)件",
+                        title: english ? "Critical / High Repos" : "重大・高リスク対象",
+                        value: "\(highRiskRepos.count) / \(allRepos.count)",
+                        subtitle: english ? "\(highRiskFindings) findings in these repos" : "該当リポジトリの指摘合計 \(highRiskFindings)件",
                         symbol: "shield.lefthalf.filled.badge.checkmark",
                         tint: SemanticColors.role("dangerText")
                     )
@@ -748,7 +748,7 @@ struct MainContentView: View {
                             Label(english ? "Open Audit List" : "監査結果一覧を見る", systemImage: "arrow.right.circle")
                         }
                     }
-                    let topRisk = Array(sortDashboardRepositories(allRepos, by: .severityDesc).prefix(5))
+                    let topRisk = Array(sortDashboardRepositories(highRiskRepos, by: .severityDesc).prefix(5))
                     if topRisk.isEmpty {
                         ContentUnavailableView(
                             english ? "No saved analyses" : "保存済みの解析はありません",

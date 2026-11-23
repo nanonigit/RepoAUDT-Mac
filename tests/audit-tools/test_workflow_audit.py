@@ -43,12 +43,16 @@ class WorkflowAuditTests(unittest.TestCase):
 
     def test_builtin_still_runs_without_zizmor(self):
         self.file.write_text(WORKFLOW)
-        with patch.object(workflow_audit, "ZIZMOR_PATHS", ()):
+        with (
+            patch.object(workflow_audit, "ZIZMOR_PATHS", ()),
+            patch.object(workflow_audit, "ACTIONLINT_PATHS", ()),
+        ):
             result = engine.scan_php_and_nodejs_and_polyglot_vulnerabilities(
                 self.repo, []
             )
         self.assertEqual(
-            result["workflow_scan"], {"scanner": "builtin", "status": "not_installed"}
+            result["workflow_scan"],
+            {"scanner": "builtin", "status": "not_installed", "actionlint_status": "not_installed"},
         )
         self.assertEqual(
             [f["rule_id"] for f in result["sast_findings"]], ["excessive-permissions"]
@@ -77,9 +81,11 @@ class WorkflowAuditTests(unittest.TestCase):
     )
     def test_real_zizmor_reports_and_handles_clean_and_invalid_files(self):
         self.file.write_text(WORKFLOW)
-        result = engine.scan_php_and_nodejs_and_polyglot_vulnerabilities(self.repo, [])
+        with patch.object(workflow_audit, "ACTIONLINT_PATHS", ()):
+            result = engine.scan_php_and_nodejs_and_polyglot_vulnerabilities(self.repo, [])
         self.assertEqual(
-            result["workflow_scan"], {"scanner": "builtin+zizmor", "status": "complete"}
+            result["workflow_scan"],
+            {"scanner": "builtin+zizmor", "status": "complete", "actionlint_status": "not_installed"},
         )
         rules = {item["rule_id"] for item in result["sast_findings"]}
         self.assertTrue(
@@ -178,3 +184,27 @@ class WorkflowAuditTests(unittest.TestCase):
         self.assertEqual(len(inj), 1)
         self.assertIn("$env:PR_TITLE", inj[0]["diff"])
         self.assertIn("PR_TITLE: ${{ github.event.pull_request.title }}", inj[0]["diff"])
+
+    def test_parse_actionlint_normalizes_findings_and_ignores_outside_paths(self):
+        uri = ".github/workflows/ci.yml"
+        raw = json.dumps([
+            {
+                "filepath": uri,
+                "line": 2,
+                "column": 5,
+                "kind": "shellcheck",
+                "message": "SC2086: Double quote to prevent globbing",
+            },
+            {
+                "filepath": "../outside.yml",
+                "line": 1,
+                "column": 1,
+                "kind": "syntax-check",
+                "message": "outside",
+            },
+        ]).encode("utf-8")
+        findings = workflow_audit.parse_actionlint(raw, {uri: 10}, lambda _: "CI")
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["scanner"], "actionlint")
+        self.assertEqual(findings[0]["rule_id"], "actionlint-shellcheck")
+        self.assertEqual(findings[0]["severity"], "medium")
