@@ -75,6 +75,44 @@ class TestOsvRemediation(unittest.TestCase):
         self.assertEqual(go_rem["fix_cmd"], "go get golang.org/x/crypto@v0.31.0")
         self.assertIn("golang.org/x/crypto v0.31.0", go_rem["diff"])
 
+    def test_trivy_comma_separated_fixed_versions_picks_matching_branch(self) -> None:
+        import json
+        import source_scanners
+
+        trivy_payload = json.dumps({
+            "Results": [
+                {
+                    "Target": "package-lock.json",
+                    "Type": "npm",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": "CVE-2026-75604",
+                            "PkgName": "next",
+                            "InstalledVersion": "16.2.0",
+                            "FixedVersion": "15.5.24, 16.3.3",
+                            "Severity": "HIGH",
+                            "Title": "Next.js vulnerability",
+                        }
+                    ],
+                }
+            ]
+        })
+        _, advisories = source_scanners.parse_trivy(
+            trivy_payload,
+            {"package-lock.json": 100},
+            lambda _: "Frontend",
+        )
+        self.assertEqual(len(advisories), 1)
+        adv = advisories[0]
+        self.assertEqual(adv["package_name"], "next")
+        self.assertEqual(adv["installed"], "16.2.0")
+        self.assertEqual(adv["installed_version"], "16.2.0")
+        self.assertEqual(adv["fixed_version"], "16.3.3")
+        self.assertEqual(adv["ecosystem"], "npm")
+        rem = analyzer.build_advisory_remediation(adv)
+        self.assertEqual(rem["fix_cmd"], "npm install next@^16.3.3")
+        self.assertNotIn(",", rem["fix_cmd"])
+
 
 if __name__ == "__main__":
     unittest.main()

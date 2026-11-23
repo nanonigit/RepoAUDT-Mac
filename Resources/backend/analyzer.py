@@ -850,8 +850,13 @@ def build_advisory_remediation(adv: Dict[str, Any]) -> Dict[str, str]:
         m_eco = re.search(r"\(([^)]+)\)\s*$", raw_pkg)
         eco = m_eco.group(1).strip() if m_eco else "npm"
 
-    installed = str(adv.get("installed") or "").strip()
-    fixed = str(adv.get("fixed_version") or adv.get("safe_version") or "").strip()
+    installed = str(adv.get("installed") or adv.get("installed_version") or "").strip()
+    raw_fixed = str(adv.get("fixed_version") or adv.get("safe_version") or "").strip()
+    if "," in raw_fixed or ";" in raw_fixed:
+        from source_scanners import _select_best_fixed_version
+        fixed = _select_best_fixed_version(raw_fixed, installed)
+    else:
+        fixed = raw_fixed
     eco_low = eco.lower()
 
     if eco_low == "npm":

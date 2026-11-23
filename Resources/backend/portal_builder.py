@@ -9010,26 +9010,36 @@ def build_portal_html(data, is_shareable=False):
         if (!actionItems.some(x => x.title.includes(adv.cve || adv.pkg))) {
           const pkgName = String(adv.package_name || adv.pkg || '').replace(/\s*\([^)]+\)\s*$/, '').trim();
           const eco = String(adv.ecosystem || ((String(adv.pkg || '').match(/\(([^)]+)\)\s*$/) || [])[1]) || 'npm').toLowerCase();
-          const fixedVer = adv.fixed_version || adv.safe_version || '';
-          const installedVer = adv.installed || '';
-          let targetFile = 'package.json (依存ライブラリ)';
+          const installedVer = String(adv.installed || adv.installed_version || '').trim();
+          const rawFixed = String(adv.fixed_version || adv.safe_version || '').trim();
+          const fixedCandidates = rawFixed.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+          let fixedVer = fixedCandidates[0] || '';
+          if (fixedCandidates.length > 1) {
+            const instMajor = (installedVer.match(/^v?(\d+)/) || [])[1];
+            const sameMajor = instMajor ? fixedCandidates.filter(v => (v.match(/^v?(\d+)/) || [])[1] === instMajor) : [];
+            fixedVer = (sameMajor.length ? sameMajor[sameMajor.length - 1] : fixedCandidates[fixedCandidates.length - 1]);
+          }
+          const cleanTarget = String(adv.target || '').replace(/^\.\//, '').trim();
+          let targetFile = cleanTarget || 'package.json';
           let fixCmd = fixedVer ? `npm install ${pkgName}@^${fixedVer}` : `npm install ${pkgName}@latest`;
           let diffText = (fixedVer && installedVer) ? `- "${pkgName}": "^${installedVer}"\n+ "${pkgName}": "^${fixedVer}"` : '';
           if (eco === 'pypi') {
-            targetFile = 'requirements.txt (依存ライブラリ)';
+            targetFile = cleanTarget || 'requirements.txt';
             fixCmd = fixedVer ? `pip install --upgrade "${pkgName}>=${fixedVer}"` : `pip install --upgrade "${pkgName}"`;
             diffText = (fixedVer && installedVer) ? `- ${pkgName}==${installedVer}\n+ ${pkgName}>=${fixedVer}` : '';
           } else if (eco === 'go') {
-            targetFile = 'go.mod (依存ライブラリ)';
+            targetFile = cleanTarget || 'go.mod';
             const normFix = fixedVer ? `v${String(fixedVer).replace(/^v/, '')}` : '';
             const normInst = installedVer ? `v${String(installedVer).replace(/^v/, '')}` : '';
             fixCmd = normFix ? `go get ${pkgName}@${normFix}` : `go get -u ${pkgName}`;
             diffText = (normFix && normInst) ? `- ${pkgName} ${normInst}\n+ ${pkgName} ${normFix}` : '';
           }
+          const baseTitle = String(adv.title || pkgName || '').trim();
+          const displayTitle = (!adv.cve || baseTitle.includes(adv.cve)) ? baseTitle : `${adv.cve}: ${baseTitle}`;
           actionItems.push({
             id: adv.cve || 'cve',
             severity: adv.severity || 'CRITICAL',
-            title: `${adv.cve || 'CVE'}: ${adv.title || pkgName}`,
+            title: displayTitle,
             file: targetFile,
             desc: adv.summary || adv.msg || '既知のセキュリティ脆弱性が報告されています。',
             fix_cmd: fixCmd,
@@ -10794,7 +10804,7 @@ def build_portal_html(data, is_shareable=False):
       const githubUrl = String(repoObj?.github_url || '').replace(/\\/+$/, '');
       const commitHash = String(repoObj?.source_revision?.commit_sha || repoObj?.commit_hash || '');
       const commitUrl = (githubUrl && commitHash) ? `${githubUrl}/commit/${commitHash}` : '';
-      const rawFile = String(act.file || '').split(' (Target:')[0].trim();
+      const rawFile = String(act.file || '').split(' (Target:')[0].replace(/\\s*\\(依存ライブラリ\\)\\s*$/, '').trim();
       const fileMatch = rawFile.match(/^(.+?):(\\d+)$/);
       const relPath = fileMatch ? fileMatch[1] : rawFile;
       const lineNum = fileMatch ? fileMatch[2] : '';

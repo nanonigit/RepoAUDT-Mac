@@ -308,6 +308,72 @@ def parse_semgrep(raw, directory, files, match_component):
     return findings
 
 
+_TRIVY_ECOSYSTEM_BY_TYPE = {
+    "npm": "npm",
+    "yarn": "npm",
+    "pnpm": "npm",
+    "pip": "PyPI",
+    "pipenv": "PyPI",
+    "poetry": "PyPI",
+    "uv": "PyPI",
+    "gomod": "Go",
+    "composer": "Packagist",
+    "cargo": "crates.io",
+}
+
+
+def _infer_trivy_ecosystem(res: dict, target: str) -> str:
+    res_type = str(res.get("Type") or "").strip().lower()
+    if res_type in _TRIVY_ECOSYSTEM_BY_TYPE:
+        return _TRIVY_ECOSYSTEM_BY_TYPE[res_type]
+    low_target = target.lower()
+    if low_target.endswith(("package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml")):
+        return "npm"
+    if low_target.endswith(("requirements.txt", "pyproject.toml", "poetry.lock", "pipfile.lock")):
+        return "PyPI"
+    if low_target.endswith(("go.mod", "go.sum")):
+        return "Go"
+    if low_target.endswith(("composer.json", "composer.lock")):
+        return "Packagist"
+    if low_target.endswith(("cargo.toml", "cargo.lock")):
+        return "crates.io"
+    return "npm"
+
+
+def _parse_version_tuple(raw: str):
+    m = re.search(r"(\d+(?:\.\d+)*)", str(raw or "").strip())
+    if not m:
+        return None
+    return tuple(int(part) for part in m.group(1).split("."))
+
+
+def _select_best_fixed_version(raw_fixed: str, installed: str = "") -> str:
+    """Pick the single best upgrade target from comma-separated Trivy FixedVersion values."""
+    candidates = [part.strip() for part in re.split(r"[,;]", str(raw_fixed or "")) if part.strip()]
+    if not candidates:
+        return ""
+    if len(candidates) == 1:
+        return candidates[0]
+
+    parsed = [(cand, _parse_version_tuple(cand)) for cand in candidates]
+    valid = [(cand, ver) for cand, ver in parsed if ver is not None]
+    if not valid:
+        return candidates[-1]
+
+    inst_ver = _parse_version_tuple(installed)
+    if inst_ver is not None:
+        same_major_upgrades = [
+            (cand, ver) for cand, ver in valid if ver[0] == inst_ver[0] and ver >= inst_ver
+        ]
+        if same_major_upgrades:
+            return min(same_major_upgrades, key=lambda item: item[1])[0]
+        higher_upgrades = [(cand, ver) for cand, ver in valid if ver >= inst_ver]
+        if higher_upgrades:
+            return min(higher_upgrades, key=lambda item: item[1])[0]
+
+    return max(valid, key=lambda item: item[1])[0]
+
+
 def parse_trivy(raw, files, match_component):
     """Parse Trivy FS JSON output into (misconfig_findings, vulnerability_advisories)."""
     text = raw.decode("utf-8", errors="ignore").strip() if isinstance(raw, (bytes, bytearray)) else str(raw).strip()
@@ -339,18 +405,25 @@ def parse_trivy(raw, files, match_component):
                 continue
             seen_vulns.add((cve, pkg))
             sev = _TRIVY_SEVERITY.get(str(vuln.get("Severity") or "MEDIUM").upper(), "medium")
-            installed = str(vuln.get("InstalledVersion") or "")
-            fixed = str(vuln.get("FixedVersion") or "")
+            installed = str(vuln.get("InstalledVersion") or "").strip()
+            raw_fixed = str(vuln.get("FixedVersion") or "").strip()
+            fixed = _select_best_fixed_version(raw_fixed, installed)
+            ecosystem = _infer_trivy_ecosystem(res, target)
             title = str(vuln.get("Title") or f"{pkg} ({installed}) vulnerability {cve}").strip()
             desc = str(vuln.get("Description") or title).strip()
             ref_url = str(vuln.get("PrimaryURL") or f"https://avd.aquasec.com/nvd/{cve.lower()}")
             advisories.append({
                 "cve": cve,
                 "severity": sev.upper(),
+                "package_name": pkg,
+                "ecosystem": ecosystem,
                 "pkg": pkg,
+                "installed": installed,
                 "installed_version": installed,
                 "fixed_version": fixed,
-                "title": f"[Trivy] {pkg}: {title}",
+                "safe_version": fixed,
+                "fixed_versions_all": raw_fixed,
+                "title": f"[Trivy] {pkg}: {title} ({cve})" if cve not in title else f"[Trivy] {pkg}: {title}",
                 "summary": desc,
                 "target": target,
                 "scanner": "trivy",
