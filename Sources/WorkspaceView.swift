@@ -618,9 +618,25 @@ struct MainContentView: View {
         .padding(32)
     }
 
+    private var appVersionLabel: String {
+        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.0"
+        return "v\(ver)"
+    }
+
     private var dashboard: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .center, spacing: 12) {
+                    Text("RepoAUDT Mac")
+                        .font(.title2.bold())
+                    Spacer()
+                    Text(appVersionLabel)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(SemanticColors.role("actionText"))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(SemanticColors.role("action").opacity(0.15), in: Capsule())
+                }
                 GroupBox {
                     HStack(spacing: 20) {
                         Image(systemName: "checkmark.shield").font(.system(size: 32)).foregroundStyle(SemanticColors.role("actionText"))
