@@ -138,6 +138,7 @@ struct MainContentView: View {
     @State private var highRiskCopyStatus: String?
     @State private var monitorEnabled = true
     @State private var monitorIntervalSec = 900
+    @State private var aspmRepos: [AspmRepoItem] = []
     @State private var monitorChecking = false
     @State private var monitorLastCheckTime = ""
     @State private var monitorSummary = ""
@@ -553,6 +554,7 @@ struct MainContentView: View {
                 coordinator.page = .dashboard
                 selection = [WorkspacePage.dashboard.rawValue]
             }
+            Task { await refreshAspmPortfolio() }
         }
         .confirmationDialog(
             reposPendingDeletion.count > 1
@@ -1015,38 +1017,84 @@ struct MainContentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
+                    if !aspmRepos.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text(english ? "ASPM Portfolio & Coverage Matrix" : "ASPM 組織ポートフォリオ & 資産カバレッジ")
+                                    .font(.headline)
+                                Spacer()
+                                Button {
+                                    Task { await refreshAspmPortfolio() }
+                                } label: {
+                                    Label(english ? "Refresh" : "更新", systemImage: "arrow.clockwise")
+                                }
+                                .buttonStyle(.borderless)
+                                .font(.caption)
+                            }
+                            VStack(spacing: 6) {
+                                ForEach(aspmRepos.prefix(8)) { item in
+                                    HStack(spacing: 10) {
+                                        Text(item.gateEmoji + " " + item.releaseGate)
+                                            .font(.caption.weight(.bold))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(item.gateColor.opacity(0.15), in: Capsule())
+                                            .foregroundStyle(item.gateColor)
+                                        Text(item.repo)
+                                            .font(.subheadline.weight(.semibold))
+                                            .lineLimit(1)
+                                        Text(item.criticalityLabel(english: english))
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                        Spacer()
+                                        Text("Risk \(item.riskScore)/100")
+                                            .font(.caption.monospacedDigit().weight(.semibold))
+                                        Text(item.coverageCompact)
+                                            .font(.caption2.monospaced())
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
+                                    .help(item.gateReasons.joined(separator: " / "))
+                                }
+                            }
+                        }
+                    }
+
                     Text(english ? "What RepoAUDT Audits" : "実施する監査内容")
                         .font(.headline)
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         auditScopeItem(
-                            title: english ? "Dependencies & IaC (OSV + Trivy)" : "依存関係・IaC 脆弱性（OSV + Trivy）",
+                            title: english ? "Dependencies, Malware & OSS Licenses (OSV + Trivy)" : "依存関係・マルウェア・OSSライセンス（OSV + Trivy）",
                             summary: english
-                                ? "Known CVEs, EOL runtimes, and Dockerfile / IaC misconfigurations."
-                                : "パッケージの既知 CVE、ランタイム EOL、Dockerfile 等の設定ミスを検出します。",
+                                ? "Detects CVEs (KEV/EPSS), MAL-* malicious packages, EOL runtimes, AGPL/GPL licenses, and exports CycloneDX SBOMs."
+                                : "既知 CVE（KEV/EPSS）、MAL-* マルウェア、ランタイム EOL、AGPL/GPL ライセンスを検出し、CycloneDX SBOM を出力します。",
                             symbol: "shippingbox.fill",
                             tint: SemanticColors.role("dangerText")
                         )
                         auditScopeItem(
-                            title: english ? "Source Code SAST (Semgrep + Ruff + AST)" : "ソースコード静的解析（Semgrep + Ruff + AST）",
+                            title: english ? "Source SAST & IaC (Semgrep + Ruff + Trivy)" : "ソースコード・IaC 静的解析（Semgrep + Ruff + Trivy）",
                             summary: english
-                                ? "Data-flow taint analysis for SQLi, XSS, command injection, and code quality."
-                                : "SQLi・XSS・コマンドインジェクション等の危険なデータフローとコード品質を解析します。",
+                                ? "Data-flow analysis for SQLi/XSS, Terraform/Dockerfile misconfigs, and structured Why/How/Verify AI fix proposals."
+                                : "SQLi/XSS 等のデータフロー解析、Terraform/Dockerfile 設定ミス検出、Why/How/Verify 構造化パッチ提案を行います。",
                             symbol: "magnifyingglass.circle.fill",
                             tint: SemanticColors.role("warningText")
                         )
                         auditScopeItem(
-                            title: english ? "Secrets & Credentials (Gitleaks)" : "シークレット・鍵流出検出（Gitleaks）",
+                            title: english ? "Secrets & Opt-in Liveness Check (Gitleaks)" : "シークレット検出＆生存確認（Gitleaks + Opt-in Verify）",
                             summary: english
-                                ? "Detects leaked API keys and tokens with automatic value redaction."
-                                : "API キーや認証トークンの誤コミットを検出し、値は自動でマスク表示します。",
+                                ? "Detects leaked API keys with masking and supports opt-in read-only Active/Revoked verification."
+                                : "API キーや認証トークンの誤コミットをマスク検出し、手動オプトインで読み取り専用の有効/失効確認が行えます。",
                             symbol: "key.fill",
                             tint: SemanticColors.role("actionText")
                         )
                         auditScopeItem(
-                            title: english ? "GitHub Actions CI/CD (zizmor + actionlint)" : "GitHub Actions 監査（zizmor + actionlint）",
+                            title: english ? "CI/CD, GitHub Posture & ASPM Gate (zizmor + ASPM)" : "GitHub Actions・Posture・ASPM ゲート（zizmor + ASPM）",
                             summary: english
-                                ? "Context-aware checks for script injection, write-all permissions, and syntax."
-                                : "コンテキスト解析によるインジェクション、過剰権限、未固定 Action、構文エラーを検査します。",
+                                ? "Audits workflow permissions/injections, repo visibility/branch protection, criticality Risk Score, and PASS/WARN/BLOCK gates."
+                                : "ワークフロー権限・インジェクション、リポジトリ保護設定、重要度加重 Risk Score と PASS/WARN/BLOCK ゲートを評価します。",
                             symbol: "gearshape.2.fill",
                             tint: SemanticColors.role("infoText")
                         )
@@ -2330,6 +2378,73 @@ struct MainContentView: View {
             throw NSError(domain: "RepoAUDT", code: 2, userInfo: [NSLocalizedDescriptionKey: msg])
         }
         return json
+    }
+
+    private func refreshAspmPortfolio() async {
+        guard backend.isReady else { return }
+        do {
+            let json = try await requestJSON("/api/aspm")
+            guard let rawRepos = json["repos"] as? [[String: Any]] else { return }
+            let parsed: [AspmRepoItem] = rawRepos.map { d in
+                let cov = d["coverage"] as? [String: [String: Any]] ?? [:]
+                let icon: (String) -> String = { key in
+                    let st = (cov[key]?["status"] as? String) ?? "unscanned"
+                    switch st {
+                    case "clean": return "✅"
+                    case "issues": return "⚠️"
+                    case "not_applicable": return "➖"
+                    default: return "⬜"
+                    }
+                }
+                let compact = "Sec:\(icon("secrets")) SCA:\(icon("sca")) SAST:\(icon("sast")) CI:\(icon("cicd")) IaC:\(icon("iac")) GH:\(icon("posture"))"
+                return AspmRepoItem(
+                    id: (d["id"] as? String) ?? UUID().uuidString,
+                    repo: (d["repo"] as? String) ?? "Repository",
+                    criticality: (d["criticality"] as? String) ?? "tier2_internal",
+                    riskScore: (d["risk_score"] as? Int) ?? 0,
+                    releaseGate: (d["release_gate"] as? String) ?? "PASS",
+                    gateReasons: (d["gate_reasons"] as? [String]) ?? [],
+                    coverageCompact: compact
+                )
+            }
+            await MainActor.run { aspmRepos = parsed }
+        } catch {
+            // Non-fatal dashboard enhancement
+        }
+    }
+}
+
+private struct AspmRepoItem: Identifiable {
+    let id: String
+    let repo: String
+    let criticality: String
+    let riskScore: Int
+    let releaseGate: String
+    let gateReasons: [String]
+    let coverageCompact: String
+
+    var gateEmoji: String {
+        switch releaseGate {
+        case "BLOCK": return "🔴"
+        case "WARN": return "🟡"
+        default: return "🟢"
+        }
+    }
+
+    var gateColor: Color {
+        switch releaseGate {
+        case "BLOCK": return SemanticColors.role("dangerText")
+        case "WARN": return SemanticColors.role("warningText")
+        default: return SemanticColors.role("successText")
+        }
+    }
+
+    func criticalityLabel(english: Bool) -> String {
+        switch criticality {
+        case "tier1_prod": return english ? "Tier 1 (Prod)" : "Tier 1 (本番)"
+        case "tier3_demo": return english ? "Tier 3 (Demo)" : "Tier 3 (デモ)"
+        default: return english ? "Tier 2 (Internal)" : "Tier 2 (社内)"
+        }
     }
 }
 

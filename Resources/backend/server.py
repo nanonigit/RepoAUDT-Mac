@@ -656,6 +656,17 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/settings"):
             self._send_json(200, security_audit_engine.get_masked_settings())
             return
+        if self.path.startswith("/api/aspm"):
+            import aspm_engine
+            state = analyzer.load_saved_analyses()
+            settings = security_audit_engine.get_masked_settings()
+            portfolio = aspm_engine.build_aspm_portfolio(
+                state.get("diagrams", []),
+                policy=settings.get("aspm_policy"),
+                history=analyzer.load_scan_history(),
+            )
+            self._send_json(200, {"ok": True, **portfolio})
+            return
         if self.path.startswith("/api/health"):
             self._send_json(200, check_live_health(self.server_port))
             return
@@ -903,6 +914,28 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 suppress = bool(body.get("suppress", True))
                 suppressed = analyzer.set_finding_suppression(fp, reason=reason, suppress=suppress)
                 self._send_json(200, {"ok": True, "suppressed": suppressed})
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path == "/api/repo/meta":
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                target_id = str(body.get("diagram_id") or body.get("repo") or "").strip()
+                criticality = str(body.get("criticality") or "tier2_internal").strip()
+                updated = analyzer.set_repo_criticality(target_id, criticality)
+                self._send_json(200, {"ok": True, **updated})
+            except LookupError as exc:
+                self._send_json(404, {"error": str(exc)})
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path == "/api/aspm/policy":
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                saved = security_audit_engine.save_settings({"aspm_policy": body})
+                self._send_json(200, {"ok": True, "aspm_policy": saved.get("aspm_policy", {})})
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
             return

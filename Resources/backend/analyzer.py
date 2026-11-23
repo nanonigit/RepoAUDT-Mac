@@ -30,6 +30,8 @@ import source_revision
 APP_SUPPORT_DIR = security_audit_engine.APP_SUPPORT_DIR
 REPOS_CACHE_DIR = APP_SUPPORT_DIR / "repos"
 STATE_FILE = APP_SUPPORT_DIR / "analyzed_repos.json"
+HISTORY_FILE = APP_SUPPORT_DIR / "scan_history.json"
+MAX_SCAN_HISTORY = 90
 _STATE_LOCK = threading.Lock()
 _GITHUB_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
@@ -2287,10 +2289,13 @@ def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) 
 
         existing = []
         previous_fps_by_id: Dict[str, set] = {}
+        previous_crit_by_id: Dict[str, str] = {}
         for d in state.get("diagrams", []):
             did = str(d.get("id") or "")
             durl = str(d.get("github_url") or "")
             if did in new_ids or did in replaced_ids or (durl, d.get("perspective")) in new_urls:
+                if d.get("criticality"):
+                    previous_crit_by_id[did] = str(d["criticality"])
                 cr_old = d.get("coderabbit") or {}
                 fps = {
                     str(it.get("fingerprint"))
@@ -2307,6 +2312,12 @@ def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) 
                 # Prune stale/renamed repo from this owner
                 continue
             existing.append(d)
+
+        for d in new_diagrams:
+            if isinstance(d, dict) and not d.get("criticality"):
+                did = str(d.get("id") or "")
+                if did in previous_crit_by_id:
+                    d["criticality"] = previous_crit_by_id[did]
 
         suppressed_map = state.get("suppressed_findings") or {}
         if previous_fps_by_id or suppressed_map:
@@ -2338,7 +2349,91 @@ def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) 
         state.setdefault("techSpecs", {}).update(result.get("techSpecs", {}))
         state.setdefault("tableSchemas", {}).update(result.get("tableSchemas", {}))
         _write_json_atomic(STATE_FILE, state)
-        return state
+
+    for d in new_diagrams:
+        if isinstance(d, dict) and not d.get("is_root"):
+            try:
+                did = str(d.get("id") or "")
+                prev_fps = previous_fps_by_id.get(did, set())
+                cr = d.get("coderabbit") if isinstance(d.get("coderabbit"), dict) else {}
+                cur_fps = {
+                    str(it.get("fingerprint"))
+                    for it in (list(cr.get("action_items") or []) + list(cr.get("findings") or []))
+                    if isinstance(it, dict) and it.get("fingerprint")
+                }
+                resolved_cnt = len(prev_fps - cur_fps) if prev_fps else 0
+                new_cnt = len(cur_fps - prev_fps) if prev_fps else len(cur_fps)
+                append_scan_history_snapshot(d, resolved_since_prev=resolved_cnt, new_since_prev=new_cnt)
+            except Exception:
+                pass
+    return state
+
+
+def load_scan_history(history_file: Optional[Path] = None) -> List[Dict[str, Any]]:
+    target = history_file or HISTORY_FILE
+    if not target.exists():
+        return []
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def append_scan_history_snapshot(
+    diagram: Dict[str, Any],
+    *,
+    resolved_since_prev: int = 0,
+    new_since_prev: int = 0,
+    history_file: Optional[Path] = None,
+) -> List[Dict[str, Any]]:
+    """Append a scan snapshot and rotate history to MAX_SCAN_HISTORY (90) entries."""
+    from aspm_engine import compute_risk_score
+
+    target = history_file or HISTORY_FILE
+    risk = compute_risk_score(diagram)
+    counts = risk["counts"]
+    snapshot = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "repo_id": str(diagram.get("id") or ""),
+        "repo": str(diagram.get("repo") or diagram.get("github_url") or ""),
+        "p0_count": int(counts.get("P0", 0)),
+        "p1_count": int(counts.get("P1", 0)),
+        "p2_count": int(counts.get("P2", 0)),
+        "p3_count": int(counts.get("P3", 0)),
+        "resolved_since_prev": int(resolved_since_prev),
+        "new_since_prev": int(new_since_prev),
+        "risk_score": int(risk.get("risk_score", 0)),
+    }
+    with _STATE_LOCK:
+        history = load_scan_history(target)
+        history.append(snapshot)
+        if len(history) > MAX_SCAN_HISTORY:
+            history = history[-MAX_SCAN_HISTORY:]
+        _write_json_atomic(target, history)
+        return history
+
+
+def set_repo_criticality(diagram_id: str, criticality: str) -> Dict[str, Any]:
+    """Persist business criticality tier (tier1_prod / tier2_internal / tier3_demo) on a repository."""
+    from aspm_engine import normalize_criticality
+
+    target_id = str(diagram_id or "").strip()
+    norm_crit = normalize_criticality(criticality)
+    if not target_id:
+        raise ValueError("diagram_id or repo is required")
+
+    with _STATE_LOCK:
+        state = _load_saved_analyses_unlocked()
+        matched = None
+        for d in state.get("diagrams", []):
+            if str(d.get("id") or "") == target_id or str(d.get("repo") or "") == target_id:
+                d["criticality"] = norm_crit
+                matched = d
+        if not matched:
+            raise LookupError(f"Repository '{target_id}' not found")
+        _write_json_atomic(STATE_FILE, state)
+        return {"id": str(matched.get("id") or ""), "repo": str(matched.get("repo") or ""), "criticality": norm_crit}
 
 
 def delete_saved_diagram(diagram_id: Optional[str] = None, category: Optional[str] = None, ids_list: Optional[List[str]] = None) -> Dict[str, Any]:

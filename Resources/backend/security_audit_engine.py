@@ -164,6 +164,11 @@ def save_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
         current["models"].update(payload["models"])
     if isinstance(payload.get("skills"), dict):
         current["skills"].update(payload["skills"])
+    if isinstance(payload.get("aspm_policy"), dict):
+        pol = current.setdefault("aspm_policy", {"block_on_p0": True, "block_on_tier1_kev": True, "warn_on_p1": True})
+        for pk in ("block_on_p0", "block_on_tier1_kev", "warn_on_p1"):
+            if pk in payload["aspm_policy"]:
+                pol[pk] = bool(payload["aspm_policy"][pk])
 
     APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -198,6 +203,12 @@ def get_masked_settings(settings: Optional[Dict[str, Any]] = None) -> Dict[str, 
         "keys_masked": masked_keys,
         "configured": configured_status,
         "models": s.get("models", DEFAULT_SETTINGS["models"]),
+        "aspm_policy": {
+            "block_on_p0": True,
+            "block_on_tier1_kev": True,
+            "warn_on_p1": True,
+            **(s.get("aspm_policy") if isinstance(s.get("aspm_policy"), dict) else {}),
+        },
         "skills": s.get("skills", DEFAULT_SETTINGS["skills"]),
     }
 

@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/23 22:19:06</strong>
+              <strong id="portal-sync-time">2026/11/23 22:25:05</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -8735,6 +8735,12 @@
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
               <h2>${en ? 'Security Triage & Findings' : 'セキュリティ監査・トリアージ'}</h2>
               ${postureBadgesHtml}
+              <span id="repo-aspm-badges" style="display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap;"></span>
+              <select id="repo-criticality-select" aria-label="${en ? 'Business Criticality' : '業務重要度'}" style="font-size: 0.78rem; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-surface); color: var(--workspace-text);">
+                <option value="tier1_prod" ${repo.criticality === 'tier1_prod' ? 'selected' : ''}>${en ? 'Tier 1: Prod / Customer' : 'Tier 1: 本番・顧客向け (1.5x)'}</option>
+                <option value="tier2_internal" ${(!repo.criticality || repo.criticality === 'tier2_internal') ? 'selected' : ''}>${en ? 'Tier 2: Internal' : 'Tier 2: 社内向け (1.0x)'}</option>
+                <option value="tier3_demo" ${repo.criticality === 'tier3_demo' ? 'selected' : ''}>${en ? 'Tier 3: Demo / Sandbox' : 'Tier 3: デモ・実験 (0.5x)'}</option>
+              </select>
             </div>
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
               <span>${en ? `${issues.length} shown / ${enrichedIssues.length} total` : `表示 ${issues.length}件 / 全${enrichedIssues.length}件`}${repoAuditDateFull ? ` · ${en ? 'Audited' : '指摘日'}: ${escapeHtml(repoAuditDateFull)}` : ''}</span>
@@ -8769,6 +8775,11 @@
               </span>
             </div>`;
           })()}
+
+          <details id="aspm-portfolio-panel" style="margin-bottom: 12px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); padding: 10px 14px;">
+            <summary style="cursor: pointer; font-weight: 700; font-size: 0.88rem;">📊 ${en ? 'ASPM Portfolio, Coverage Matrix & Risk Trend' : 'ASPM 組織ポートフォリオ（資産カバレッジ行列・リスク推移）'}</summary>
+            <div id="aspm-portfolio-body" style="margin-top: 10px; font-size: 0.82rem; color: var(--workspace-muted);">${en ? 'Loading ASPM portfolio…' : 'ASPM ポートフォリオを読み込み中…'}</div>
+          </details>
 
           ${enrichedIssues.length > 0 ? `
           <div style="padding: 10px 14px; border-radius: 10px; border: 1px solid var(--workspace-border); background: rgba(56, 189, 248, 0.08); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
@@ -8956,9 +8967,10 @@
               <code style="font-size: 0.8rem; word-break: break-all;">${escapeHtml(dFile)}</code>
 
               <div style="padding: 10px 12px; border-radius: 8px; border: 1px solid var(--workspace-border); background: var(--workspace-background); display: grid; gap: 6px; font-size: 0.85rem;">
-                <div><strong>${en ? 'Why it matters:' : '重要度・リスク理由:'}</strong> ${escapeHtml(dIss.priority_reason || dIss.severity || '')}</div>
-                <div><strong>${en ? 'Scenario:' : '想定リスク:'}</strong> ${escapeHtml(dIss.desc || dIss.comment || dIss.summary || '')}</div>
+                <div><strong>${en ? '1. Root Cause / Data Flow (Why):' : '1. データフロー / 根本原因（Why）:'}</strong> ${escapeHtml(dIss.priority_reason || dIss.severity || '')} — ${escapeHtml(dIss.desc || dIss.comment || dIss.summary || '')}</div>
                 <div><strong>${en ? 'Reachability:' : '到達可能性:'}</strong> ${escapeHtml(dIss.reachability || 'reachable')}</div>
+                <div><strong>${en ? '2. Minimal Patch (How):' : '2. 最小変更パッチ（How）:'}</strong> ${dIss.fix_cmd ? `<code>${escapeHtml(dIss.fix_cmd)}</code>` : (en ? 'See safe diff preview below' : '下の安全な差分プレビューを参照')}</div>
+                <div><strong>${en ? '3. Verification (Verify):' : '3. 修正後の検証手順（Verify）:'}</strong> ${escapeHtml(dIss._cat === 'Dependencies (SCA)' ? (en ? 'Run lockfile install and re-run dependency/test suite.' : '依存関係更新後にビルドと既存テストを実行し、リグレッションがないことを確認してください。') : (en ? 'Run linter, type-check, and unit tests to confirm zero regressions.' : 'パッチ適用後にリンター・型チェック・ユニットテストを実行して正常動作を確認してください。'))}</div>
               </div>
 
               ${(dIss._cat === 'Secrets' || dIss.category === 'secrets' || dIss.secret_liveness || String(dIss.title || '').includes('シークレット')) ? (() => {
@@ -9189,6 +9201,105 @@
           }
         });
       }
+      const critSelect = view.querySelector('#repo-criticality-select');
+      if (critSelect) {
+        critSelect.addEventListener('change', async () => {
+          critSelect.disabled = true;
+          try {
+            const resp = await fetch('/api/repo/meta', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ diagram_id: repo.id || repo.repo || '', criticality: critSelect.value })
+            });
+            if (resp.ok) {
+              repo.criticality = critSelect.value;
+              await syncSavedAnalysesFromServer();
+              renderCodeRabbitView();
+            }
+          } finally {
+            critSelect.disabled = false;
+          }
+        });
+      }
+      (async () => {
+        try {
+          const resp = await fetch('/api/aspm');
+          if (!resp.ok) return;
+          const aspm = await resp.json();
+          const reposList = Array.isArray(aspm.repos) ? aspm.repos : [];
+          const curEntry = reposList.find(r => (r.id && r.id === repo.id) || r.repo === repo.repo);
+          const badgeBox = view.querySelector('#repo-aspm-badges');
+          if (badgeBox && curEntry) {
+            const g = curEntry.release_gate || 'PASS';
+            const gIcon = g === 'BLOCK' ? '🔴' : (g === 'WARN' ? '🟡' : '🟢');
+            const gCls = g === 'BLOCK' ? 'danger' : (g === 'WARN' ? 'warning' : 'success');
+            const reasonTitle = (curEntry.gate_reasons || []).join(' / ');
+            badgeBox.innerHTML = `<span class="issue-severity ${gCls}" title="${escapeHtml(reasonTitle)}">${gIcon} ${escapeHtml(g)}</span><span class="issue-severity neutral" title="${en ? 'Weighted Risk Score (0-100)' : '重要度加重リスクスコア (0-100)'}">Risk ${escapeHtml(String(curEntry.risk_score ?? 0))}/100</span>`;
+          }
+          const bodyEl = view.querySelector('#aspm-portfolio-body');
+          if (bodyEl) {
+            const cellIcon = c => {
+              if (!c) return '⬜';
+              if (c.status === 'clean') return '✅';
+              if (c.status === 'issues') return '⚠️ ' + (c.count || 0);
+              if (c.status === 'not_applicable') return '➖';
+              return '⬜';
+            };
+            const rows = reposList.map(r => {
+              const cv = r.coverage || {};
+              const g = r.release_gate || 'PASS';
+              const gIcon = g === 'BLOCK' ? '🔴' : (g === 'WARN' ? '🟡' : '🟢');
+              const reasons = (r.gate_reasons || []).join(' / ');
+              return `<tr style="border-top: 1px solid var(--workspace-border);">
+                <td style="padding: 6px 8px; font-weight: 600;">${escapeHtml(r.repo || '')}</td>
+                <td style="padding: 6px 8px;">${escapeHtml(r.criticality || 'tier2_internal')}</td>
+                <td style="padding: 6px 8px; font-weight: 700;">${escapeHtml(String(r.risk_score ?? 0))}</td>
+                <td style="padding: 6px 8px;" title="${escapeHtml(reasons)}">${gIcon} ${escapeHtml(g)}</td>
+                <td style="padding: 6px 8px;">${cellIcon(cv.secrets)}</td>
+                <td style="padding: 6px 8px;">${cellIcon(cv.sca)}</td>
+                <td style="padding: 6px 8px;">${cellIcon(cv.sast)}</td>
+                <td style="padding: 6px 8px;">${cellIcon(cv.cicd)}</td>
+                <td style="padding: 6px 8px;">${cellIcon(cv.iac)}</td>
+                <td style="padding: 6px 8px;">${cellIcon(cv.posture)}</td>
+              </tr>`;
+            }).join('');
+            const hist = Array.isArray(aspm.history) ? aspm.history.slice(-14) : [];
+            let svgHtml = '';
+            if (hist.length >= 2) {
+              const w = 360, h = 64, pad = 6;
+              const pts = hist.map((pt, idx) => {
+                const x = pad + (idx * (w - pad * 2)) / Math.max(1, hist.length - 1);
+                const y = h - pad - ((Math.min(100, Number(pt.risk_score || 0)) / 100) * (h - pad * 2));
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+              }).join(' ');
+              const latest = hist[hist.length - 1];
+              svgHtml = `<div style="margin-top: 12px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                <div>
+                  <div style="font-weight: 700; margin-bottom: 4px;">📈 ${en ? 'Risk Score Trend (Recent Scans)' : 'リスクスコア推移（直近スキャン）'}</div>
+                  <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="background: var(--workspace-background); border: 1px solid var(--workspace-border); border-radius: 6px;">
+                    <polyline fill="none" stroke="#38bdf8" stroke-width="2" points="${pts}"/>
+                  </svg>
+                </div>
+                <div style="font-size: 0.78rem;">
+                  <div>P0: <strong>${latest.p0_count || 0}</strong> · P1: <strong>${latest.p1_count || 0}</strong></div>
+                  <div>${en ? 'New' : '新規'}: <strong>+${latest.new_since_prev || 0}</strong> · ${en ? 'Resolved' : '解消'}: <strong>-${latest.resolved_since_prev || 0}</strong></div>
+                </div>
+              </div>`;
+            }
+            bodyEl.innerHTML = `<div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; color: var(--workspace-text);">
+                <thead>
+                  <tr style="text-align: left; color: var(--workspace-muted);">
+                    <th style="padding: 4px 8px;">Repo</th><th style="padding: 4px 8px;">Criticality</th><th style="padding: 4px 8px;">Risk</th><th style="padding: 4px 8px;">Gate</th>
+                    <th style="padding: 4px 8px;">Secrets</th><th style="padding: 4px 8px;">SCA</th><th style="padding: 4px 8px;">SAST</th><th style="padding: 4px 8px;">CI/CD</th><th style="padding: 4px 8px;">IaC</th><th style="padding: 4px 8px;">Posture</th>
+                  </tr>
+                </thead>
+                <tbody>${rows || '<tr><td colspan="10">No repositories</td></tr>'}</tbody>
+              </table>
+            </div>${svgHtml}`;
+          }
+        } catch (_err) {}
+      })();
       for (const finding of view.querySelectorAll('.audit-issue')) {
         finding.addEventListener('toggle', () => {
           const button = finding.querySelector('[data-load-finding-source]');
@@ -9215,20 +9326,20 @@
           '',
           '[Detected Issue]: ' + title,
           '[Target File/Location]: ' + targetFile,
-          '[Reason / Risk]: ' + desc
+          '[1. Data Flow / Root Cause (Why)]: ' + desc
         ];
         if (act.diff) {
-          lines.push('[Recommended Fix Diff]:', act.diff);
+          lines.push('[2. Minimal Safe Patch (How) - Diff]:', act.diff);
         }
         if (act.fix_cmd) {
-          lines.push('[Verification / Fix Command]:', '$ ' + act.fix_cmd);
+          lines.push('[2. Minimal Safe Patch (How) - Command]:', '$ ' + act.fix_cmd);
         }
         lines.push(
           '',
-          '[Remediation Requirements]:',
-          '1. Locate the exact code in `' + targetFile + '` and implement the remediation meeting security and robustness standards.',
-          '2. Preserve existing function signatures and callers to avoid side effects.',
-          '3. Run syntax checks, type checks, and unit tests after editing to confirm zero regressions.'
+          '[3. Post-Fix Verification (Verify)]:',
+          '1. Locate the exact code in `' + targetFile + '` and apply the minimal safe patch preserving existing interfaces.',
+          '2. Run syntax checks, type checks, and unit tests after editing to confirm zero regressions.',
+          '3. Re-run RepoAUDT scan to verify the finding transitions to resolved.'
         );
         return lines.join('\n');
       }
@@ -9238,20 +9349,20 @@
         '',
         '【検知された問題】: ' + title,
         '【対象ファイル・箇所】: ' + targetFile,
-        '【要対応の理由・リスク】: ' + desc
+        '【1. データフロー / 根本原因（Why）】: ' + desc
       ];
       if (act.diff) {
-        lines.push('【推奨修正Diffの目安】:', act.diff);
+        lines.push('【2. 最小変更パッチ（How）- Diff目安】:', act.diff);
       }
       if (act.fix_cmd) {
-        lines.push('【確認・適用コマンド】:', '$ ' + act.fix_cmd);
+        lines.push('【2. 最小変更パッチ（How）- コマンド】:', '$ ' + act.fix_cmd);
       }
       lines.push(
         '',
-        '【修正要件】:',
-        '1. `' + targetFile + '` の該当箇所を特定し、上記のセキュリティ・堅牢性基準を満たすように安全に実装を修正してください。',
-        '2. 既存の関数シグネチャや呼び出し元との互換性を維持し、副作用が出ないようにしてください。',
-        '3. 修正後に構文チェック・型チェック・テストを実行してエラーがないことを確認してください。'
+        '【3. 修正後の検証手順（Verify）】:',
+        '1. `' + targetFile + '` の該当箇所を特定し、既存インターフェースを維持した最小限の安全パッチを適用する。',
+        '2. 修正後に構文チェック・型チェック・ユニットテストを実行し、リグレッションがないことを確認する。',
+        '3. RepoAUDT 再スキャンで該当指摘が解消されたことを確認する。'
       );
       return lines.join('\n');
     }
