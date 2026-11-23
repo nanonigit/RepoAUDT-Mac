@@ -923,9 +923,12 @@ def _adv_version_tuple(raw: str) -> tuple[int, ...]:
 
 
 def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Group OSV/Trivy advisories by (target_file, package_name) into one remediation item per package."""
-    groups: Dict[tuple[str, str], Dict[str, Any]] = {}
-    order: List[tuple[str, str]] = []
+    """Group OSV/Trivy advisories by (manifest_dir, ecosystem, package_name) into one remediation item."""
+    from source_scanners import select_safe_upgrade_version
+
+    groups: Dict[tuple[str, str, str], Dict[str, Any]] = {}
+    order: List[tuple[str, str, str]] = []
+    manifest_names = ("package.json", "requirements.txt", "pyproject.toml", "go.mod", "composer.json", "cargo.toml")
 
     for adv in advisories:
         if not isinstance(adv, dict):
@@ -936,20 +939,19 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
         if not eco:
             m_eco = re.search(r"\(([^)]+)\)\s*$", raw_pkg)
             eco = m_eco.group(1).strip() if m_eco else "npm"
+        eco_low = eco.lower()
         installed = str(adv.get("installed") or adv.get("installed_version") or "").strip()
         rem_preview = build_advisory_remediation(adv)
         target_file = str(adv.get("target") or "").removeprefix("./").strip() or rem_preview["file"]
-        key = (target_file, pkg_name.lower())
+        manifest_dir = str(Path(target_file).parent)
+        key = (manifest_dir, eco_low, pkg_name.lower())
 
         sev = str(adv.get("severity") or "high").lower()
         if sev not in _SEV_ORDER:
             sev = "high"
         cve_label = str(adv.get("cve") or adv.get("osv_id") or "").strip()
-        fixed_ver = ""
-        raw_fixed = str(adv.get("fixed_version") or adv.get("safe_version") or "").strip()
-        if raw_fixed:
-            from source_scanners import _select_best_fixed_version
-            fixed_ver = _select_best_fixed_version(raw_fixed, installed)
+        raw_fixed = str(adv.get("fixed_versions_all") or adv.get("fixed_version") or adv.get("safe_version") or "").strip()
+        adv_safe = select_safe_upgrade_version(raw_fixed, installed, pick_highest_same_major=False)
 
         if key not in groups:
             order.append(key)
@@ -960,7 +962,7 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
                 "target_file": target_file,
                 "severity": sev,
                 "cves": [cve_label] if cve_label else [],
-                "fixed_version": fixed_ver,
+                "fixed_version": adv_safe,
                 "first_title": str(adv.get("title") or "").strip(),
                 "first_summary": str(adv.get("summary") or "").strip(),
                 "official_source": (adv.get("sources") or [{}])[0].get("url", "") if isinstance(adv.get("sources"), list) and adv.get("sources") else "",
@@ -971,10 +973,12 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
                 g["severity"] = sev
             if cve_label and cve_label not in g["cves"]:
                 g["cves"].append(cve_label)
-            if fixed_ver and (not g["fixed_version"] or _adv_version_tuple(fixed_ver) > _adv_version_tuple(g["fixed_version"])):
-                g["fixed_version"] = fixed_ver
+            if adv_safe and (not g["fixed_version"] or _adv_version_tuple(adv_safe) > _adv_version_tuple(g["fixed_version"])):
+                g["fixed_version"] = adv_safe
             if not g["installed"] and installed:
                 g["installed"] = installed
+            if Path(target_file).name.lower() in manifest_names:
+                g["target_file"] = target_file
 
     grouped_items: List[Dict[str, Any]] = []
     for key in order:
@@ -1808,6 +1812,8 @@ def _is_legacy_noise_finding(item: Any) -> bool:
     if "Private Cryptographic Key" in title and (is_example_env or "..." in str(item.get("diff") or "")):
         return True
     if "OpenAI API Key" in title and (is_example_env or "xxxx" in str(item.get("desc") or "").lower()):
+        return True
+    if "(private-key)" in title and ("docs/" in file_loc or base_name == "readme.md"):
         return True
     if "(generic-api-key)" in title and (
         is_example_env

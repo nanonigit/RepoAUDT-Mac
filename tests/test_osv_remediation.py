@@ -151,6 +151,65 @@ class TestOsvRemediation(unittest.TestCase):
         self.assertIn("16.4.5", next_item["title"])
         self.assertEqual(next_item["fix_cmd"], "npm install next@^16.4.5")
 
+    def test_no_downgrade_and_prerelease_exclusion(self) -> None:
+        import source_scanners
+
+        # 1. ajv 8.17.1: never downgrade to 6.14.0; pick 8.18.0 when present, else ""
+        self.assertEqual(
+            source_scanners.select_safe_upgrade_version(["6.14.0", "8.18.0"], "8.17.1"),
+            "8.18.0",
+        )
+        self.assertEqual(
+            source_scanners.select_safe_upgrade_version(["6.14.0"], "8.17.1"),
+            "",
+        )
+
+        # 2. body-parser 2.2.0: never downgrade to 1.20.9; pick 2.4.0
+        self.assertEqual(
+            source_scanners.select_safe_upgrade_version(["1.20.9", "2.4.0"], "2.2.0"),
+            "2.4.0",
+        )
+
+        # 3. @sentry/nextjs 10.38.0: prefer stable 10.40.0 over 11.0.0-rc.1;
+        # if only prerelease exists, fall back to "" (@latest)
+        self.assertEqual(
+            source_scanners.select_safe_upgrade_version(["10.40.0", "11.0.0-rc.1"], "10.38.0"),
+            "10.40.0",
+        )
+        self.assertEqual(
+            source_scanners.select_safe_upgrade_version(["11.0.0-rc.1"], "10.38.0"),
+            "",
+        )
+
+    def test_merges_osv_package_json_and_trivy_package_lock_json_into_one(self) -> None:
+        advisories = [
+            {
+                "package_name": "next",
+                "ecosystem": "npm",
+                "installed": "16.2.0",
+                "fixed_version": "16.4.1",
+                "cve": "CVE-2026-1001",
+                "severity": "HIGH",
+                "target": "package.json",
+            },
+            {
+                "package_name": "next",
+                "ecosystem": "npm",
+                "installed": "16.2.0",
+                "fixed_version": "16.4.5",
+                "cve": "CVE-2026-1002",
+                "severity": "CRITICAL",
+                "target": "package-lock.json",
+            },
+        ]
+        grouped = analyzer.group_advisories_by_package(advisories)
+        self.assertEqual(len(grouped), 1)
+        item = grouped[0]
+        self.assertEqual(item["file"], "package.json")
+        self.assertEqual(item["severity"], "critical")
+        self.assertEqual(item["fix_cmd"], "npm install next@^16.4.5")
+        self.assertIn("16.4.5", item["title"])
+
 
 if __name__ == "__main__":
     unittest.main()

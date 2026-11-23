@@ -153,6 +153,28 @@ def _is_benign_generic_api_key(directory: Path, relative: str, line: int) -> boo
     return is_comment or has_placeholder
 
 
+def _is_benign_private_key_doc(directory: Path, relative: str, line: int) -> bool:
+    """Return True if a Gitleaks private-key hit is a single-line ellipsis/doc placeholder in docs/README."""
+    rel_low = relative.lower().replace("\\", "/")
+    parts = [p.lower() for p in Path(relative).parts]
+    name = parts[-1] if parts else ""
+    is_doc = (
+        "docs" in parts[:-1]
+        or name == "readme.md"
+        or name.endswith((".md", ".mdx"))
+    )
+    if not is_doc:
+        return False
+    try:
+        lines = (directory / relative).read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return False
+    if not 1 <= line <= len(lines):
+        return False
+    low = lines[line - 1].lower()
+    return "..." in low or "base64 content" in low or "placeholder" in low or "example" in low
+
+
 def parse_findings(scanner, raw, directory, files, match_component):
     data = json.loads(raw)
     if data is None and scanner == "gitleaks":
@@ -194,6 +216,8 @@ def parse_findings(scanner, raw, directory, files, match_component):
             continue
         seen.add(key)
         if scanner == "gitleaks" and rule == "generic-api-key" and _is_benign_generic_api_key(directory, relative, line):
+            continue
+        if scanner == "gitleaks" and rule == "private-key" and _is_benign_private_key_doc(directory, relative, line):
             continue
         component = match_component(relative)
         findings.append(
@@ -407,38 +431,67 @@ def _infer_trivy_ecosystem(res: dict, target: str) -> str:
     return "npm"
 
 
+_PRERELEASE_RE = re.compile(r"-(?:rc|alpha|beta|dev|canary|preview|next|pre)(?:[.\-\d]|$)", re.IGNORECASE)
+
+
+def _is_prerelease_version(raw: str) -> bool:
+    return bool(_PRERELEASE_RE.search(str(raw or "").strip()))
+
+
 def _parse_version_tuple(raw: str):
     m = re.search(r"(\d+(?:\.\d+)*)", str(raw or "").strip())
     if not m:
         return None
-    return tuple(int(part) for part in m.group(1).split("."))
+    parts = [int(part) for part in m.group(1).split(".")]
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts)
+
+
+def select_safe_upgrade_version(candidates, installed: str = "", *, pick_highest_same_major: bool = False) -> str:
+    """
+    Pick a safe upgrade version from candidates:
+      1. Never downgrade: exclude any candidate <= installed.
+      2. Prefer stable (non-prerelease) candidates; if only prereleases exist, return "".
+      3. Prefer same-major upgrade over next-major; if none in same major, pick smallest next-major.
+         When pick_highest_same_major=True (e.g. merging multiple CVEs), pick the highest same-major
+         upgrade so all CVEs in that branch are resolved at once.
+    """
+    if isinstance(candidates, str):
+        raw_list = [part.strip() for part in re.split(r"[,;]", candidates) if part.strip()]
+    else:
+        raw_list = [str(c).strip() for c in (candidates or []) if str(c).strip()]
+    if not raw_list:
+        return ""
+
+    stable_valid = []
+    for cand in raw_list:
+        if _is_prerelease_version(cand):
+            continue
+        ver = _parse_version_tuple(cand)
+        if ver is not None:
+            stable_valid.append((cand, ver))
+
+    if not stable_valid:
+        return ""
+
+    inst_ver = _parse_version_tuple(installed)
+    if inst_ver is not None:
+        strictly_newer = [(cand, ver) for cand, ver in stable_valid if ver > inst_ver]
+        if not strictly_newer:
+            return ""
+        same_major = [(cand, ver) for cand, ver in strictly_newer if ver[0] == inst_ver[0]]
+        if same_major:
+            chooser = max if pick_highest_same_major else min
+            return chooser(same_major, key=lambda item: item[1])[0]
+        return min(strictly_newer, key=lambda item: item[1])[0]
+
+    return max(stable_valid, key=lambda item: item[1])[0]
 
 
 def _select_best_fixed_version(raw_fixed: str, installed: str = "") -> str:
     """Pick the single best upgrade target from comma-separated Trivy FixedVersion values."""
-    candidates = [part.strip() for part in re.split(r"[,;]", str(raw_fixed or "")) if part.strip()]
-    if not candidates:
-        return ""
-    if len(candidates) == 1:
-        return candidates[0]
-
-    parsed = [(cand, _parse_version_tuple(cand)) for cand in candidates]
-    valid = [(cand, ver) for cand, ver in parsed if ver is not None]
-    if not valid:
-        return candidates[-1]
-
-    inst_ver = _parse_version_tuple(installed)
-    if inst_ver is not None:
-        same_major_upgrades = [
-            (cand, ver) for cand, ver in valid if ver[0] == inst_ver[0] and ver >= inst_ver
-        ]
-        if same_major_upgrades:
-            return min(same_major_upgrades, key=lambda item: item[1])[0]
-        higher_upgrades = [(cand, ver) for cand, ver in valid if ver >= inst_ver]
-        if higher_upgrades:
-            return min(higher_upgrades, key=lambda item: item[1])[0]
-
-    return max(valid, key=lambda item: item[1])[0]
+    return select_safe_upgrade_version(raw_fixed, installed, pick_highest_same_major=False)
 
 
 def parse_trivy(raw, files, match_component):

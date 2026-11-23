@@ -9017,12 +9017,33 @@ def build_portal_html(data, is_shareable=False):
           const eco = String(adv.ecosystem || ((String(adv.pkg || '').match(/\(([^)]+)\)\s*$/) || [])[1]) || 'npm').toLowerCase();
           const installedVer = String(adv.installed || adv.installed_version || '').trim();
           const rawFixed = String(adv.fixed_version || adv.safe_version || '').trim();
-          const fixedCandidates = rawFixed.split(/[,;]/).map(s => s.trim()).filter(Boolean);
-          let fixedVer = fixedCandidates[0] || '';
-          if (fixedCandidates.length > 1) {
-            const instMajor = (installedVer.match(/^v?(\d+)/) || [])[1];
-            const sameMajor = instMajor ? fixedCandidates.filter(v => (v.match(/^v?(\d+)/) || [])[1] === instMajor) : [];
-            fixedVer = (sameMajor.length ? sameMajor[sameMajor.length - 1] : fixedCandidates[fixedCandidates.length - 1]);
+          const fixedCandidates = rawFixed.split(/[,;]/).map(s => s.trim()).filter(v => v && !/-(?:rc|alpha|beta|dev|canary|preview|next|pre)(?:[.\-\d]|$)/i.test(v));
+          const toVer = v => {
+            const m = String(v || '').match(/(\d+(?:\.\d+)*)/);
+            if (!m) return null;
+            const p = m[1].split('.').map(Number);
+            while (p.length < 3) p.push(0);
+            return p;
+          };
+          const cmpVer = (a, b) => {
+            for (let i = 0; i < Math.max(a.length, b.length); i++) {
+              const d = (a[i] || 0) - (b[i] || 0);
+              if (d !== 0) return d;
+            }
+            return 0;
+          };
+          const instTuple = toVer(installedVer);
+          const newerCandidates = fixedCandidates.filter(v => {
+            const t = toVer(v);
+            if (!t) return false;
+            return instTuple ? cmpVer(t, instTuple) > 0 : true;
+          });
+          let fixedVer = '';
+          if (newerCandidates.length > 0) {
+            const sameMajor = instTuple ? newerCandidates.filter(v => (toVer(v) || [])[0] === instTuple[0]) : [];
+            const pool = sameMajor.length ? sameMajor : newerCandidates;
+            pool.sort((a, b) => cmpVer(toVer(a), toVer(b)));
+            fixedVer = sameMajor.length ? pool[pool.length - 1] : pool[0];
           }
           const cleanTarget = String(adv.target || '').replace(/^\.\//, '').trim();
           let targetFile = cleanTarget || 'package.json';

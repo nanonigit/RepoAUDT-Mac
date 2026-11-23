@@ -89,6 +89,38 @@ class SourceScannerTests(unittest.TestCase):
         )
         self.assertNotIn("eyJhbGci", json.dumps(findings))
 
+    def test_gitleaks_ignores_doc_ellipsis_pem_but_keeps_real_private_key(self):
+        doc_rel = "docs/cloudfront-video-signed-url-setup.md"
+        real_rel = "certs/server.key"
+        doc_file = self.root / doc_rel
+        real_file = self.root / real_rel
+        doc_file.parent.mkdir(parents=True, exist_ok=True)
+        real_file.parent.mkdir(parents=True, exist_ok=True)
+        doc_file.write_text(
+            'VIDEO_CLOUDFRONT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\\nMIIEow...(base64 content on one line with \\n for newlines)...\\n-----END RSA PRIVATE KEY-----"\n',
+            encoding="utf-8",
+        )
+        real_file.write_text(
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAt8realkeymaterial\n-----END RSA PRIVATE KEY-----\n",
+            encoding="utf-8",
+        )
+        raw = json.dumps(
+            [
+                {"File": doc_rel, "StartLine": 1, "RuleID": "private-key"},
+                {"File": real_rel, "StartLine": 1, "RuleID": "private-key"},
+            ]
+        )
+        findings = source_scanners.parse_findings(
+            "gitleaks",
+            raw,
+            self.root,
+            {doc_rel: 1, real_rel: 3},
+            lambda _: "Core",
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertTrue(findings[0]["file"].startswith("certs/server.key:1"))
+        self.assertEqual(findings[0]["severity"], "high")
+
     def test_parser_rejects_files_outside_staging(self):
         raw = json.dumps([{"File": "../outside", "StartLine": 1, "RuleID": "test"}])
         with self.assertRaises(ValueError):

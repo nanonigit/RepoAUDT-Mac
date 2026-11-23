@@ -202,8 +202,10 @@ def get_masked_settings(settings: Optional[Dict[str, Any]] = None) -> Dict[str, 
     }
 
 
-def _extract_osv_fixed_version(vuln_obj: Dict[str, Any], pkg_name: str, eco: str) -> Optional[str]:
-    """Extract the fixed version for (pkg_name, eco) from an OSV vulnerability record."""
+def _extract_osv_fixed_version(
+    vuln_obj: Dict[str, Any], pkg_name: str, eco: str, installed: str = ""
+) -> Optional[str]:
+    """Extract the safest upgrade fixed version for (pkg_name, eco) from an OSV record."""
     if not isinstance(vuln_obj, dict):
         return None
     affected_list = vuln_obj.get("affected") or []
@@ -233,7 +235,11 @@ def _extract_osv_fixed_version(vuln_obj: Dict[str, Any], pkg_name: str, eco: str
         )
     ]
     candidates = _collect_fixed(matched) or _collect_fixed(affected_list)
-    return candidates[-1] if candidates else None
+    if not candidates:
+        return None
+    from source_scanners import select_safe_upgrade_version
+    chosen = select_safe_upgrade_version(candidates, installed, pick_highest_same_major=False)
+    return chosen or None
 
 
 def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]]:
@@ -281,7 +287,7 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                         aliases = list(v0.get("aliases") or [])
                         osv_summary = str(v0.get("summary") or "").strip()
                         osv_details = str(v0.get("details") or "").strip()
-                        fixed_ver = _extract_osv_fixed_version(v0, pkg_name, eco)
+                        fixed_ver = _extract_osv_fixed_version(v0, pkg_name, eco, installed=clean_ver)
                         if (not osv_summary or not fixed_ver) and len(advisories) < 8:
                             try:
                                 vreq = urllib.request.Request(
@@ -296,7 +302,7 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                                         if not osv_details:
                                             osv_details = str(vfull.get("details") or "").strip()
                                         if not fixed_ver:
-                                            fixed_ver = _extract_osv_fixed_version(vfull, pkg_name, eco)
+                                            fixed_ver = _extract_osv_fixed_version(vfull, pkg_name, eco, installed=clean_ver)
                                         for al in vfull.get("aliases") or []:
                                             if al not in aliases:
                                                 aliases.append(al)
