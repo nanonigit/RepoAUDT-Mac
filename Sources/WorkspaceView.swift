@@ -98,6 +98,7 @@ struct MainContentView: View {
     @State private var refreshingList = false
     @State private var listRefreshNote = ""
     @State private var didInitializeLaunchPage = false
+    @State private var triggerSidebarAppUpdate = false
 
     private struct AppUpdateInfo {
         let localCommit: String
@@ -227,46 +228,7 @@ struct MainContentView: View {
                         }
                     }
                 } header: {
-                    HStack(spacing: 6) {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                repositoriesExpanded.toggle()
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: repositoriesExpanded ? "chevron.down" : "chevron.right")
-                                    .font(.caption2.weight(.semibold))
-                                Text(english ? "Repositories (\(repositories.count))" : "リポジトリ (\(repositories.count))")
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .help(repositoriesExpanded
-                              ? (english ? "Collapse repositories" : "リポジトリ一覧を折りたたむ")
-                              : (english ? "Expand repositories" : "リポジトリ一覧を展開する"))
-                        Spacer()
-                        Menu {
-                            ForEach(RepositorySortOrder.allCases) { option in
-                                Button {
-                                    sortOrderRaw = option.rawValue
-                                } label: {
-                                    if sortOrder == option {
-                                        Label(option.title(english: english), systemImage: "checkmark")
-                                    } else {
-                                        Text(option.title(english: english))
-                                    }
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "arrow.up.arrow.down")
-                                .font(.caption)
-                                .foregroundStyle(sortOrder == .defaultOrder ? Color.secondary : Color.accentColor)
-                        }
-                        .menuStyle(.borderlessButton)
-                        .fixedSize()
-                        .help(english ? "Sort repositories (\(sortOrder.title(english: true)))"
-                                      : "並び替え (\(sortOrder.title(english: false)))")
-                    }
+                    repositoriesSectionHeader
                 }
             }
             .listStyle(.sidebar)
@@ -282,25 +244,13 @@ struct MainContentView: View {
                     }
                     .buttonStyle(.plain)
                     Button {
-                        Task { await checkForAppUpdates() }
+                        triggerSidebarAppUpdate = true
+                        showPage(.system)
                     } label: {
-                        HStack(spacing: 6) {
-                            Label(
-                                applyingAppUpdate
-                                    ? (english ? "Updating…" : "アップデート中…")
-                                    : (checkingAppUpdate
-                                       ? (english ? "Checking updates…" : "更新を確認中…")
-                                       : (english ? "Update App" : "アプリをアップデート")),
-                                systemImage: "arrow.triangle.2.circlepath"
-                            )
-                            if checkingAppUpdate || applyingAppUpdate {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                        }
+                        Label(english ? "Update App" : "アプリをアップデート", systemImage: "arrow.triangle.2.circlepath")
                     }
                     .buttonStyle(.plain)
-                    .disabled(checkingAppUpdate || applyingAppUpdate || !backend.isReady)
+                    .disabled(!backend.isReady)
                     .padding(.bottom, 8)
                     Label(coordinator.ready ? (english ? "Local engine" : "ローカル解析エンジン") :
                             (english ? "Loading" : "読み込み中"),
@@ -332,7 +282,7 @@ struct MainContentView: View {
                 } else if page == .mcp {
                     MCPConnectionView(english: english, port: backend.port)
                 } else if page == .system {
-                    SystemUpdateView(english: english, port: backend.port)
+                    SystemUpdateView(english: english, port: backend.port, autoRunUpdate: $triggerSidebarAppUpdate)
                 }
             }
             .navigationTitle(page.title(english: english))
@@ -491,6 +441,53 @@ struct MainContentView: View {
             Button("OK", role: .cancel) { appUpdateStatusMessage = nil }
         } message: {
             Text(appUpdateStatusMessage ?? "")
+        }
+    }
+
+    private var repositoriesSectionHeader: some View {
+        let titleText = english ? "Repositories (\(repositories.count))" : "リポジトリ (\(repositories.count))"
+        let helpText = repositoriesExpanded
+            ? (english ? "Collapse repositories" : "リポジトリ一覧を折りたたむ")
+            : (english ? "Expand repositories" : "リポジトリ一覧を展開する")
+        let sortHelp = english
+            ? "Sort repositories (\(sortOrder.title(english: true)))"
+            : "並び替え (\(sortOrder.title(english: false)))"
+        return HStack(spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    repositoriesExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: repositoriesExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                    Text(titleText)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(helpText)
+            Spacer()
+            Menu {
+                ForEach(RepositorySortOrder.allCases) { option in
+                    Button {
+                        sortOrderRaw = option.rawValue
+                    } label: {
+                        if sortOrder == option {
+                            Label(option.title(english: english), systemImage: "checkmark")
+                        } else {
+                            Text(option.title(english: english))
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.caption)
+                    .foregroundStyle(sortOrder == .defaultOrder ? Color.secondary : Color.accentColor)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help(sortHelp)
         }
     }
 

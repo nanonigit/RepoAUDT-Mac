@@ -413,6 +413,7 @@ struct SystemUpdateView: View {
     @State private var behindCount = 0
     let english: Bool
     let port: Int
+    @Binding var autoRunUpdate: Bool
 
     var body: some View {
         ScrollView {
@@ -518,7 +519,14 @@ struct SystemUpdateView: View {
         }
         .task {
             store.port = port
-            await loadDiagnosticsAndCheckUpdate(autoUpdate: false)
+            let shouldUpdate = autoRunUpdate
+            autoRunUpdate = false
+            await loadDiagnosticsAndCheckUpdate(autoUpdate: shouldUpdate)
+        }
+        .onChange(of: autoRunUpdate) { _, shouldUpdate in
+            guard shouldUpdate else { return }
+            autoRunUpdate = false
+            Task { await loadDiagnosticsAndCheckUpdate(autoUpdate: true) }
         }
     }
 
