@@ -440,16 +440,24 @@ function openNativeOrSettingsPage(targetPage) {
 
 function renderEvidenceErrorBanner(resultEl, errorMessage, retryFn) {
   const msg = String(errorMessage || 'Unknown error');
-  const isGhConnectError = /github|gh\b|connect|auth|token|resolve|certificate|signed in|installed|permission/i.test(msg);
-  const heading = isGhConnectError
-    ? auditLabel('GitHub CLI could not connect to GitHub', 'GitHub CLI が GitHub に接続できません')
-    : auditLabel('Re-scan failed', '再スキャンに失敗しました');
-  const guidance = isGhConnectError
+  const isMissingGithubRepo = /select a saved github repository first|local working tree/i.test(msg);
+  const isGhConnectError = !isMissingGithubRepo && /github|gh\b|connect|auth|token|resolve|certificate|signed in|installed|permission/i.test(msg);
+  const heading = isMissingGithubRepo
+    ? auditLabel('GitHub repository URL is not linked', 'GitHub リポジトリ URL が未設定です')
+    : isGhConnectError
+      ? auditLabel('GitHub CLI could not connect to GitHub', 'GitHub CLI が GitHub に接続できません')
+      : auditLabel('Re-scan failed', '再スキャンに失敗しました');
+  const guidance = isMissingGithubRepo
     ? auditLabel(
-        'Check your network/VPN or GitHub CLI (`gh auth login`) and GitHub Token settings.',
-        'ネットワーク接続・GitHub CLI（gh auth login）または GitHub トークン設定を確認してください。'
+        'This saved analysis has no linked GitHub URL (e.g. scanned from a local folder or older data). Click "Add GitHub Repository" and scan its https://github.com/owner/repo URL to enable live GitHub comparison.',
+        'この保存済みデータには有効な GitHub URL（https://github.com/owner/repo）が紐付いていないか、ローカルフォルダ解析の結果です。解消方法：「GitHub URL を追加して解析」から対象リポジトリの URL を登録・再解析してください。'
       )
-    : '';
+    : isGhConnectError
+      ? auditLabel(
+          'Check your network/VPN or GitHub CLI (`gh auth login`) and GitHub Token settings.',
+          'ネットワーク接続・GitHub CLI（gh auth login）または GitHub トークン設定を確認してください。'
+        )
+      : '';
 
   resultEl.innerHTML = '';
   const box = document.createElement('div');
@@ -484,7 +492,29 @@ function renderEvidenceErrorBanner(resultEl, errorMessage, retryFn) {
   actions.style.flexWrap = 'wrap';
   actions.style.gap = '8px';
 
-  if (isGhConnectError) {
+  if (isMissingGithubRepo) {
+    const addRepoBtn = document.createElement('button');
+    addRepoBtn.type = 'button';
+    addRepoBtn.textContent = auditLabel('➕ Add / Re-scan GitHub URL', '➕ GitHub URL を追加して解析');
+    Object.assign(addRepoBtn.style, {
+      padding: '6px 12px',
+      borderRadius: '6px',
+      border: '1px solid rgba(96, 165, 250, 0.65)',
+      background: 'rgba(37, 99, 235, 0.35)',
+      color: '#eff6ff',
+      fontSize: '0.8rem',
+      fontWeight: '600',
+      cursor: 'pointer'
+    });
+    addRepoBtn.addEventListener('click', () => {
+      if (typeof openAnalyzerModal === 'function') {
+        openAnalyzerModal();
+      } else {
+        openNativeOrSettingsPage('settings');
+      }
+    });
+    actions.appendChild(addRepoBtn);
+  } else if (isGhConnectError) {
     const connectBtn = document.createElement('button');
     connectBtn.type = 'button';
     connectBtn.textContent = auditLabel('🔗 Open GitHub / AI Connection', '🔗 GitHub / AI 接続設定を開く');
