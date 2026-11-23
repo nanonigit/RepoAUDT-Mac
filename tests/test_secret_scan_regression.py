@@ -63,6 +63,38 @@ class TestSecretScanRegression(unittest.TestCase):
             self.assertIn('os.environ.get("DB_PASSWORD"', py_diff)
             self.assertNotIn("process.env.", py_diff)
 
+    def test_csv_secondary_secret_never_leaks_in_diff_or_desc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "src" / "common" / "configs" / "account.csv"
+            csv_file.parent.mkdir(parents=True)
+            secret_access_key = "8niyOBASWqv14LGf7K8GIt6Zgr+QyrSCxskHFLxh"
+            csv_file.write_text(
+                f"AKIA5S1234567890H27A,{secret_access_key}\n",
+                encoding="utf-8",
+            )
+
+            findings = security_audit_engine.scan_secrets_and_credentials(root, lambda _: "Core")
+            self.assertEqual(len(findings), 1)
+            serialized = str(findings[0])
+            self.assertNotIn(secret_access_key, serialized)
+            self.assertIn("- [REDACTED SECRET LINE]", findings[0]["diff"])
+
+    def test_ignores_doc_ellipsis_pem_and_xxxx_openai_key_templates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "docs").mkdir()
+            (root / "docs" / "setup.md").write_text(
+                'VIDEO_CLOUDFRONT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\\nMIIEow...(base64 content)...\\n-----END RSA PRIVATE KEY-----"\n',
+                encoding="utf-8",
+            )
+            (root / "README.md").write_text(
+                'OPENAI_API_KEY="sk-proj-example1234567890abcdefxxxx"\n',
+                encoding="utf-8",
+            )
+            findings = security_audit_engine.scan_secrets_and_credentials(root, lambda _: "Docs")
+            self.assertEqual(findings, [])
+
 
 if __name__ == "__main__":
     unittest.main()

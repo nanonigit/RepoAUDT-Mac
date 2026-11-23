@@ -113,6 +113,44 @@ class TestOsvRemediation(unittest.TestCase):
         self.assertEqual(rem["fix_cmd"], "npm install next@^16.3.3")
         self.assertNotIn(",", rem["fix_cmd"])
 
+    def test_group_advisories_by_package_collapses_multiple_cves(self) -> None:
+        advisories = [
+            {
+                "package_name": "next",
+                "ecosystem": "npm",
+                "installed": "14.2.35",
+                "fixed_version": "15.5.24, 16.3.3",
+                "cve": "CVE-2026-1111",
+                "severity": "HIGH",
+                "target": "package.json",
+            },
+            {
+                "package_name": "next",
+                "ecosystem": "npm",
+                "installed": "14.2.35",
+                "fixed_version": "16.4.5",
+                "cve": "CVE-2026-2222",
+                "severity": "CRITICAL",
+                "target": "package.json",
+            },
+            {
+                "package_name": "axios",
+                "ecosystem": "npm",
+                "installed": "1.8.4",
+                "fixed_version": "1.20.0",
+                "cve": "CVE-2026-3333",
+                "severity": "HIGH",
+                "target": "package.json",
+            },
+        ]
+        grouped = analyzer.group_advisories_by_package(advisories)
+        self.assertEqual(len(grouped), 2)
+        next_item = grouped[0]
+        self.assertEqual(next_item["severity"], "critical")
+        self.assertIn("2件のCVE/GHSA", next_item["title"])
+        self.assertIn("16.4.5", next_item["title"])
+        self.assertEqual(next_item["fix_cmd"], "npm install next@^16.4.5")
+
 
 if __name__ == "__main__":
     unittest.main()

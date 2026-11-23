@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/23 14:38:56</strong>
+              <strong id="portal-sync-time">2026/11/23 14:47:14</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -8893,8 +8893,13 @@
       }
 
       advisories.forEach(adv => {
-        if (!actionItems.some(x => x.title.includes(adv.cve || adv.pkg))) {
-          const pkgName = String(adv.package_name || adv.pkg || '').replace(/\s*\([^)]+\)\s*$/, '').trim();
+        const pkgName = String(adv.package_name || adv.pkg || '').replace(/\s*\([^)]+\)\s*$/, '').trim();
+        const pkgLower = pkgName.toLowerCase();
+        const alreadyCovered = actionItems.some(x =>
+          x.title.includes(adv.cve || adv.pkg) ||
+          (x.title.includes('[依存関係脆弱性集約]') && x.title.toLowerCase().includes(pkgLower))
+        );
+        if (!alreadyCovered) {
           const eco = String(adv.ecosystem || ((String(adv.pkg || '').match(/\(([^)]+)\)\s*$/) || [])[1]) || 'npm').toLowerCase();
           const installedVer = String(adv.installed || adv.installed_version || '').trim();
           const rawFixed = String(adv.fixed_version || adv.safe_version || '').trim();

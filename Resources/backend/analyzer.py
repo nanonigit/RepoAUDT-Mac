@@ -912,6 +912,108 @@ def build_advisory_remediation(adv: Dict[str, Any]) -> Dict[str, str]:
     return {"file": target_file, "diff": diff_text, "fix_cmd": fix_cmd}
 
 
+_SEV_ORDER = {"critical": 4, "high": 3, "medium": 2, "warning": 2, "low": 1, "info": 0}
+
+
+def _adv_version_tuple(raw: str) -> tuple[int, ...]:
+    m = re.search(r"(\d+(?:\.\d+)*)", str(raw or "").strip())
+    if not m:
+        return ()
+    return tuple(int(p) for p in m.group(1).split("."))
+
+
+def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Group OSV/Trivy advisories by (target_file, package_name) into one remediation item per package."""
+    groups: Dict[tuple[str, str], Dict[str, Any]] = {}
+    order: List[tuple[str, str]] = []
+
+    for adv in advisories:
+        if not isinstance(adv, dict):
+            continue
+        raw_pkg = str(adv.get("pkg") or "").strip()
+        pkg_name = str(adv.get("package_name") or "").strip() or re.sub(r"\s*\([^)]+\)\s*$", "", raw_pkg).strip()
+        eco = str(adv.get("ecosystem") or "").strip()
+        if not eco:
+            m_eco = re.search(r"\(([^)]+)\)\s*$", raw_pkg)
+            eco = m_eco.group(1).strip() if m_eco else "npm"
+        installed = str(adv.get("installed") or adv.get("installed_version") or "").strip()
+        rem_preview = build_advisory_remediation(adv)
+        target_file = str(adv.get("target") or "").removeprefix("./").strip() or rem_preview["file"]
+        key = (target_file, pkg_name.lower())
+
+        sev = str(adv.get("severity") or "high").lower()
+        if sev not in _SEV_ORDER:
+            sev = "high"
+        cve_label = str(adv.get("cve") or adv.get("osv_id") or "").strip()
+        fixed_ver = ""
+        raw_fixed = str(adv.get("fixed_version") or adv.get("safe_version") or "").strip()
+        if raw_fixed:
+            from source_scanners import _select_best_fixed_version
+            fixed_ver = _select_best_fixed_version(raw_fixed, installed)
+
+        if key not in groups:
+            order.append(key)
+            groups[key] = {
+                "package_name": pkg_name,
+                "ecosystem": eco,
+                "installed": installed,
+                "target_file": target_file,
+                "severity": sev,
+                "cves": [cve_label] if cve_label else [],
+                "fixed_version": fixed_ver,
+                "first_title": str(adv.get("title") or "").strip(),
+                "first_summary": str(adv.get("summary") or "").strip(),
+                "official_source": (adv.get("sources") or [{}])[0].get("url", "") if isinstance(adv.get("sources"), list) and adv.get("sources") else "",
+            }
+        else:
+            g = groups[key]
+            if _SEV_ORDER.get(sev, 0) > _SEV_ORDER.get(g["severity"], 0):
+                g["severity"] = sev
+            if cve_label and cve_label not in g["cves"]:
+                g["cves"].append(cve_label)
+            if fixed_ver and (not g["fixed_version"] or _adv_version_tuple(fixed_ver) > _adv_version_tuple(g["fixed_version"])):
+                g["fixed_version"] = fixed_ver
+            if not g["installed"] and installed:
+                g["installed"] = installed
+
+    grouped_items: List[Dict[str, Any]] = []
+    for key in order:
+        g = groups[key]
+        pkg_name = g["package_name"]
+        installed = g["installed"]
+        fixed = g["fixed_version"]
+        cves = g["cves"]
+        rem = build_advisory_remediation({
+            "package_name": pkg_name,
+            "ecosystem": g["ecosystem"],
+            "installed": installed,
+            "fixed_version": fixed,
+            "safe_version": fixed,
+        })
+        if len(cves) > 1:
+            ver_part = f" v{installed}" if installed else ""
+            fix_part = f" → {fixed} へ更新" if fixed else ""
+            title = f"[依存関係脆弱性集約] {pkg_name}{ver_part} ({len(cves)}件のCVE/GHSA{fix_part})"
+            cve_preview = ", ".join(cves[:6]) + (f" ほか{len(cves) - 6}件" if len(cves) > 6 else "")
+            desc = (
+                f"`{pkg_name}` ({g['ecosystem']}) {f'v{installed} ' if installed else ''}に対して {len(cves)} 件の既知脆弱性（{cve_preview}）が検出されています。"
+                + (f" バージョン `{fixed}` 以降へのアップデートで一括解消できます。" if fixed else " 最新版へのアップデートを推奨します。")
+            )
+        else:
+            title = g["first_title"] or f"{pkg_name} の脆弱性対応"
+            desc = g["first_summary"] or "既知の脆弱性が報告されています。安全版へのアップデートが必要です。"
+        grouped_items.append({
+            "severity": g["severity"],
+            "title": title,
+            "file": g["target_file"],
+            "desc": desc,
+            "diff": rem["diff"],
+            "fix_cmd": rem["fix_cmd"],
+            "official_source": g["official_source"],
+        })
+    return grouped_items
+
+
 def run_coderabbit_static_audit(
     repo_dir: Path,
     repo_name: str,
@@ -934,16 +1036,10 @@ def run_coderabbit_static_audit(
                 return c["name"]
         return components[0]["name"] if components else repo_name
 
-    for adv in deps.get("security_advisories", []):
-        remediation = build_advisory_remediation(adv)
+    for grouped in group_advisories_by_package(deps.get("security_advisories", [])):
         item = {
-            "severity": "high",
-            "title": adv.get("title", f"{adv.get('package_name') or adv.get('pkg')} の脆弱性対応"),
-            "file": remediation["file"],
-            "target_node": match_component_for_file(remediation["file"]),
-            "desc": adv.get("summary", "既知の脆弱性が報告されています。安全版へのアップデートが必要です。"),
-            "diff": remediation["diff"],
-            "fix_cmd": remediation["fix_cmd"],
+            **grouped,
+            "target_node": match_component_for_file(grouped["file"]),
         }
         action_items.append(item)
         findings.append({**item, "line": "dependencies"})
@@ -1709,11 +1805,14 @@ def _is_legacy_noise_finding(item: Any) -> bool:
     )
     if "Database / Hardcoded Password" in title and (is_test_file or is_example_env):
         return True
-    if "Private Cryptographic Key" in title and is_example_env:
+    if "Private Cryptographic Key" in title and (is_example_env or "..." in str(item.get("diff") or "")):
+        return True
+    if "OpenAI API Key" in title and (is_example_env or "xxxx" in str(item.get("desc") or "").lower()):
         return True
     if "(generic-api-key)" in title and (
         is_example_env
         or is_test_file
+        or base_name == "readme.md"
         or ".docs." in base_name
         or file_loc.endswith("source-manifest.json")
         or "/seeds/" in f"/{file_loc}"
@@ -1723,12 +1822,25 @@ def _is_legacy_noise_finding(item: Any) -> bool:
 
 
 def _repair_legacy_remediation_fields(item: Dict[str, Any]) -> bool:
-    """Fix legacy hardcoded ^1.7.4 diffs and (npm)@latest commands in saved findings."""
+    """Fix legacy hardcoded ^1.7.4 diffs, (npm)@latest commands, and unredacted secret diff lines."""
     changed = False
     diff_val = str(item.get("diff") or "")
     if ': "old"' in diff_val and ': "^1.7.4"' in diff_val:
         item["diff"] = ""
         changed = True
+    elif "[シークレット漏洩検知]" in str(item.get("title") or "") and diff_val:
+        lines = diff_val.splitlines()
+        new_lines = []
+        line_changed = False
+        for ln in lines:
+            if ln.startswith("- ") and ln != "- [REDACTED SECRET LINE]" and not re.match(r"^- [A-Za-z_][A-Za-z0-9_.-]{1,60}\s*[:=]\s*\[REDACTED\]$", ln):
+                new_lines.append("- [REDACTED SECRET LINE]")
+                line_changed = True
+            else:
+                new_lines.append(ln)
+        if line_changed:
+            item["diff"] = "\n".join(new_lines)
+            changed = True
     fix_cmd = str(item.get("fix_cmd") or "")
     cleaned_cmd = re.sub(r"\s*\((?:npm|PyPI|Go|Packagist|crates\.io)\)@", "@", fix_cmd)
     if cleaned_cmd != fix_cmd:

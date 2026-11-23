@@ -9007,8 +9007,13 @@ def build_portal_html(data, is_shareable=False):
       }
 
       advisories.forEach(adv => {
-        if (!actionItems.some(x => x.title.includes(adv.cve || adv.pkg))) {
-          const pkgName = String(adv.package_name || adv.pkg || '').replace(/\s*\([^)]+\)\s*$/, '').trim();
+        const pkgName = String(adv.package_name || adv.pkg || '').replace(/\s*\([^)]+\)\s*$/, '').trim();
+        const pkgLower = pkgName.toLowerCase();
+        const alreadyCovered = actionItems.some(x =>
+          x.title.includes(adv.cve || adv.pkg) ||
+          (x.title.includes('[依存関係脆弱性集約]') && x.title.toLowerCase().includes(pkgLower))
+        );
+        if (!alreadyCovered) {
           const eco = String(adv.ecosystem || ((String(adv.pkg || '').match(/\(([^)]+)\)\s*$/) || [])[1]) || 'npm').toLowerCase();
           const installedVer = String(adv.installed || adv.installed_version || '').trim();
           const rawFixed = String(adv.fixed_version || adv.safe_version || '').trim();

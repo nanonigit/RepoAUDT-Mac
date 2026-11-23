@@ -467,6 +467,7 @@ _PLACEHOLDER_MARKERS = (
     "change_me",
     "replace_me",
     "redact",
+    "xxxx",
 )
 _KNOWN_WEAK_PASSWORDS = {"12345678", "password", "password123", "qwertyui"}
 
@@ -490,12 +491,28 @@ def _is_placeholder_secret_line(line: str, raw_secret: str = "") -> bool:
     low_secret = raw_secret.lower().strip()
     if any(marker in low_line for marker in _PLACEHOLDER_MARKERS):
         return True
+    if "-----begin" in low_line and "..." in low_line:
+        return True
     if low_secret:
         if any(marker in low_secret for marker in _PLACEHOLDER_MARKERS):
+            return True
+        if "..." in low_secret or re.search(r"x{4,}", low_secret):
             return True
         if low_secret in _KNOWN_WEAK_PASSWORDS or len(set(low_secret)) <= 2:
             return True
     return False
+
+
+def _build_redacted_diff_removed_line(rel_path: str, stripped_line: str) -> str:
+    """Never emit raw source line contents after secret detection; redact the entire line or RHS."""
+    suffix = Path(rel_path).suffix.lower()
+    if suffix in (".csv", ".tsv", ".env") or "," in stripped_line:
+        return "- [REDACTED SECRET LINE]"
+    m_assign = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_.-]{1,60})\s*([:=])\s*", stripped_line)
+    if m_assign:
+        key, op = m_assign.group(1), m_assign.group(2)
+        return f"- {key} {op} [REDACTED]"
+    return "- [REDACTED SECRET LINE]"
 
 
 def _infer_env_var_name(stripped_line: str, secret_name: str, default_fix: str) -> str:
@@ -647,13 +664,14 @@ def scan_secrets_and_credentials(
                         safe_replacement = _build_secret_fix_replacement(
                             rel_path, stripped, secret_name, fix_replacement
                         )
+                        redacted_removed = _build_redacted_diff_removed_line(rel_path, stripped)
                         findings.append({
                             "severity": "critical",
                             "title": f"🚨 [シークレット漏洩検知] {secret_name} が平文でハードコードされています ({file_path.name}:{line_no})",
                             "file": f"{rel_path}:{line_no} (Target: {target_node})",
                             "target_node": target_node,
                             "desc": f"`{rel_path}` の {line_no}行目で、{desc_label}（`{masked}`）が平文で検出されました。ソースコード内に認証情報が存在すると、閲覧権限を持つ全員に漏洩し、不正利用やデータ侵害の原因となります。直ちに該当サービスでキーを無効化（Revoke/Rotate）し、環境変数または秘密情報マネージャーへ退避してください。",
-                            "diff": f"- {stripped.replace(raw_secret, '[REDACTED]', 1)}\n+ {safe_replacement}",
+                            "diff": f"{redacted_removed}\n+ {safe_replacement}",
                             "fix_cmd": f"sed -n '{max(1, line_no-2)},{line_no+2}p' {rel_path}",
                         })
                         if len(findings) >= 20:

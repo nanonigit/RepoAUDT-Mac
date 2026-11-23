@@ -126,6 +126,7 @@ def _is_benign_generic_api_key(directory: Path, relative: str, line: int) -> boo
     if (
         name.startswith((".env.example", "env.example", "env.e2e.example"))
         or name.endswith((".example", ".example.txt"))
+        or name == "readme.md"
         or rel_low.endswith("source-manifest.json")
         or "/seeds/" in f"/{rel_low}"
         or name.endswith((".test.ts", ".test.js", ".spec.ts", ".spec.js", ".docs.ts", ".docs.js"))
