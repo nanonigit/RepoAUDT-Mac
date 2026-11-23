@@ -1597,6 +1597,23 @@ def automatic_refresh_url(diagram: Dict[str, Any]) -> Optional[str]:
     return url if url.startswith(prefix) and source_revision.SLUG.fullmatch(url[len(prefix):]) else None
 
 
+def _is_legacy_dummy_lightweight_finding(item: Any) -> bool:
+    """Detect legacy fabricated lightweight-repo findings targeting README.md/.coderabbit.yaml."""
+    if not isinstance(item, dict):
+        return False
+    title = str(item.get("title") or "")
+    desc = str(item.get("desc") or "")
+    file_field = str(item.get("file") or "")
+    diff_field = str(item.get("diff") or "")
+    if "のディープ静的解析・.coderabbit.yaml ガードレール確認" in title:
+        return True
+    if "は組織階層（" in desc and "から自動検出されました" in desc and ".coderabbit.yaml" in desc:
+        return True
+    if file_field.startswith("README.md (Target:") and "language: ja-JP" in diff_field and "profile: assertive" in diff_field:
+        return True
+    return False
+
+
 def _load_saved_analyses_unlocked() -> Dict[str, Any]:
     ensure_dirs()
     bak_file = STATE_FILE.with_suffix(STATE_FILE.suffix + ".bak")
@@ -1625,14 +1642,22 @@ def _load_saved_analyses_unlocked() -> Dict[str, Any]:
                     s["title"] = clean_t
                 cr = d.get("coderabbit")
                 if isinstance(cr, dict):
-                    acts = cr.get("action_items") or []
+                    raw_acts = cr.get("action_items") or []
+                    raw_findings = cr.get("findings") or []
+                    acts = [a for a in raw_acts if not _is_legacy_dummy_lightweight_finding(a)]
+                    cleaned_findings = [f for f in raw_findings if not _is_legacy_dummy_lightweight_finding(f)]
+                    removed_dummy = (len(acts) != len(raw_acts)) or (len(cleaned_findings) != len(raw_findings))
+                    if removed_dummy:
+                        cr["action_items"] = acts
+                        cr["findings"] = cleaned_findings
                     st = cr.setdefault("stats", {})
-                    if st.get("critical") is None:
+                    if removed_dummy or st.get("critical") is None:
                         st["critical"] = sum(1 for a in acts if str(a.get("severity", "")).lower() in ("critical", "high"))
-                    if st.get("warning") is None:
+                    if removed_dummy or st.get("warning") is None:
                         st["warning"] = sum(1 for a in acts if str(a.get("severity", "")).lower() in ("warning", "medium"))
-                    if st.get("info") is None:
-                        st["info"] = max(1, sum(1 for a in acts if str(a.get("severity", "")).lower() in ("info", "low")))
+                    if removed_dummy or st.get("info") is None:
+                        low_count = sum(1 for a in acts if str(a.get("severity", "")).lower() in ("info", "low"))
+                        st["info"] = low_count if removed_dummy else max(1, low_count)
                     for w in cr.get("walkthrough") or []:
                         if not w.get("title"):
                             w["title"] = w.get("path") or "Module"

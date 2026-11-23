@@ -955,6 +955,47 @@ class TestF18McpServerIntegration(unittest.TestCase):
         self.assertEqual(diag["coderabbit"]["action_items"], [])
         self.assertEqual(diag["coderabbit"]["findings"], [])
 
+    def test_load_saved_analyses_cleanses_legacy_dummy_findings(self):
+        """Saved state containing legacy README.md/.coderabbit.yaml dummy findings is cleansed on load."""
+        import json
+        import tempfile
+        from unittest.mock import patch
+        import analyzer
+
+        dummy_item = {
+            "severity": "low",
+            "title": "AI_Interview_xcore のディープ静的解析・.coderabbit.yaml ガードレール確認",
+            "file": "README.md (Target: AI_Interview_xcore Core Logic)",
+            "desc": "`plusimpact/AI_Interview_xcore` は組織階層（`https://github.com/plusimpact`）から自動検出されました。個別ディープスキャンまたは `.coderabbit.yaml` の整備により、行単位の静的解析を実行できます。",
+            "diff": "+ language: ja-JP\n+ reviews:\n+   profile: assertive",
+        }
+        state_payload = {
+            "diagrams": [
+                {
+                    "id": "gh-plusimpact-ai_interview_xcore-overall",
+                    "repo": "plusimpact/AI_Interview_xcore",
+                    "coderabbit": {
+                        "status": "CLEAN",
+                        "stats": {"critical": 0, "warning": 0, "info": 1},
+                        "action_items": [dummy_item],
+                        "findings": [dummy_item],
+                    },
+                }
+            ],
+            "techSpecs": {},
+            "tableSchemas": {},
+            "deleted_ids": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            state_file = Path(tmp) / "analyzed_repos.json"
+            state_file.write_text(json.dumps(state_payload), encoding="utf-8")
+            with patch.object(analyzer, "STATE_FILE", state_file):
+                loaded = analyzer.load_saved_analyses()
+        cr = loaded["diagrams"][0]["coderabbit"]
+        self.assertEqual(cr["action_items"], [])
+        self.assertEqual(cr["findings"], [])
+        self.assertEqual(cr["stats"]["info"], 0)
+
     def test_f18_05_cyclonedx_sbom_and_sarif_export(self):
         """CycloneDX 1.5 SBOM and SARIF 2.1.0 generators produce spec-compliant documents."""
         import security_audit_engine
