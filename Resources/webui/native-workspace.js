@@ -16,7 +16,8 @@ function publishNativeWorkspace(page = null) {
         const next = String(issue.severity || '').toLowerCase();
         return (ranks[next] || 0) > (ranks[highest] || 0) ? next : highest;
       }, ''),
-      updatedAt: String(item.github_meta?.pushedAt || item.github_meta?.updatedAt || item.analyzed_at || '')
+      updatedAt: String(item.github_meta?.pushedAt || item.github_meta?.updatedAt || item.analyzed_at || ''),
+      analyzedAt: String(item.analyzed_at || item.updatedAt || item.commit_date || '')
     })),
     selectedID: selectedDiagram ? String(selectedDiagram.id) : null
   });

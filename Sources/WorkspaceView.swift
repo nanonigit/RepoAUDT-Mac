@@ -10,6 +10,7 @@ struct WorkspaceRepository: Decodable, Identifiable {
     let findings: Int
     let severity: String
     let updatedAt: String?
+    let analyzedAt: String?
 }
 
 enum RepositorySortOrder: String, CaseIterable, Identifiable {
@@ -165,6 +166,29 @@ struct MainContentView: View {
         guard let raw, !raw.isEmpty else { return "" }
         // Normalize "YYYY/MM/DD HH:MM:SS" and ISO-8601 strings to lexicographically comparable format.
         return raw.replacingOccurrences(of: "/", with: "-")
+    }
+
+    private func formattedAnalysisDate(_ raw: String?) -> String? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return nil
+        }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoNoFrac = ISO8601DateFormatter()
+        isoNoFrac.formatOptions = [.withInternetDateTime]
+
+        let out = DateFormatter()
+        out.dateFormat = "yyyy/MM/dd HH:mm"
+
+        if let date = iso.date(from: raw) ?? isoNoFrac.date(from: raw) {
+            return out.string(from: date)
+        }
+        let slashFmt = DateFormatter()
+        slashFmt.dateFormat = "yyyy/MM/dd HH:mm:ss"
+        if let date = slashFmt.date(from: raw) {
+            return out.string(from: date)
+        }
+        return String(raw.prefix(16))
     }
 
     var body: some View {
@@ -583,8 +607,14 @@ struct MainContentView: View {
                 Image(systemName: "folder").font(.title3).foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(repo.name).font(.body.weight(.medium)).lineLimit(1)
-                    Text(repo.commit.isEmpty ? (english ? "Commit not recorded" : "コミット未記録") : String(repo.commit.prefix(10)))
-                        .font(.caption.monospaced()).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text(repo.commit.isEmpty ? (english ? "Commit not recorded" : "コミット未記録") : String(repo.commit.prefix(10)))
+                        if let analyzedLabel = formattedAnalysisDate(repo.analyzedAt ?? repo.updatedAt) {
+                            Text("·")
+                            Text(english ? "Analyzed: \(analyzedLabel)" : "解析日時: \(analyzedLabel)")
+                        }
+                    }
+                    .font(.caption.monospaced()).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 10)
                 Label(english ? "\(repo.findings) findings" : "指摘 \(repo.findings)件",
