@@ -2190,6 +2190,7 @@ struct MainContentView: View {
             let state = try await requestJSON("/api/state")
             let diagrams = state["diagrams"] as? [[String: Any]] ?? []
             var sections: [String] = []
+            var crossRepoRows: [(tierRank: Int, tier: String, repo: String, title: String, file: String, action: String)] = []
             var totalHighFindings = 0
             var affectedRepos = 0
 
@@ -2253,6 +2254,18 @@ struct MainContentView: View {
                     let diff = item["diff"] as? String ?? ""
                     let fixCmd = item["fix_cmd"] as? String ?? ""
                     let officialSource = item["official_source"] as? String ?? ""
+                    let displayRepo = repoName.isEmpty ? githubUrl : repoName
+                    let tRank = tier == "P0" ? 0 : 1
+                    let shortFile = file.components(separatedBy: " (Target:").first ?? file
+                    let shortAction = fixCmd.isEmpty ? (reason.isEmpty ? (tier == "P0" ? "即時無効化・履歴削除" : "安全版へ更新") : reason) : fixCmd
+                    crossRepoRows.append((
+                        tierRank: tRank,
+                        tier: tier.isEmpty ? (sev == "critical" ? "P0" : "P1") : tier,
+                        repo: displayRepo,
+                        title: title.replacingOccurrences(of: "|", with: "/"),
+                        file: shortFile.replacingOccurrences(of: "|", with: "/"),
+                        action: shortAction.replacingOccurrences(of: "|", with: "/").replacingOccurrences(of: "\n", with: " ")
+                    ))
 
                     repoLines.append("")
                     repoLines.append("### \(idx + 1). \(tierPrefix)[\(sev)]\(kevTag)\(newTag) \(title)")
@@ -2274,9 +2287,23 @@ struct MainContentView: View {
             let header = english
                 ? "# 🛡️ RepoAUDT Mac — Critical & High-Risk Audit Report\n\n- **Affected Repositories**: \(affectedRepos)\n- **Total Critical / High Findings**: \(totalHighFindings)\n"
                 : "# 🛡️ RepoAUDT Mac — 重大・高リスク一括監査レポート\n\n- **対象リポジトリ数**: \(affectedRepos) 件\n- **重大・高リスク指摘合計**: \(totalHighFindings) 件\n"
+            var summaryTable = ""
+            if !crossRepoRows.isEmpty {
+                let sortedRows = crossRepoRows.sorted { $0.tierRank < $1.tierRank }
+                var tbl: [String] = [
+                    english ? "## 🚨 Cross-Repository P0 / P1 Top Summary" : "## 🚨 全リポジトリ横断 P0 / P1 サマリー",
+                    "",
+                    english ? "| Priority | Repository | Finding | Target File | Recommended Action |" : "| 優先度 | リポジトリ | 指摘タイトル | 対象ファイル | 推奨アクション |",
+                    "| --- | --- | --- | --- | --- |"
+                ]
+                for row in sortedRows {
+                    tbl.append("| **\(row.tier)** | `\(row.repo)` | \(row.title) | `\(row.file)` | `\(row.action)` |")
+                }
+                summaryTable = "\n" + tbl.joined(separator: "\n") + "\n"
+            }
             let report = sections.isEmpty
                 ? header + (english ? "\nNo Critical or High findings." : "\n重大・高リスクの指摘はありません。")
-                : header + "\n---\n\n" + sections.joined(separator: "\n\n---\n\n")
+                : header + summaryTable + "\n---\n\n" + sections.joined(separator: "\n\n---\n\n")
 
             let pb = NSPasteboard.general
             pb.clearContents()

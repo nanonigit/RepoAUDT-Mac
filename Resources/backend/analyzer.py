@@ -32,6 +32,7 @@ REPOS_CACHE_DIR = APP_SUPPORT_DIR / "repos"
 STATE_FILE = APP_SUPPORT_DIR / "analyzed_repos.json"
 HISTORY_FILE = APP_SUPPORT_DIR / "scan_history.json"
 MAX_SCAN_HISTORY = 90
+AUDIT_ENGINE_VERSION = "2026.11.24-1"
 _STATE_LOCK = threading.Lock()
 _GITHUB_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
@@ -1516,11 +1517,20 @@ def analyze_checkout(
             coderabbit["status"] = "ACTION_REQUIRED"
 
     # Run Live Multi-LLM Deep Audit if OpenAI / Claude / Gemini / Groq API key is configured
-    llm_items, llm_label = security_audit_engine.run_llm_deep_vulnerability_audit(repo_dir, repo, components)
+    llm_items, llm_label, llm_status = security_audit_engine.run_llm_deep_vulnerability_audit_with_status(
+        repo_dir, repo, components
+    )
+    coderabbit["llm_audit_status"] = llm_status
     if llm_items:
         coderabbit["action_items"] = llm_items + coderabbit["action_items"]
         coderabbit["findings"] = llm_items + coderabbit["findings"]
         coderabbit["status"] = "ACTION_REQUIRED"
+    coderabbit["action_items"] = security_audit_engine.merge_secret_and_gitleaks_findings(
+        coderabbit.get("action_items") or []
+    )
+    coderabbit["findings"] = security_audit_engine.merge_secret_and_gitleaks_findings(
+        coderabbit.get("findings") or []
+    )
     if runtime_inventory:
         coderabbit["action_items"].insert(0, runtime_inventory)
     authorization_findings, authorization_scope = authorization_audit.scan_authorization(
@@ -2300,6 +2310,11 @@ def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) 
                     d["analyzed_at"] = now_analyzed
                 if not d.get("analyzed_at_utc"):
                     d["analyzed_at_utc"] = now_analyzed_utc
+                if not d.get("is_root"):
+                    d["audit_engine_version"] = AUDIT_ENGINE_VERSION
+                    d["sync_status"] = "ok"
+                    d["last_sync_error"] = None
+                    d["last_sync_attempted_at"] = now_analyzed
         new_ids = {d["id"] for d in new_diagrams}
         new_urls = {(d.get("github_url"), d.get("perspective")) for d in new_diagrams}
         replaced_ids = set(result.get("replaced_ids") or [])
@@ -2462,6 +2477,51 @@ def set_repo_criticality(diagram_id: str, criticality: str) -> Dict[str, Any]:
             raise LookupError(f"Repository '{target_id}' not found")
         _write_json_atomic(STATE_FILE, state)
         return {"id": str(matched.get("id") or ""), "repo": str(matched.get("repo") or ""), "criticality": norm_crit}
+
+
+def _sanitize_sync_error(raw_err: Any) -> str:
+    msg = str(raw_err or "").strip()
+    msg = re.sub(r"(?:https?://)[^@\s]+@", "https://[REDACTED]@", msg)
+    msg = re.sub(r"\b(?:ghp_|github_pat_|sk-|xox[bp]-|AKIA)[A-Za-z0-9_/-]{6,}\b", "[REDACTED]", msg)
+    return msg[:240] if len(msg) > 240 else msg
+
+
+def record_sync_status(
+    diagram_id_or_url: str,
+    *,
+    sync_status: str,
+    last_sync_error: Optional[str] = None,
+    attempted_at: Optional[str] = None,
+) -> bool:
+    """Persist per-repository sync outcome (ok | error | timeout) without exposing credentials."""
+    target = str(diagram_id_or_url or "").strip()
+    if not target:
+        return False
+    status_norm = str(sync_status or "error").strip().lower()
+    if status_norm not in ("ok", "error", "timeout"):
+        status_norm = "error"
+    ts = attempted_at or now_timestamps()[0]
+    safe_err = None if status_norm == "ok" else (_sanitize_sync_error(last_sync_error) or "Sync failed")
+
+    with _STATE_LOCK:
+        state = _load_saved_analyses_unlocked()
+        updated = False
+        for d in state.get("diagrams", []):
+            if not isinstance(d, dict) or d.get("is_root"):
+                continue
+            if (
+                str(d.get("id") or "") == target
+                or str(d.get("repo") or "") == target
+                or str(d.get("github_url") or "") == target
+                or automatic_refresh_url(d) == target
+            ):
+                d["sync_status"] = status_norm
+                d["last_sync_error"] = safe_err
+                d["last_sync_attempted_at"] = ts
+                updated = True
+        if updated:
+            _write_json_atomic(STATE_FILE, state)
+        return updated
 
 
 def delete_saved_diagram(diagram_id: Optional[str] = None, category: Optional[str] = None, ids_list: Optional[List[str]] = None) -> Dict[str, Any]:

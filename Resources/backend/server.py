@@ -13,6 +13,7 @@ import binascii
 import json
 import os
 import plistlib
+import concurrent.futures
 import subprocess
 import sys
 import threading
@@ -409,6 +410,12 @@ class SyncDaemon:
                             "detected_at": now_local,
                         })
                 except Exception as exc:
+                    is_timeout = isinstance(exc, subprocess.TimeoutExpired) or "timed out" in str(exc).lower()
+                    analyzer.record_sync_status(
+                        str(d.get("id") or url),
+                        sync_status="timeout" if is_timeout else "error",
+                        last_sync_error=str(exc),
+                    )
                     print(f"Notice: commit monitor skipped {url}: {exc}", file=sys.stderr)
         finally:
             now_local, _ = analyzer.now_timestamps()
@@ -444,6 +451,31 @@ class SyncDaemon:
                     self.check_once()
                 except Exception as exc:
                     print(f"Warning in SyncDaemon loop: {exc}", file=sys.stderr)
+
+
+def should_skip_unchanged_repo(diagram: Dict[str, Any], *, force: bool = False) -> Tuple[bool, str]:
+    """Return (True, 'skipped_unchanged') if commit_sha, engine version, and sync_status are unchanged."""
+    if force:
+        return False, "forced"
+    if str(diagram.get("sync_status") or "ok").lower() != "ok":
+        return False, "previous_sync_failed"
+    if str(diagram.get("audit_engine_version") or "") != analyzer.AUDIT_ENGINE_VERSION:
+        return False, "engine_updated"
+    url = (analyzer.automatic_refresh_url(diagram) or diagram.get("github_url") or "").strip()
+    if not url.startswith("https://github.com/"):
+        return False, "non_github"
+    slug = url.removeprefix("https://github.com/").strip("/")
+    saved_commit = str(
+        (diagram.get("source_revision") or {}).get("commit_sha")
+        or diagram.get("commit_hash")
+        or ""
+    ).strip()
+    if not saved_commit:
+        return False, "no_commit_sha"
+    head_info = audit_evidence.repository_status(f"repos/{slug}", saved_commit)
+    if head_info.get("head") and head_info.get("same_head"):
+        return True, "skipped_unchanged"
+    return False, "commit_changed"
 
 
 _SYNC_DAEMON = SyncDaemon()
@@ -1020,6 +1052,7 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
             try:
                 body = json.loads(body_raw) if body_raw else {}
                 target_url = (body.get("url") or body.get("target") or "").strip()
+                force_rescan = bool(body.get("force", False))
                 now_str = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
                 job_id = f"sync_{uuid.uuid4().hex[:8]}"
 
@@ -1028,9 +1061,18 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 synced_targets: List[str] = []
 
                 if target_url:
-                    res = analyzer.analyze_any_github_target(target_url)
-                    analyzer.save_analysis_result(res, respect_deleted=True)
-                    synced_targets.append(target_url)
+                    try:
+                        res = analyzer.analyze_any_github_target(target_url)
+                        analyzer.save_analysis_result(res, respect_deleted=True)
+                        synced_targets.append(target_url)
+                    except Exception as exc:
+                        is_timeout = isinstance(exc, subprocess.TimeoutExpired) or "timed out" in str(exc).lower()
+                        analyzer.record_sync_status(
+                            target_url,
+                            sync_status="timeout" if is_timeout else "error",
+                            last_sync_error=str(exc),
+                        )
+                        raise
                 else:
                     # Collect unique repository URLs from saved diagrams (skipping org root entries)
                     processed = set()
@@ -1085,46 +1127,79 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
 
                     def _run_batch_sync(items: List[Dict[str, Any]], jid: str, t0: float) -> None:
                         total = len(items)
-                        for idx, d in enumerate(items, 1):
+                        completed_counter = {"n": 0}
+                        counter_lock = threading.Lock()
+
+                        def _sync_one(idx: int, d: Dict[str, Any]) -> None:
                             url = (analyzer.automatic_refresh_url(d) or d.get("github_url") or "").strip()
                             repo_label = str(d.get("repo") or url)
-                            stage_text = "OSV / Trivy / Semgrep / Gitleaks / Actions 監査中"
-                            elapsed = max(0.1, time.time() - t0)
-                            eta = int((elapsed / (idx - 1)) * (total - (idx - 1))) if idx > 1 else max(3, total * 4)
-                            _append_job_log(
-                                jid,
-                                f"[{datetime.now().strftime('%H:%M:%S')}] 🔍 ({idx}/{total}) {repo_label}: {stage_text}…",
-                                completed=idx - 1,
-                                current_repo=repo_label,
-                                current_stage=stage_text,
-                                eta_seconds=eta,
-                            )
+                            did = str(d.get("id") or url)
                             item_t0 = time.time()
                             try:
+                                skip, reason = should_skip_unchanged_repo(d, force=force_rescan)
+                                if skip:
+                                    with counter_lock:
+                                        completed_counter["n"] += 1
+                                        done_n = completed_counter["n"]
+                                    elapsed_now = max(0.1, time.time() - t0)
+                                    eta_after = int((elapsed_now / done_n) * (total - done_n)) if done_n < total else 0
+                                    _append_job_log(
+                                        jid,
+                                        f"[{datetime.now().strftime('%H:%M:%S')}] ⏭️ ({done_n}/{total}) {repo_label} スキップ（変更なし: {reason}）",
+                                        completed=done_n,
+                                        current_repo=repo_label,
+                                        eta_seconds=eta_after,
+                                    )
+                                    return
+
+                                stage_text = "OSV / Trivy / Semgrep / Gitleaks / Actions 監査中"
+                                _append_job_log(
+                                    jid,
+                                    f"[{datetime.now().strftime('%H:%M:%S')}] 🔍 ({idx}/{total}) {repo_label}: {stage_text}…",
+                                    current_repo=repo_label,
+                                    current_stage=stage_text,
+                                )
                                 res = analyzer.analyze_any_github_target(url)
                                 analyzer.save_analysis_result(res, respect_deleted=True)
                                 item_dt = time.time() - item_t0
                                 cr = (res.get("diagram") or {}).get("coderabbit") or {}
                                 findings_cnt = len(cr.get("action_items") or [])
+                                with counter_lock:
+                                    completed_counter["n"] += 1
+                                    done_n = completed_counter["n"]
                                 elapsed_now = max(0.1, time.time() - t0)
-                                eta_after = int((elapsed_now / idx) * (total - idx)) if idx < total else 0
+                                eta_after = int((elapsed_now / done_n) * (total - done_n)) if done_n < total else 0
                                 _append_job_log(
                                     jid,
-                                    f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ({idx}/{total}) {repo_label} 完了 (指摘 {findings_cnt}件 · {item_dt:.1f}s)",
-                                    completed=idx,
+                                    f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ({done_n}/{total}) {repo_label} 完了 (指摘 {findings_cnt}件 · {item_dt:.1f}s)",
+                                    completed=done_n,
                                     eta_seconds=eta_after,
                                 )
                             except Exception as e_sub:
                                 item_dt = time.time() - item_t0
+                                is_timeout = isinstance(e_sub, subprocess.TimeoutExpired) or "timed out" in str(e_sub).lower()
+                                analyzer.record_sync_status(
+                                    did,
+                                    sync_status="timeout" if is_timeout else "error",
+                                    last_sync_error=str(e_sub),
+                                )
+                                with counter_lock:
+                                    completed_counter["n"] += 1
+                                    done_n = completed_counter["n"]
                                 elapsed_now = max(0.1, time.time() - t0)
-                                eta_after = int((elapsed_now / idx) * (total - idx)) if idx < total else 0
+                                eta_after = int((elapsed_now / done_n) * (total - done_n)) if done_n < total else 0
                                 print(f"Warning syncing {url}: {e_sub}", flush=True)
                                 _append_job_log(
                                     jid,
-                                    f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ ({idx}/{total}) {repo_label} スキップ ({str(e_sub)[:80]} · {item_dt:.1f}s)",
-                                    completed=idx,
+                                    f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ ({done_n}/{total}) {repo_label} 同期失敗 ({str(e_sub)[:80]} · {item_dt:.1f}s)",
+                                    completed=done_n,
                                     eta_seconds=eta_after,
                                 )
+
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+                            futures = [pool.submit(_sync_one, idx, d) for idx, d in enumerate(items, 1)]
+                            concurrent.futures.wait(futures)
+
                         done_local, done_utc = analyzer.now_timestamps()
                         _SYNC_DAEMON.last_sync_time = done_local
                         _append_job_log(

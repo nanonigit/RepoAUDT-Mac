@@ -540,6 +540,7 @@ def build_pdf_audit_html(diagrams: List[Dict[str, Any]], *, lang: str = "ja") ->
     counts = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
     new_cnt = 0
     repo_sections: List[str] = []
+    cross_rows: List[Tuple[int, str, str, str, str, str]] = []
 
     for d in target_repos:
         repo_name = str(d.get("repo") or d.get("github_url") or "Repository")
@@ -565,6 +566,19 @@ def build_pdf_audit_html(diagrams: List[Dict[str, Any]], *, lang: str = "ja") ->
                     new_cnt += 1
 
         p0_p1 = [it for it in deduped if str(it.get("priority_tier") or "").upper() in ("P0", "P1")]
+        p0_p1.sort(key=lambda x: 0 if str(x.get("priority_tier") or "").upper() == "P0" else 1)
+        for it in p0_p1:
+            t_str = str(it.get("priority_tier") or "P1").upper()
+            short_file = str(it.get("file") or "").split(" (Target:", 1)[0].strip()
+            short_act = _sanitize_slack_text(str(it.get("fix_cmd") or it.get("priority_reason") or ("即時無効化" if t_str == "P0" else "安全版へ更新")))
+            cross_rows.append((
+                0 if t_str == "P0" else 1,
+                t_str,
+                repo_name,
+                _sanitize_slack_text(str(it.get("title") or "")),
+                short_file,
+                short_act,
+            ))
         posture_str = (
             f"Visibility: {posture.get('visibility', 'unknown')} · "
             f"Branch Protected: {posture.get('default_branch_protected', 'unknown')}"
@@ -645,6 +659,16 @@ def build_pdf_audit_html(diagrams: List[Dict[str, Any]], *, lang: str = "ja") ->
     <div class="kpi"><span>P3 Backlog</span><strong>{counts['P3']}</strong></div>
     <div class="kpi"><span>New Findings</span><strong>+{new_cnt}</strong></div>
   </div>
+  {(
+    '<h2>🚨 ' + ('Cross-Repository P0 / P1 Top Summary' if is_en else '全リポジトリ横断 P0 / P1 サマリー') + '</h2>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px;">'
+    + '<thead><tr style="background:#f1f5f9;text-align:left;"><th style="padding:5px;border:1px solid #cbd5e1;">' + ('Priority' if is_en else '優先度') + '</th><th style="padding:5px;border:1px solid #cbd5e1;">' + ('Repository' if is_en else 'リポジトリ') + '</th><th style="padding:5px;border:1px solid #cbd5e1;">' + ('Finding' if is_en else '指摘タイトル') + '</th><th style="padding:5px;border:1px solid #cbd5e1;">' + ('File' if is_en else '対象ファイル') + '</th><th style="padding:5px;border:1px solid #cbd5e1;">' + ('Action' if is_en else '推奨アクション') + '</th></tr></thead><tbody>'
+    + ''.join(
+        f'<tr><td style="padding:5px;border:1px solid #cbd5e1;"><span class="badge badge-{escape(r[1].lower())}">{escape(r[1])}</span></td><td style="padding:5px;border:1px solid #cbd5e1;">{escape(r[2])}</td><td style="padding:5px;border:1px solid #cbd5e1;">{escape(r[3])}</td><td style="padding:5px;border:1px solid #cbd5e1;"><code>{escape(r[4])}</code></td><td style="padding:5px;border:1px solid #cbd5e1;"><code>{escape(r[5][:80])}</code></td></tr>'
+        for r in sorted(cross_rows, key=lambda x: x[0])
+    )
+    + '</tbody></table>'
+  ) if cross_rows else ''}
   {''.join(repo_sections)}
 </body>
 </html>"""

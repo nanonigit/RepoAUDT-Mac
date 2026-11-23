@@ -8850,6 +8850,7 @@ def build_portal_html(data, is_shareable=False):
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
               <h2>${en ? 'Security Triage & Findings' : 'セキュリティ監査・トリアージ'}</h2>
               ${postureBadgesHtml}
+              ${(repo.sync_status && repo.sync_status !== 'ok') ? `<span class="issue-severity danger" title="${escapeHtml(repo.last_sync_error || '')}">⚠️ ${en ? 'Sync Failed' : '同期失敗'}</span><button type="button" id="retry-repo-sync-btn" class="table-view-btn" style="font-size:0.75rem;">🔄 ${en ? 'Retry' : '再試行'}</button>` : ''}
               <span id="repo-aspm-badges" style="display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap;"></span>
               <select id="repo-criticality-select" aria-label="${en ? 'Business Criticality' : '業務重要度'}" style="font-size: 0.78rem; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-surface); color: var(--workspace-text);">
                 <option value="tier1_prod" ${repo.criticality === 'tier1_prod' ? 'selected' : ''}>${en ? 'Tier 1: Prod / Customer' : 'Tier 1: 本番・顧客向け (1.5x)'}</option>
@@ -9313,6 +9314,26 @@ def build_portal_html(data, is_shareable=False):
             }
           } finally {
             verifySecretBtn.disabled = false;
+          }
+        });
+      }
+      const retrySyncBtn = view.querySelector('#retry-repo-sync-btn');
+      if (retrySyncBtn) {
+        retrySyncBtn.addEventListener('click', async () => {
+          retrySyncBtn.disabled = true;
+          retrySyncBtn.textContent = en ? 'Retrying…' : '再試行中…';
+          try {
+            const resp = await fetch('/api/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: repo.github_url || '', force: true })
+            });
+            if (resp.ok) {
+              await syncSavedAnalysesFromServer();
+              renderCodeRabbitView();
+            }
+          } finally {
+            retrySyncBtn.disabled = false;
           }
         });
       }

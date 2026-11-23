@@ -646,6 +646,58 @@ def mask_detected_secret(secret: str) -> str:
     return f"{s[:4]}****...{s[-4:]}"
 
 
+def _normalize_secret_file_line(file_val: Any) -> Optional[Tuple[str, int]]:
+    raw = str(file_val or "").split(" (Target:", 1)[0].strip()
+    if ":" not in raw:
+        return None
+    path_part, _, line_part = raw.rpartition(":")
+    if not line_part.strip().isdigit():
+        return None
+    norm_path = path_part.strip().replace("\\", "/").lstrip("./")
+    if not norm_path:
+        return None
+    return (norm_path, int(line_part.strip()))
+
+
+def merge_secret_and_gitleaks_findings(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Merge custom secret scanner and Gitleaks hits on the same (file, line) into one record."""
+    custom_by_loc: Dict[Tuple[str, int], Dict[str, Any]] = {}
+    gitleaks_indices: set[int] = set()
+
+    def _is_gitleaks(it: Dict[str, Any]) -> bool:
+        return str(it.get("scanner") or "").lower() == "gitleaks" or "[gitleaks]" in str(it.get("title") or "").lower()
+
+    def _is_custom_secret(it: Dict[str, Any]) -> bool:
+        if _is_gitleaks(it):
+            return False
+        return "シークレット漏洩検知" in str(it.get("title") or "") or str(it.get("category") or "").lower() == "secrets"
+
+    for it in items:
+        if not isinstance(it, dict) or not _is_custom_secret(it):
+            continue
+        loc = _normalize_secret_file_line(it.get("file") or it.get("path") or "")
+        if loc and loc not in custom_by_loc:
+            custom_by_loc[loc] = it
+
+    for idx, it in enumerate(items):
+        if not isinstance(it, dict) or not _is_gitleaks(it):
+            continue
+        loc = _normalize_secret_file_line(it.get("file") or it.get("path") or "")
+        if loc and loc in custom_by_loc:
+            base = custom_by_loc[loc]
+            detected_by = list(base.get("detected_by") or ["secret_scanner"])
+            if "gitleaks" not in detected_by:
+                detected_by.append("gitleaks")
+            base["detected_by"] = detected_by
+            if it.get("official_source") and not base.get("official_source"):
+                base["official_source"] = it["official_source"]
+            if it.get("rule_id"):
+                base["gitleaks_rule_id"] = it["rule_id"]
+            gitleaks_indices.add(idx)
+
+    return [it for idx, it in enumerate(items) if idx not in gitleaks_indices]
+
+
 def scan_secrets_and_credentials(
     repo_dir: Path,
     match_comp: Any,
@@ -1140,7 +1192,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
             continue
         seen_sast_locs.add(key)
         deduped_sast.append(item)
-    sast_findings = deduped_sast
+    sast_findings = merge_secret_and_gitleaks_findings(deduped_sast)
     source_scan = {**source_scan, **ext_scan}
     security_advisories = enrich_advisories_with_epss(security_advisories)
 
@@ -1874,10 +1926,14 @@ def _detect_stack_context(repo_dir: Path) -> Tuple[str, str]:
 
 def _parse_deep_audit_items(raw: str) -> List[Dict[str, Any]]:
     """Extract a list of finding dicts from JSON array or wrapped object output."""
-    cleaned = raw.strip()
+    cleaned = str(raw or "").strip()
+    if not cleaned:
+        return []
     fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
     if fence:
         cleaned = fence.group(1).strip()
+    if not cleaned:
+        return []
 
     parsed: Any = None
     try:
@@ -1885,8 +1941,13 @@ def _parse_deep_audit_items(raw: str) -> List[Dict[str, Any]]:
     except Exception:
         arr_match = re.search(r"\[.*\]", cleaned, re.DOTALL)
         obj_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        candidate = arr_match.group(0) if arr_match else (obj_match.group(0) if obj_match else cleaned)
-        parsed = json.loads(candidate)
+        candidate = arr_match.group(0) if arr_match else (obj_match.group(0) if obj_match else "")
+        if not candidate:
+            return []
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            return []
 
     if isinstance(parsed, list):
         return [x for x in parsed if isinstance(x, dict)]
@@ -1903,15 +1964,24 @@ def run_llm_deep_vulnerability_audit(
     repo_name: str,
     components: List[Dict[str, Any]],
 ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    items, label, _status = run_llm_deep_vulnerability_audit_with_status(repo_dir, repo_name, components)
+    return items, label
+
+
+def run_llm_deep_vulnerability_audit_with_status(
+    repo_dir: Path,
+    repo_name: str,
+    components: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], Optional[str], str]:
     """
     If an LLM provider is configured, send repository manifests, CI/CD workflows,
     and source snippets to the LLM to perform Risk-First security & quality auditing.
-    Returns (llm_action_items, provider_label).
+    Returns (llm_action_items, provider_label, llm_audit_status).
     """
     settings = load_settings()
     chosen = choose_active_llm(settings)
     if not chosen:
-        return [], None
+        return [], None, "disabled"
 
     provider, api_key, model = chosen
     comp_names = [c["name"] for c in components]
@@ -1938,7 +2008,7 @@ def run_llm_deep_vulnerability_audit(
         snippets.append(f"=== {rel} ===\n" + sf.read_text(encoding="utf-8", errors="ignore")[:900])
 
     if not snippets:
-        return [], f"{provider.upper()} ({model})"
+        return [], f"{provider.upper()} ({model})", "skipped"
 
     lang_fw, infra_cicd = _detect_stack_context(repo_dir)
     sys_prompt = (
@@ -1953,7 +2023,13 @@ def run_llm_deep_vulnerability_audit(
     )
 
     try:
-        raw = call_llm_provider(provider, api_key, model, sys_prompt, user_prompt)
+        raw = ""
+        for attempt in range(2):
+            raw = call_llm_provider(provider, api_key, model, sys_prompt, user_prompt)
+            if str(raw or "").strip():
+                break
+        if not str(raw or "").strip():
+            return [], f"{provider.upper()} ({model})", "skipped"
         items = _parse_deep_audit_items(raw)
         valid_items: List[Dict[str, Any]] = []
         allowed_severities = {"critical", "high", "medium", "low", "info"}
@@ -2004,7 +2080,7 @@ def run_llm_deep_vulnerability_audit(
             if isinstance(advisory_url, str) and advisory_url.startswith(("https://", "http://")):
                 entry["official_source"] = advisory_url
             valid_items.append(entry)
-        return valid_items, f"{provider.upper()} ({model})"
+        return valid_items, f"{provider.upper()} ({model})", "completed"
     except Exception as exc:
         print(f"Notice: LLM deep audit skipped/failed for {repo_name}: {exc}", file=sys.stderr)
-        return [], f"{provider.upper()} ({model})"
+        return [], f"{provider.upper()} ({model})", "skipped"
