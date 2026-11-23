@@ -828,6 +828,22 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(400, {"error": "Provide a JSON-RPC 2.0 request or {'tool': '<name>', 'arguments': {...}}"})
             return
 
+        if self.path.startswith("/api/findings/triage"):
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                fp = str(body.get("fingerprint") or "").strip()
+                action = str(body.get("action") or "ignore").strip().lower()
+                reason = str(body.get("reason") or "").strip()
+                note = str(body.get("note") or "").strip()
+                days = int(body.get("days") or 7)
+                suppressed = analyzer.set_finding_triage(
+                    fp, action=action, reason=reason, note=note, days=days
+                )
+                self._send_json(200, {"ok": True, "suppressed": suppressed})
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
         if self.path.startswith("/api/findings/suppress"):
             try:
                 body = json.loads(body_raw) if body_raw else {}

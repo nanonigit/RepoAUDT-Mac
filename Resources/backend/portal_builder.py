@@ -8687,11 +8687,85 @@ def build_portal_html(data, is_shareable=False):
         if (t === 'P2') return 2;
         return 1;
       };
+      const inferCategory = it => {
+        if (it.category) return it.category;
+        const t = String(it.title || '').toLowerCase();
+        const sc = String(it.scanner || '').toLowerCase();
+        const fl = String(it.file || '').toLowerCase();
+        if (t.includes('シークレット') || sc === 'gitleaks') return 'Secrets';
+        if (sc === 'zizmor' || sc === 'actionlint' || fl.includes('.github/workflows/')) return 'CI/CD';
+        if (it.package_name || t.includes('[osv') || t.includes('[依存関係脆弱性集約]')) return 'Dependencies (SCA)';
+        if (sc === 'trivy' || fl.includes('.tf') || fl.includes('dockerfile')) return 'IaC';
+        return 'SAST';
+      };
+      const inferTier = it => {
+        if (it.priority_tier) return String(it.priority_tier).toUpperCase();
+        const s = String(it.severity || 'medium').toLowerCase();
+        if (s === 'critical') return 'P0';
+        if (s === 'high') return 'P1';
+        if (s === 'medium' || s === 'warning') return 'P2';
+        return 'P3';
+      };
       const repoAuditRawDate = repo.analyzed_at || repo.updatedAt || repo.commit_date || '';
-      const visibleIssues = rawIssues.filter(it => !it.suppressed);
+      const enrichedIssues = rawIssues.map((it, idx) => ({
+        ...it,
+        _idx: idx,
+        _tier: inferTier(it),
+        _cat: inferCategory(it),
+        _fp: it.fingerprint || `idx-${idx}`
+      }));
+      const activePool = enrichedIssues.filter(it => !it.suppressed);
+      const ignoredPool = enrichedIssues.filter(it => Boolean(it.suppressed));
+      const p0Cnt = activePool.filter(it => it._tier === 'P0').length;
+      const p1Cnt = activePool.filter(it => it._tier === 'P1').length;
+      const p2Cnt = activePool.filter(it => it._tier === 'P2').length;
+      const p3Cnt = activePool.filter(it => it._tier === 'P3').length;
+      const newCnt = activePool.filter(it => Boolean(it.is_new)).length;
+      const actionableCnt = p0Cnt + p1Cnt;
+      const backlogCnt = p2Cnt + p3Cnt;
+      const noiseReducedPct = enrichedIssues.length > 0
+        ? Math.max(0, Math.round(((enrichedIssues.length - actionableCnt) / enrichedIssues.length) * 100))
+        : 0;
+
+      if (!window.__auditTriageState) {
+        window.__auditTriageState = {
+          tab: actionableCnt > 0 ? 'actionable' : (backlogCnt > 0 ? 'backlog' : 'actionable'),
+          tier: '',
+          category: '',
+          reachableOnly: false,
+          newOnly: false,
+          search: '',
+          selectedFp: null
+        };
+      }
+      const ts = window.__auditTriageState;
+      if (ts.tab === 'actionable' && actionableCnt === 0 && backlogCnt > 0 && !ts._userPickedTab) {
+        ts.tab = 'backlog';
+      }
+
+      const tabFiltered = (ts.tab === 'ignored'
+        ? ignoredPool
+        : ts.tab === 'backlog'
+          ? activePool.filter(it => it._tier === 'P2' || it._tier === 'P3')
+          : ts.tab === 'all'
+            ? activePool
+            : activePool.filter(it => it._tier === 'P0' || it._tier === 'P1')
+      );
+      const visibleIssues = tabFiltered.filter(it => {
+        if (ts.tier && it._tier !== ts.tier) return false;
+        if (ts.category && it._cat !== ts.category) return false;
+        if (ts.reachableOnly && (it.reachability === 'unlikely' || it.reachability === 'mitigated')) return false;
+        if (ts.newOnly && !it.is_new) return false;
+        if (ts.search) {
+          const q = ts.search.toLowerCase();
+          const hay = `${it.title || ''} ${it.file || ''} ${it.desc || ''} ${it.priority_reason || ''}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
       const issues = [...visibleIssues].sort((a, b) => {
         if (findingSortOrder === 'severityDesc') {
-          const tDiff = tierScore(b.priority_tier) - tierScore(a.priority_tier);
+          const tDiff = tierScore(b._tier) - tierScore(a._tier);
           if (tDiff !== 0) return tDiff;
           const diff = severityScore(b.severity) - severityScore(a.severity);
           if (diff !== 0) return diff;
@@ -8729,14 +8803,18 @@ def build_portal_html(data, is_shareable=False):
           : {month: 'short', day: 'numeric'});
       };
       const repoAuditDateFull = formatFindingDate(repoAuditRawDate, true);
+      const selectedDrawerIssue = ts.selectedFp ? enrichedIssues.find(it => it._fp === ts.selectedFp) || null : null;
+      const kpiCardStyle = active => `padding: 10px 12px; border-radius: 10px; border: 1px solid ${active ? 'var(--workspace-accent)' : 'var(--workspace-border)'}; background: var(--workspace-surface); cursor: pointer; text-align: left; display: grid; gap: 4px;`;
+      const tabBtnStyle = active => `padding: 6px 12px; border-radius: 8px; border: 1px solid ${active ? 'var(--workspace-accent)' : 'var(--workspace-border)'}; background: ${active ? 'rgba(56, 189, 248, 0.14)' : 'transparent'}; color: var(--workspace-text); font-size: 0.84rem; font-weight: ${active ? '600' : '500'}; cursor: pointer;`;
+
       view.innerHTML = `
         <section class="workspace-audit">
           <div class="workspace-audit-heading">
-            <h2>${en ? 'Saved findings' : '保存済みの指摘'}</h2>
+            <h2>${en ? 'Security Triage & Findings' : 'セキュリティ監査・トリアージ'}</h2>
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-              <span>${en ? `${issues.length} findings` : `${issues.length}件`}${repoAuditDateFull ? ` · ${en ? 'Audited' : '指摘日'}: ${escapeHtml(repoAuditDateFull)}` : ''}</span>
+              <span>${en ? `${issues.length} shown / ${enrichedIssues.length} total` : `表示 ${issues.length}件 / 全${enrichedIssues.length}件`}${repoAuditDateFull ? ` · ${en ? 'Audited' : '指摘日'}: ${escapeHtml(repoAuditDateFull)}` : ''}</span>
               <select id="finding-sort-select" aria-label="${en ? 'Sort findings' : '指摘の並び替え'}" style="font-size: 0.82rem; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-surface); color: var(--workspace-text);">
-                <option value="severityDesc" ${findingSortOrder === 'severityDesc' ? 'selected' : ''}>${en ? 'Highest severity first' : '危険度の高い順'}</option>
+                <option value="severityDesc" ${findingSortOrder === 'severityDesc' ? 'selected' : ''}>${en ? 'Priority (P0 → P3)' : '優先度順 (P0 → P3)'}</option>
                 <option value="severityAsc" ${findingSortOrder === 'severityAsc' ? 'selected' : ''}>${en ? 'Lowest severity first' : '低い順（重要度が低い順）'}</option>
                 <option value="dateDesc" ${findingSortOrder === 'dateDesc' ? 'selected' : ''}>${en ? 'Newest date first' : '指摘日が新しい順'}</option>
                 <option value="fileAsc" ${findingSortOrder === 'fileAsc' ? 'selected' : ''}>${en ? 'By file path' : 'ファイルパス順'}</option>
@@ -8745,12 +8823,62 @@ def build_portal_html(data, is_shareable=False):
               </select>
             </div>
           </div>
-          <p class="audit-note">${en ? 'Open a finding to inspect the evidence, impact and suggested fix. Results reflect the saved analysis.' : '指摘を開くと、根拠・影響・修正案を確認できます。保存された解析時点の結果です。'}</p>
-          <div class="audit-color-key" aria-label="${en ? 'Severity legend' : '重要度の凡例'}">
-            <span class="issue-severity danger">⛔ ${en ? 'Critical / High' : '重大・高リスク'}</span>
-            <span class="issue-severity warning">△ ${en ? 'Medium / Warning' : '中リスク・警告'}</span>
-            <span class="issue-severity info">ⓘ ${en ? 'Low / Suggestion' : '低リスク・改善'}</span>
+
+          ${enrichedIssues.length > 0 ? `
+          <div style="padding: 10px 14px; border-radius: 10px; border: 1px solid var(--workspace-border); background: rgba(56, 189, 248, 0.08); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <div style="font-size: 0.88rem;">
+              <strong>🛡️ AutoTriage:</strong>
+              ${en
+                ? `Narrowed <strong>${enrichedIssues.length}</strong> raw detections down to <strong>${actionableCnt}</strong> actionable P0/P1 items${noiseReducedPct > 0 ? ` (${noiseReducedPct}% noise reduced)` : ''}.`
+                : `全スキャン検出 <strong>${enrichedIssues.length}件</strong> → 要対応（P0/P1）<strong>${actionableCnt}件</strong> に絞り込み${noiseReducedPct > 0 ? `（ノイズ <strong>${noiseReducedPct}%</strong> 削減）` : ''}。`}
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" data-triage-tab="actionable" style="${tabBtnStyle(ts.tab === 'actionable')}">${en ? `Actionable (${actionableCnt})` : `要対応 P0/P1 (${actionableCnt})`}</button>
+              <button type="button" data-triage-tab="backlog" style="${tabBtnStyle(ts.tab === 'backlog')}">${en ? `Backlog (${backlogCnt})` : `バックログ P2/P3 (${backlogCnt})`}</button>
+              <button type="button" data-triage-tab="ignored" style="${tabBtnStyle(ts.tab === 'ignored')}">${en ? `Ignored / Snoozed (${ignoredPool.length})` : `許容・スヌーズ済み (${ignoredPool.length})`}</button>
+              <button type="button" data-triage-tab="all" style="${tabBtnStyle(ts.tab === 'all')}">${en ? `All Active (${activePool.length})` : `すべて (${activePool.length})`}</button>
+            </div>
           </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px;">
+            <button type="button" data-kpi-tier="P0" style="${kpiCardStyle(ts.tier === 'P0')}">
+              <span style="font-size: 0.78rem; color: var(--workspace-danger-text); font-weight: 700;">P0 ${en ? 'CRITICAL · SECRETS' : '緊急（シークレット漏洩）'}</span>
+              <strong style="font-size: 1.35rem;">${p0Cnt}</strong>
+            </button>
+            <button type="button" data-kpi-tier="P1" style="${kpiCardStyle(ts.tier === 'P1')}">
+              <span style="font-size: 0.78rem; color: #fb923c; font-weight: 700;">P1 ${en ? 'HIGH · KEV / RCE' : '高リスク（KEV / RCE / 認証）'}</span>
+              <strong style="font-size: 1.35rem;">${p1Cnt}</strong>
+            </button>
+            <button type="button" data-kpi-tier="P2" style="${kpiCardStyle(ts.tier === 'P2')}">
+              <span style="font-size: 0.78rem; color: var(--workspace-warning-text); font-weight: 700;">P2 ${en ? 'PLANNED · CI/CD & IaC' : '計画対応（CI/CD / IaC）'}</span>
+              <strong style="font-size: 1.35rem;">${p2Cnt}</strong>
+            </button>
+            <button type="button" data-kpi-new="1" style="${kpiCardStyle(ts.newOnly)}">
+              <span style="font-size: 0.78rem; color: var(--workspace-accent); font-weight: 700;">🆕 ${en ? 'NEW FINDINGS' : '新規検出 (前回比)'}</span>
+              <strong style="font-size: 1.35rem;">+${newCnt}</strong>
+            </button>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--workspace-border); background: var(--workspace-surface);">
+            <select id="triage-cat-filter" style="font-size: 0.82rem; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-background); color: var(--workspace-text);">
+              <option value="">${en ? 'All Categories' : '全カテゴリ'}</option>
+              ${['Secrets', 'Dependencies (SCA)', 'CI/CD', 'IaC', 'SAST'].map(c => `<option value="${c}" ${ts.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+            <select id="triage-tier-filter" style="font-size: 0.82rem; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-background); color: var(--workspace-text);">
+              <option value="">${en ? 'All Tiers (P0-P3)' : '全優先度 (P0-P3)'}</option>
+              ${['P0', 'P1', 'P2', 'P3'].map(p => `<option value="${p}" ${ts.tier === p ? 'selected' : ''}>${p}</option>`).join('')}
+            </select>
+            <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.82rem; cursor: pointer;">
+              <input type="checkbox" id="triage-reachable-only" ${ts.reachableOnly ? 'checked' : ''}>
+              <span>🎯 ${en ? 'Reachable only' : 'Reachable のみ'}</span>
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.82rem; cursor: pointer;">
+              <input type="checkbox" id="triage-new-only" ${ts.newOnly ? 'checked' : ''}>
+              <span>🆕 ${en ? 'New only' : '新規のみ'}</span>
+            </label>
+            <input type="search" id="triage-search-input" placeholder="${en ? 'Filter by title, file, CVE…' : 'タイトル・ファイル・CVEで絞り込み…'}" value="${escapeHtml(ts.search)}" style="flex: 1; min-width: 180px; font-size: 0.82rem; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-background); color: var(--workspace-text);">
+            ${(ts.tier || ts.category || ts.reachableOnly || ts.newOnly || ts.search) ? `<button type="button" id="triage-reset-filters" class="table-view-btn" style="font-size: 0.78rem;">${en ? 'Reset' : 'リセット'}</button>` : ''}
+          </div>` : ''}
           <div class="audit-list">
             ${issues.length ? issues.map(issue => {
               const severity = String(issue.severity || 'info').toLowerCase();
@@ -8783,20 +8911,28 @@ def build_portal_html(data, is_shareable=False):
                 : '';
               const findingRawDate = issue.detected_at || repoAuditRawDate;
               const findingShortDate = formatFindingDate(findingRawDate, false);
-              const tierTag = issue.priority_tier ? `<span class="issue-severity ${issue.priority_tier === 'P0' || issue.priority_tier === 'P1' ? 'danger' : issue.priority_tier === 'P2' ? 'warning' : 'info'}" style="font-weight:700;">${escapeHtml(issue.priority_tier)}</span>` : '';
-              const kevTag = issue.in_cisa_kev ? `<span class="issue-severity danger" style="font-weight:700;">KEV</span>` : '';
-              const newTag = issue.is_new ? `<span class="issue-severity info" style="font-weight:700;">NEW</span>` : '';
-              const reachTag = issue.reachability ? `<span class="issue-severity neutral">${escapeHtml(issue.reachability)}</span>` : '';
-              const fpAttr = issue.fingerprint ? encodeURIComponent(String(issue.fingerprint)) : '';
+              const tierTag = `<span class="issue-severity ${issue._tier === 'P0' || issue._tier === 'P1' ? 'danger' : issue._tier === 'P2' ? 'warning' : 'info'}" style="font-weight:700;">${escapeHtml(issue._tier)}</span>`;
+              const catTag = `<span class="issue-severity neutral">${escapeHtml(issue._cat)}</span>`;
+              const kevTag = issue.in_cisa_kev ? `<span class="issue-severity danger" style="font-weight:700;">🔥 KEV</span>` : '';
+              const epssTag = (typeof issue.epss_score === 'number' && issue.epss_score >= 0.05) ? `<span class="issue-severity warning">EPSS ${(issue.epss_score * 100).toFixed(0)}%</span>` : '';
+              const newTag = issue.is_new ? `<span class="issue-severity info" style="font-weight:700;">🆕 NEW</span>` : '';
+              const reachTag = issue.reachability
+                ? `<span class="issue-severity neutral">${issue.reachability === 'mitigated' ? '🛡️' : 'ⓘ'} ${escapeHtml(issue.reachability)}</span>`
+                : '';
+              const updTag = issue.update_type
+                ? `<span class="issue-severity ${issue.update_type === 'Breaking Major' ? 'warning' : 'info'}">${escapeHtml(issue.update_type)}</span>`
+                : '';
+              const fpAttr = encodeURIComponent(String(issue._fp));
               return `<details class="audit-issue">
                 <summary>
                   ${tierTag}
                   <span class="issue-severity ${tone}"><span aria-hidden="true">${tone === 'danger' ? '⛔' : tone === 'warning' ? '△' : tone === 'info' ? 'ⓘ' : '—'}</span> ${escapeHtml(severity.toUpperCase())}</span>
-                  ${kevTag}${newTag}${reachTag}
+                  ${catTag}${kevTag}${epssTag}${newTag}${reachTag}${updTag}
                   <div class="issue-heading">
                     <div class="issue-title">${escapeHtml((en && issue.title_en) || issue.title || (en ? 'Review finding' : '確認事項'))}</div>
                     <div class="issue-path">${escapeHtml(file || (en ? 'Location not recorded' : '場所未記録'))}${findingShortDate ? ` · <span title="${escapeHtml(String(findingRawDate))}">📅 ${escapeHtml(findingShortDate)}</span>` : ''}${issue.priority_reason ? ` · ${escapeHtml(issue.priority_reason)}` : ''}</div>
                   </div>
+                  <button type="button" class="table-view-btn" data-open-drawer="${fpAttr}" style="margin-left: auto; font-size: 0.78rem; flex-shrink: 0;">${en ? 'Details →' : '詳細パネル →'}</button>
                 </summary>
                 <div class="issue-body">
                   ${findingSourceControls(repo, issue, file)}
@@ -8830,12 +8966,151 @@ def build_portal_html(data, is_shareable=False):
               </details>`;
             }).join('') : `<div class="audit-empty">${en ? 'No findings recorded in this analysis. Review the scan scope before drawing conclusions.' : 'この解析に保存された指摘はありません。確認範囲は解析の詳細から確認してください。'}</div>`}
           </div>
+          ${selectedDrawerIssue ? (() => {
+            const dIss = selectedDrawerIssue;
+            const dFile = dIss.file || dIss.path || '';
+            const dPrompt = encodeURIComponent(buildAiAgentFixPrompt(repo.repo, dIss)).replace(/'/g, '%27');
+            const dReport = encodeDataArg(dIss);
+            const dName = encodeURIComponent(repo.repo || '').replace(/'/g, '%27');
+            const dFp = encodeURIComponent(String(dIss._fp));
+            return `<aside id="audit-detail-drawer" role="dialog" aria-label="${en ? 'Finding detail drawer' : '指摘詳細ドロワー'}" style="position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 92vw); z-index: 150; background: var(--workspace-surface); border-left: 1px solid var(--workspace-border); box-shadow: -8px 0 28px rgba(0,0,0,0.45); padding: 18px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                  <span class="issue-severity ${dIss._tier === 'P0' || dIss._tier === 'P1' ? 'danger' : dIss._tier === 'P2' ? 'warning' : 'info'}" style="font-weight: 700;">${escapeHtml(dIss._tier)}</span>
+                  <span class="issue-severity neutral">${escapeHtml(dIss._cat)}</span>
+                  ${dIss.in_cisa_kev ? `<span class="issue-severity danger">🔥 KEV</span>` : ''}
+                  ${dIss.reachability ? `<span class="issue-severity neutral">${escapeHtml(dIss.reachability)}</span>` : ''}
+                </div>
+                <button type="button" id="audit-drawer-close" class="table-view-btn" style="font-size: 0.82rem;">✕ ${en ? 'Close' : '閉じる'}</button>
+              </div>
+              <h3 style="margin: 0; font-size: 1.02rem; line-height: 1.4;">${escapeHtml(dIss.title || '')}</h3>
+              <code style="font-size: 0.8rem; word-break: break-all;">${escapeHtml(dFile)}</code>
+
+              <div style="padding: 10px 12px; border-radius: 8px; border: 1px solid var(--workspace-border); background: var(--workspace-background); display: grid; gap: 6px; font-size: 0.85rem;">
+                <div><strong>${en ? 'Why it matters:' : '重要度・リスク理由:'}</strong> ${escapeHtml(dIss.priority_reason || dIss.severity || '')}</div>
+                <div><strong>${en ? 'Scenario:' : '想定リスク:'}</strong> ${escapeHtml(dIss.desc || dIss.comment || dIss.summary || '')}</div>
+                <div><strong>${en ? 'Reachability:' : '到達可能性:'}</strong> ${escapeHtml(dIss.reachability || 'reachable')}</div>
+              </div>
+
+              ${dIss.diff ? `<div><strong style="font-size: 0.84rem;">${en ? 'Safe Code / Diff Preview' : '安全な差分プレビュー'}</strong><pre style="margin-top: 6px; font-size: 0.8rem; max-height: 180px; overflow: auto;">${escapeHtml(dIss.diff)}</pre></div>` : ''}
+              ${dIss.fix_cmd ? `<div><strong style="font-size: 0.84rem;">${en ? 'Fix Command' : '修正コマンド'}</strong><pre style="margin-top: 6px; font-size: 0.8rem;">${escapeHtml(dIss.fix_cmd)}</pre><button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(dIss.fix_cmd)}">${en ? 'Copy command' : 'コマンドをコピー'}</button></div>` : ''}
+
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${dPrompt}">${en ? 'Copy AI fix prompt' : 'AI修正プロンプトをコピー'}</button>
+                <button type="button" class="table-view-btn" onclick="copySingleActionReport('${dReport}', '${dName}', this)">${en ? 'Copy report' : 'レポートをコピー'}</button>
+              </div>
+
+              <div style="border-top: 1px solid var(--workspace-border); padding-top: 12px; display: grid; gap: 8px;">
+                <strong style="font-size: 0.86rem;">${en ? 'Triage Actions (Ignore / Snooze)' : 'トリアージ操作（許容 / スヌーズ）'}</strong>
+                ${dIss.suppressed ? `
+                  <p style="font-size: 0.82rem; color: var(--workspace-muted); margin: 0;">${escapeHtml(dIss.suppression_status === 'snoozed' ? `Snoozed until ${dIss.snooze_expires_at || ''}` : `Ignored: ${dIss.suppressed_reason || ''}`)}</p>
+                  <button type="button" class="table-view-btn workspace-primary" data-drawer-triage="restore" data-fp="${dFp}">${en ? 'Restore to Active' : '要対応へ戻す'}</button>
+                ` : `
+                  <select id="drawer-ignore-reason" style="font-size: 0.82rem; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-background); color: var(--workspace-text);">
+                    <option value="False Positive">${en ? 'False Positive' : '誤検知 (False Positive)'}</option>
+                    <option value="Not Reachable">${en ? 'Not Reachable' : '到達不可 (Not Reachable)'}</option>
+                    <option value="Accepted Risk">${en ? 'Accepted Risk' : '業務上許容 (Accepted Risk)'}</option>
+                    <option value="Dev-only">${en ? 'Dev-only' : '開発専用 (Dev-only)'}</option>
+                  </select>
+                  <input id="drawer-ignore-note" type="text" placeholder="${en ? 'Optional note…' : '任意メモ…'}" style="font-size: 0.82rem; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-background); color: var(--workspace-text);">
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <button type="button" class="table-view-btn" data-drawer-triage="ignore" data-fp="${dFp}">${en ? 'Ignore / Accept Risk' : 'リスク許容 (Ignore)'}</button>
+                    <button type="button" class="table-view-btn" data-drawer-triage="snooze" data-days="7" data-fp="${dFp}">${en ? 'Snooze 7d' : '7日間スヌーズ'}</button>
+                    <button type="button" class="table-view-btn" data-drawer-triage="snooze" data-days="30" data-fp="${dFp}">${en ? 'Snooze 30d' : '30日間スヌーズ'}</button>
+                    <button type="button" class="table-view-btn" data-drawer-triage="snooze" data-days="90" data-fp="${dFp}">${en ? 'Snooze 90d' : '90日間スヌーズ'}</button>
+                  </div>
+                `}
+              </div>
+            </aside>`;
+          })() : ''}
         </section>`;
       const sortSelect = view.querySelector('#finding-sort-select');
       if (sortSelect) {
         sortSelect.addEventListener('change', () => {
           safeStorageSet('repoaudt_finding_sort', sortSelect.value);
           renderCodeRabbitView();
+        });
+      }
+      for (const tabBtn of view.querySelectorAll('[data-triage-tab]')) {
+        tabBtn.addEventListener('click', () => {
+          ts.tab = tabBtn.dataset.triageTab;
+          ts._userPickedTab = true;
+          ts.selectedFp = null;
+          renderCodeRabbitView();
+        });
+      }
+      for (const kpiBtn of view.querySelectorAll('[data-kpi-tier]')) {
+        kpiBtn.addEventListener('click', () => {
+          const picked = kpiBtn.dataset.kpiTier;
+          ts.tier = ts.tier === picked ? '' : picked;
+          if (ts.tier === 'P0' || ts.tier === 'P1') ts.tab = 'actionable';
+          else if (ts.tier === 'P2' || ts.tier === 'P3') ts.tab = 'backlog';
+          renderCodeRabbitView();
+        });
+      }
+      const kpiNewBtn = view.querySelector('[data-kpi-new]');
+      if (kpiNewBtn) {
+        kpiNewBtn.addEventListener('click', () => {
+          ts.newOnly = !ts.newOnly;
+          ts.tab = 'all';
+          renderCodeRabbitView();
+        });
+      }
+      const catSel = view.querySelector('#triage-cat-filter');
+      if (catSel) catSel.addEventListener('change', () => { ts.category = catSel.value; renderCodeRabbitView(); });
+      const tierSel = view.querySelector('#triage-tier-filter');
+      if (tierSel) tierSel.addEventListener('change', () => { ts.tier = tierSel.value; renderCodeRabbitView(); });
+      const reachChk = view.querySelector('#triage-reachable-only');
+      if (reachChk) reachChk.addEventListener('change', () => { ts.reachableOnly = reachChk.checked; renderCodeRabbitView(); });
+      const newChk = view.querySelector('#triage-new-only');
+      if (newChk) newChk.addEventListener('change', () => { ts.newOnly = newChk.checked; renderCodeRabbitView(); });
+      const searchInp = view.querySelector('#triage-search-input');
+      if (searchInp) searchInp.addEventListener('input', () => { ts.search = searchInp.value; renderCodeRabbitView(); });
+      const resetBtn = view.querySelector('#triage-reset-filters');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          ts.tier = ''; ts.category = ''; ts.reachableOnly = false; ts.newOnly = false; ts.search = '';
+          renderCodeRabbitView();
+        });
+      }
+      for (const drBtn of view.querySelectorAll('[data-open-drawer]')) {
+        drBtn.addEventListener('click', e => {
+          e.preventDefault();
+          e.stopPropagation();
+          ts.selectedFp = decodeURIComponent(drBtn.dataset.openDrawer || '');
+          renderCodeRabbitView();
+        });
+      }
+      const closeDrBtn = view.querySelector('#audit-drawer-close');
+      if (closeDrBtn) {
+        closeDrBtn.addEventListener('click', () => {
+          ts.selectedFp = null;
+          renderCodeRabbitView();
+        });
+      }
+      for (const actBtn of view.querySelectorAll('[data-drawer-triage]')) {
+        actBtn.addEventListener('click', async () => {
+          const action = actBtn.dataset.drawerTriage;
+          const fp = decodeURIComponent(actBtn.dataset.fp || '');
+          const days = Number(actBtn.dataset.days || 7);
+          const reason = view.querySelector('#drawer-ignore-reason')?.value || '';
+          const note = view.querySelector('#drawer-ignore-note')?.value || '';
+          try {
+            actBtn.disabled = true;
+            const resp = await fetch('/api/findings/triage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fingerprint: fp, action, reason, note, days })
+            });
+            if (resp.ok) {
+              ts.selectedFp = null;
+              await syncSavedAnalysesFromServer();
+              renderCodeRabbitView();
+              if (typeof publishNativeWorkspace === 'function') publishNativeWorkspace();
+            }
+          } finally {
+            actBtn.disabled = false;
+          }
         });
       }
       for (const finding of view.querySelectorAll('.audit-issue')) {

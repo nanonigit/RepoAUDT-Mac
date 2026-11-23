@@ -193,6 +193,48 @@ class TestTriageAndValidation(unittest.TestCase):
                 self.assertFalse(by_title["Brand new issue"]["suppressed"])
                 self.assertTrue(by_title["Brand new issue"]["is_new"])
 
+    def test_triage_snooze_and_auto_expiry_plus_category_and_update_type(self) -> None:
+        self.assertEqual(
+            triage_engine.classify_category({"title": "[zizmor] unpinned-uses", "scanner": "zizmor", "file": ".github/workflows/ci.yml:1"}),
+            "CI/CD",
+        )
+        self.assertEqual(
+            triage_engine.classify_update_type({"diff": '- "next": "^16.2.0"\n+ "next": "^16.4.5"'}),
+            "Safe Patch/Minor",
+        )
+        self.assertEqual(
+            triage_engine.classify_update_type({"diff": '- "next": "^15.5.0"\n+ "next": "^16.4.5"'}),
+            "Breaking Major",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            state_file = Path(tmp) / "saved_analyses.json"
+            with mock.patch.object(analyzer, "STATE_FILE", state_file), \
+                 mock.patch.object(analyzer, "ensure_dirs"):
+                item = {"title": "Temp snooze issue", "file": "a.ts:1", "severity": "high"}
+                fp = triage_engine.compute_finding_fingerprint("org/repo", item)
+                item["fingerprint"] = fp
+                analyzer.save_analysis_result({
+                    "diagram": {
+                        "id": "repo-1",
+                        "repo": "org/repo",
+                        "github_url": "https://github.com/org/repo",
+                        "coderabbit": {"action_items": [item], "findings": []},
+                    }
+                })
+                supp = analyzer.set_finding_triage(fp, action="snooze", reason="Scheduled", note="Sprint 12", days=7)
+                self.assertEqual(supp[fp]["status"], "snoozed")
+                self.assertIsNotNone(supp[fp]["expires_at"])
+
+                # Force expires_at into the past and verify reload auto-restores to active
+                raw = json.loads(state_file.read_text(encoding="utf-8"))
+                raw["suppressed_findings"][fp]["expires_at"] = "2020-01-01T00:00:00+00:00"
+                state_file.write_text(json.dumps(raw), encoding="utf-8")
+
+                reloaded = analyzer.load_saved_analyses()
+                self.assertNotIn(fp, reloaded["suppressed_findings"])
+                self.assertFalse(reloaded["diagrams"][0]["coderabbit"]["action_items"][0]["suppressed"])
+
 
 if __name__ == "__main__":
     unittest.main()

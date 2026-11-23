@@ -133,6 +133,58 @@ def annotate_windows_cve_reachability(item: Dict[str, Any], is_linux_repo: bool)
             item["desc"] = str(item.get("desc") or "") + " [Reachability: unlikely (Linuxベース構成のため影響限定的)]"
 
 
+def classify_category(item: Dict[str, Any]) -> str:
+    """Classify finding into Secrets, Dependencies (SCA), CI/CD, IaC, or SAST."""
+    title = str(item.get("title") or "").lower()
+    scanner = str(item.get("scanner") or "").lower()
+    file_loc = str(item.get("file") or "").lower()
+    if (
+        "シークレット" in title
+        or scanner == "gitleaks"
+        or str(item.get("rule_id") or "").lower() in ("aws-access-token", "openai-api-key", "private-key", "generic-api-key")
+    ):
+        return "Secrets"
+    if (
+        scanner in ("zizmor", "actionlint")
+        or ".github/workflows/" in file_loc
+        or "[zizmor]" in title
+    ):
+        return "CI/CD"
+    if (
+        item.get("package_name")
+        or "[osv" in title
+        or "[trivy]" in title and any(m in file_loc for m in ("package.json", "package-lock.json", "requirements.txt", "go.mod", "composer.json", "cargo.toml"))
+        or "[依存関係脆弱性集約]" in title
+    ):
+        return "Dependencies (SCA)"
+    if (
+        scanner == "trivy"
+        or ".tf" in file_loc
+        or "dockerfile" in file_loc
+        or "cloudformation" in file_loc
+        or "yaml" in file_loc
+    ):
+        return "IaC"
+    return "SAST"
+
+
+def classify_update_type(item: Dict[str, Any]) -> Optional[str]:
+    """Return 'Safe Patch/Minor' or 'Breaking Major' when a dependency diff/upgrade is present."""
+    diff_val = str(item.get("diff") or "")
+    if not diff_val:
+        return None
+    m_old = re.search(r'^-\s*"?([^":\s]+)"?\s*[:=]\s*"?[\^~v=]*([^"\s]+)"?', diff_val, re.MULTILINE)
+    m_new = re.search(r'^\+\s*"?([^":\s]+)"?\s*[:=]\s*"?[\^~v=]*([^"\s]+)"?', diff_val, re.MULTILINE)
+    if not (m_old and m_new):
+        return None
+    old_t, new_t = _parse_ver(m_old.group(2)), _parse_ver(m_new.group(2))
+    if not (old_t and new_t):
+        return None
+    if new_t[0] > old_t[0]:
+        return "Breaking Major"
+    return "Safe Patch/Minor"
+
+
 def classify_priority_tier(item: Dict[str, Any], kev_set: Optional[Set[str]] = None) -> Tuple[str, str]:
     """Assign (priority_tier, priority_reason) for P0-P3 automated triage."""
     title = str(item.get("title") or "")
@@ -281,7 +333,11 @@ def triage_and_validate_findings(
         tier, reason = classify_priority_tier(item, kev_set=kev_set)
         item["priority_tier"] = tier
         item["priority_reason"] = reason
+        item["category"] = item.get("category") or classify_category(item)
         validate_and_sanitize_finding(item)
+        upd_type = classify_update_type(item)
+        if upd_type:
+            item["update_type"] = upd_type
         fp = compute_finding_fingerprint(repo_id, item)
         item["fingerprint"] = fp
         if has_prev:
@@ -289,7 +345,10 @@ def triage_and_validate_findings(
         if fp in supp:
             entry = supp[fp]
             item["suppressed"] = True
+            item["suppression_status"] = entry.get("status", "ignored") if isinstance(entry, dict) else "ignored"
             item["suppressed_reason"] = entry.get("reason", "") if isinstance(entry, dict) else ""
+            item["suppressed_note"] = entry.get("note", "") if isinstance(entry, dict) else ""
+            item["snooze_expires_at"] = entry.get("expires_at") if isinstance(entry, dict) else None
         else:
             item["suppressed"] = False
         processed.append(item)

@@ -1895,7 +1895,29 @@ def _load_saved_analyses_unlocked() -> Dict[str, Any]:
             data.setdefault("techSpecs", {})
             data.setdefault("tableSchemas", {})
             data.setdefault("deleted_ids", [])
-            data.setdefault("suppressed_findings", {})
+            supp = data.setdefault("suppressed_findings", {})
+            if isinstance(supp, dict) and supp:
+                now_iso = datetime.now(timezone.utc).isoformat()
+                expired_fps = [
+                    fp for fp, entry in supp.items()
+                    if isinstance(entry, dict)
+                    and entry.get("status") == "snoozed"
+                    and entry.get("expires_at")
+                    and str(entry.get("expires_at")) <= now_iso
+                ]
+                for fp in expired_fps:
+                    supp.pop(fp, None)
+                if expired_fps:
+                    for d_item in data.get("diagrams", []):
+                        cr_obj = d_item.get("coderabbit") if isinstance(d_item, dict) else None
+                        if not isinstance(cr_obj, dict):
+                            continue
+                        for lst_key in ("action_items", "findings"):
+                            for f_it in cr_obj.get(lst_key) or []:
+                                if isinstance(f_it, dict) and f_it.get("fingerprint") in expired_fps:
+                                    f_it["suppressed"] = False
+                                    f_it.pop("suppression_status", None)
+                                    f_it.pop("snooze_expires_at", None)
             # Normalize any legacy sequence objects missing `diagram` or `id` and coderabbit stats
             for d in data.get("diagrams", []):
                 for idx, s in enumerate(d.get("sequences", [])):
@@ -1953,24 +1975,41 @@ def load_saved_analyses() -> Dict[str, Any]:
         return _load_saved_analyses_unlocked()
 
 
-def set_finding_suppression(
+def set_finding_triage(
     fingerprint: str,
     *,
+    action: str = "ignore",
     reason: str = "",
-    suppress: bool = True,
+    note: str = "",
+    days: int = 7,
 ) -> Dict[str, Any]:
-    """Persist or remove a finding fingerprint in suppressed_findings and update saved diagrams."""
+    """Ignore, snooze (for N days), or restore a finding by fingerprint."""
     fp = str(fingerprint or "").strip()
     if not fp:
         raise ValueError("fingerprint is required")
-    local_ts, _ = now_timestamps()
+    act = str(action or "ignore").strip().lower()
+    if act not in ("ignore", "snooze", "restore"):
+        raise ValueError("action must be ignore, snooze, or restore")
+
+    from datetime import timedelta
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
+    expires_at = (now_dt + timedelta(days=max(1, min(365, int(days or 7))))).isoformat() if act == "snooze" else None
+
     with _STATE_LOCK:
         state = _load_saved_analyses_unlocked()
         supp = state.setdefault("suppressed_findings", {})
-        if suppress:
-            supp[fp] = {"reason": str(reason or "").strip(), "suppressed_at": local_ts}
-        else:
+        if act == "restore":
             supp.pop(fp, None)
+        else:
+            supp[fp] = {
+                "fingerprint": fp,
+                "status": "snoozed" if act == "snooze" else "ignored",
+                "reason": str(reason or "").strip(),
+                "note": str(note or "").strip(),
+                "expires_at": expires_at,
+                "created_at": now_iso,
+            }
 
         for d in state.get("diagrams", []):
             cr = d.get("coderabbit")
@@ -1979,10 +2018,34 @@ def set_finding_suppression(
             for lst_key in ("action_items", "findings"):
                 for item in cr.get(lst_key) or []:
                     if isinstance(item, dict) and item.get("fingerprint") == fp:
-                        item["suppressed"] = bool(suppress)
-                        item["suppressed_reason"] = str(reason or "").strip() if suppress else ""
+                        if act == "restore":
+                            item["suppressed"] = False
+                            item.pop("suppression_status", None)
+                            item.pop("suppressed_reason", None)
+                            item.pop("suppressed_note", None)
+                            item.pop("snooze_expires_at", None)
+                        else:
+                            item["suppressed"] = True
+                            item["suppression_status"] = "snoozed" if act == "snooze" else "ignored"
+                            item["suppressed_reason"] = str(reason or "").strip()
+                            item["suppressed_note"] = str(note or "").strip()
+                            item["snooze_expires_at"] = expires_at
         _write_json_atomic(STATE_FILE, state)
         return dict(supp)
+
+
+def set_finding_suppression(
+    fingerprint: str,
+    *,
+    reason: str = "",
+    suppress: bool = True,
+) -> Dict[str, Any]:
+    """Persist or remove a finding fingerprint in suppressed_findings and update saved diagrams."""
+    return set_finding_triage(
+        fingerprint,
+        action="ignore" if suppress else "restore",
+        reason=reason,
+    )
 
 
 def get_suppressed_findings() -> Dict[str, Any]:
