@@ -2189,6 +2189,52 @@ def set_finding_suppression(
     )
 
 
+def record_secret_verification(
+    diagram_id: str,
+    fingerprint: str,
+    verification: Dict[str, Any],
+    *,
+    file_hint: str = "",
+) -> bool:
+    """Persist opt-in secret liveness result and auto-downgrade revoked keys to P3."""
+    target_id = str(diagram_id or "").strip()
+    fp = str(fingerprint or "").strip()
+    clean_file = str(file_hint or "").split(" (", 1)[0].split(":", 1)[0].strip()
+    status = str(verification.get("status") or "unknown").lower()
+    updated = False
+
+    with _STATE_LOCK:
+        state = _load_saved_analyses_unlocked()
+        for d in state.get("diagrams", []):
+            if target_id and str(d.get("id") or "") != target_id and str(d.get("repo") or "") != target_id:
+                continue
+            cr = d.get("coderabbit")
+            lists_to_scan = []
+            if isinstance(cr, dict):
+                lists_to_scan.extend([cr.get("action_items") or [], cr.get("findings") or []])
+            deps = d.get("deps")
+            if isinstance(deps, dict):
+                lists_to_scan.append(deps.get("sast_findings") or [])
+            for lst in lists_to_scan:
+                for item in lst:
+                    if not isinstance(item, dict):
+                        continue
+                    item_fp = str(item.get("fingerprint") or "").strip()
+                    item_file = str(item.get("file") or item.get("path") or "").split(" (", 1)[0].split(":", 1)[0].strip()
+                    if (fp and item_fp == fp) or (not fp and clean_file and item_file == clean_file):
+                        item["secret_liveness"] = dict(verification)
+                        if status == "revoked":
+                            item["priority_tier"] = "P3"
+                            item["priority_reason"] = "失効済みキー（履歴削除のみ推奨）"
+                        elif status == "active":
+                            item["priority_tier"] = "P0"
+                            item["priority_reason"] = "有効なシークレットキー（即時失効必須）"
+                        updated = True
+        if updated:
+            _write_json_atomic(STATE_FILE, state)
+    return updated
+
+
 def get_suppressed_findings() -> Dict[str, Any]:
     with _STATE_LOCK:
         state = _load_saved_analyses_unlocked()

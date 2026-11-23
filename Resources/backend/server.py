@@ -907,6 +907,54 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"error": str(exc)})
             return
 
+        if self.path == "/api/secrets/verify":
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                diagram_id = str(body.get("diagram_id") or body.get("repo") or "").strip()
+                fp = str(body.get("fingerprint") or "").strip()
+                file_raw = str(body.get("file") or "").strip()
+                state = analyzer.load_saved_analyses()
+                diagrams = state.get("diagrams", [])
+                matched = next(
+                    (
+                        d for d in diagrams
+                        if str(d.get("id") or "") == diagram_id or str(d.get("repo") or "") == diagram_id
+                    ),
+                    None,
+                )
+                if not matched:
+                    self._send_json(404, {"error": f"Repository '{diagram_id}' not found"})
+                    return
+                local_dir = str(
+                    matched.get("local_path")
+                    or (matched.get("source_revision") or {}).get("local_path")
+                    or ""
+                ).strip()
+                if not local_dir or not Path(local_dir).is_dir():
+                    self._send_json(400, {"error": "Local repository workspace is required for secret verification."})
+                    return
+                rel_only = file_raw.split(" (", 1)[0].strip()
+                line_hint = None
+                if ":" in rel_only:
+                    rel_part, _, line_part = rel_only.rpartition(":")
+                    if line_part.isdigit():
+                        rel_only = rel_part
+                        line_hint = int(line_part)
+                import secret_verifier
+                result = secret_verifier.verify_secret_in_file(
+                    Path(local_dir), rel_only, line_hint=line_hint
+                )
+                analyzer.record_secret_verification(
+                    str(matched.get("id") or diagram_id),
+                    fp,
+                    result,
+                    file_hint=rel_only,
+                )
+                self._send_json(200, {"ok": True, **result})
+            except Exception as exc:
+                self._send_json(400, {"error": f"Verification failed: {type(exc).__name__}"})
+            return
+
         if self.path.startswith("/api/monitor/config"):
             try:
                 body = json.loads(body_raw) if body_raw else {}

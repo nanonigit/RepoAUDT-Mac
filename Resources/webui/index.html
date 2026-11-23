@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/23 22:14:39</strong>
+              <strong id="portal-sync-time">2026/11/23 22:19:06</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -8961,6 +8961,29 @@
                 <div><strong>${en ? 'Reachability:' : '到達可能性:'}</strong> ${escapeHtml(dIss.reachability || 'reachable')}</div>
               </div>
 
+              ${(dIss._cat === 'Secrets' || dIss.category === 'secrets' || dIss.secret_liveness || String(dIss.title || '').includes('シークレット')) ? (() => {
+                const lv = dIss.secret_liveness || {};
+                const st = String(lv.status || 'unknown').toLowerCase();
+                const badgeText = st === 'active'
+                  ? (en ? '🔴 ACTIVE (Valid Key — Revoke Immediately)' : '🔴 ACTIVE（有効なキー・即時失効必須）')
+                  : st === 'revoked'
+                    ? (en ? '🟢 REVOKED (Inactive)' : '🟢 REVOKED（失効済み）')
+                    : (en ? '⚪ UNKNOWN (Unverified / Unsupported)' : '⚪ UNKNOWN（未確認 / 非対応プロバイダ）');
+                const badgeCls = st === 'active' ? 'danger' : st === 'revoked' ? 'success' : 'neutral';
+                return `<div style="padding: 10px 12px; border-radius: 8px; border: 1px solid var(--workspace-border); background: var(--workspace-background); display: grid; gap: 8px; font-size: 0.84rem;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                    <strong>${en ? 'Secret Liveness (Opt-in Read-Only)' : 'シークレット生存確認（オプトイン・読み取り専用）'}</strong>
+                    <span class="issue-severity ${badgeCls}">${escapeHtml(badgeText)}</span>
+                  </div>
+                  ${lv.masked_id ? `<div style="font-size: 0.78rem; color: var(--workspace-muted);">ID: <code>${escapeHtml(lv.masked_id)}</code> · ${escapeHtml(lv.provider || '')}${lv.account_id ? ` (Account: ${escapeHtml(lv.account_id)})` : ''}${lv.checked_at ? ` · ${escapeHtml(String(lv.checked_at).slice(0, 19))}` : ''}</div>` : ''}
+                  ${st === 'revoked' ? `<div style="font-size: 0.8rem; color: var(--workspace-success-text, #16a34a);">${en ? 'Auto-downgraded to P3. Only Git history cleanup is recommended.' : '失効済みのため優先度を P0 → P3 へ自動引き下げしました。Git 履歴削除のみ推奨します。'}</div>` : ''}
+                  ${lv.message ? `<div style="font-size: 0.8rem; color: var(--workspace-muted);">${escapeHtml(lv.message)}</div>` : ''}
+                  <div>
+                    <button type="button" id="drawer-verify-secret-btn" class="table-view-btn" data-diagram-id="${escapeHtml(String(repo.id || repo.repo || ''))}" data-fp="${dFp}" data-file="${escapeHtml(dFile)}">${en ? 'Verify Key Liveness (Read-Only)' : 'キーの生存を確認（読み取り専用）'}</button>
+                  </div>
+                </div>`;
+              })() : ''}
+
               ${dIss.diff ? `<div><strong style="font-size: 0.84rem;">${en ? 'Safe Code / Diff Preview' : '安全な差分プレビュー'}</strong><pre style="margin-top: 6px; font-size: 0.8rem; max-height: 180px; overflow: auto;">${escapeHtml(dIss.diff)}</pre></div>` : ''}
               ${dIss.fix_cmd ? `<div><strong style="font-size: 0.84rem;">${en ? 'Fix Command' : '修正コマンド'}</strong><pre style="margin-top: 6px; font-size: 0.8rem;">${escapeHtml(dIss.fix_cmd)}</pre><button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(dIss.fix_cmd)}">${en ? 'Copy command' : 'コマンドをコピー'}</button></div>` : ''}
 
@@ -9136,6 +9159,33 @@
             }
           } finally {
             actBtn.disabled = false;
+          }
+        });
+      }
+      const verifySecretBtn = view.querySelector('#drawer-verify-secret-btn');
+      if (verifySecretBtn) {
+        verifySecretBtn.addEventListener('click', async () => {
+          const diagramId = verifySecretBtn.dataset.diagramId || '';
+          const fp = decodeURIComponent(verifySecretBtn.dataset.fp || '');
+          const file = verifySecretBtn.dataset.file || '';
+          const origLabel = verifySecretBtn.textContent;
+          try {
+            verifySecretBtn.disabled = true;
+            verifySecretBtn.textContent = en ? 'Checking…' : '確認中…';
+            const resp = await fetch('/api/secrets/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ diagram_id: diagramId, fingerprint: fp, file })
+            });
+            if (resp.ok) {
+              await syncSavedAnalysesFromServer();
+              renderCodeRabbitView();
+              if (typeof publishNativeWorkspace === 'function') publishNativeWorkspace();
+            } else {
+              verifySecretBtn.textContent = origLabel;
+            }
+          } finally {
+            verifySecretBtn.disabled = false;
           }
         });
       }
