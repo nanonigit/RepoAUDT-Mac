@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/23 08:59:31</strong>
+              <strong id="portal-sync-time">2026/11/23 09:00:44</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -10551,12 +10551,12 @@
       }
     }
 
-    function downloadSingleActionReport(actData, repoNameData) {
+    function buildSingleActionReportMarkdown(actData, repoNameData) {
       let act = actData;
       if (typeof act === 'string') {
         try { act = JSON.parse(decodeURIComponent(act)); } catch (_) {}
       }
-      if (!act) return;
+      if (!act) return { md: '', safeTitle: 'issue' };
       let repoName = repoNameData;
       if (typeof repoName === 'string') {
         try { repoName = decodeURIComponent(repoName); } catch (_) {}
@@ -10565,17 +10565,27 @@
       const isEn = (typeof currentLang !== 'undefined' && currentLang === 'en');
       const nowStr = isEn ? new Date().toUTCString() : new Date().toLocaleString('ja-JP');
       const safeTitle = (act.title || 'issue').replace(/[^\w\d\-\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/g, '_').substring(0, 50);
-      const fileName = isEn
-        ? `RepoAUDT_Mac_Remediation_Report_${safeTitle}.md`
-        : `RepoAUDT_Mac_改善レポート_${safeTitle}.md`;
+
+      const repoObj = (typeof selectedDiagram !== 'undefined' && selectedDiagram) ? selectedDiagram : null;
+      const githubUrl = String(repoObj?.github_url || '').replace(/\/+$/, '');
+      const commitHash = String(repoObj?.source_revision?.commit_sha || repoObj?.commit_hash || '');
+      const commitUrl = (githubUrl && commitHash) ? `${githubUrl}/commit/${commitHash}` : '';
+      const rawFile = String(act.file || '').split(' (Target:')[0].trim();
+      const fileMatch = rawFile.match(/^(.+?):(\d+)$/);
+      const relPath = fileMatch ? fileMatch[1] : rawFile;
+      const lineNum = fileMatch ? fileMatch[2] : '';
+      const blobUrl = (githubUrl && commitHash && relPath && !relPath.includes('未記録') && !relPath.includes('Location'))
+        ? `${githubUrl}/blob/${commitHash}/${relPath.split('/').map(encodeURIComponent).join('/')}${lineNum ? '#L' + lineNum : ''}`
+        : '';
+      const advisoryUrl = act.official_source || '';
 
       let md = isEn
         ? `# 🛡️ RepoAUDT Mac Security & Remediation Report\n\n`
         : `# 🛡️ RepoAUDT Mac 改善・セキュリティ監査レポート\n\n`;
 
       md += isEn
-        ? `- **Repository**: ${repoName || 'All Ecosystem'}\n- **Action Item**: ${act.title || 'Action Required'}\n- **Target File / Path**: \`${act.file || 'N/A'}\`\n- **Severity**: ${act.severity || 'CRITICAL'}\n- **Generated At**: ${nowStr}\n- **Audit Engine**: RepoAUDT Mac Architecture & Vulnerability AI Studio\n\n---\n\n## ⚠️ Reason for Action (Risk Analysis)\n\n${act.desc || 'No detailed risk description available.'}\n\n---\n\n## 🛠️ Proposed Solution & Remediation\n\n`
-        : `- **リポジトリ名**: ${repoName || '全体エコシステム'}\n- **改善項目**: ${act.title || '要対応事項'}\n- **対象ファイル / 箇所**: \`${act.file || 'N/A'}\`\n- **重要度**: ${act.severity || 'CRITICAL (要対応)'}\n- **出力日時**: ${nowStr}\n- **監査エンジン**: RepoAUDT Mac Architecture & Vulnerability AI Studio\n\n---\n\n## ⚠️ 要対応の理由 (なぜ必要か / リスク分析)\n\n${act.desc || '詳細なリスク情報はありません。'}\n\n---\n\n## 🛠️ 対応方法の提案 (具体的な対策)\n\n`;
+        ? `- **Repository**: ${repoName || 'All Ecosystem'}\n${githubUrl ? `- **Repository URL**: ${githubUrl}\n` : ''}${commitHash ? `- **Audited Commit**: \`${commitHash}\`${commitUrl ? ` (${commitUrl})` : ''}\n` : ''}- **Action Item**: ${act.title || 'Action Required'}\n- **Target File / Path**: \`${act.file || 'N/A'}\`${blobUrl ? `\n- **Source Link**: ${blobUrl}` : ''}\n${advisoryUrl ? `- **Advisory URL**: ${advisoryUrl}\n` : ''}- **Severity**: ${act.severity || 'CRITICAL'}\n- **Generated At**: ${nowStr}\n- **Audit Engine**: RepoAUDT Mac Architecture & Vulnerability AI Studio\n\n---\n\n## ⚠️ Reason for Action (Risk Analysis)\n\n${act.desc || 'No detailed risk description available.'}\n\n---\n\n## 🛠️ Proposed Solution & Remediation\n\n`
+        : `- **リポジトリ名**: ${repoName || '全体エコシステム'}\n${githubUrl ? `- **リポジトリ URL**: ${githubUrl}\n` : ''}${commitHash ? `- **監査コミット**: \`${commitHash}\`${commitUrl ? ` (${commitUrl})` : ''}\n` : ''}- **改善項目**: ${act.title || '要対応事項'}\n- **対象ファイル / 箇所**: \`${act.file || 'N/A'}\`${blobUrl ? `\n- **該当ソース URL**: ${blobUrl}` : ''}\n${advisoryUrl ? `- **脆弱性情報 URL**: ${advisoryUrl}\n` : ''}- **重要度**: ${act.severity || 'CRITICAL (要対応)'}\n- **出力日時**: ${nowStr}\n- **監査エンジン**: RepoAUDT Mac Architecture & Vulnerability AI Studio\n\n---\n\n## ⚠️ 要対応の理由 (なぜ必要か / リスク分析)\n\n${act.desc || '詳細なリスク情報はありません。'}\n\n---\n\n## 🛠️ 対応方法の提案 (具体的な対策)\n\n`;
 
       if (act.diff) {
         md += isEn ? `### Recommended Code Diff:\n\`\`\`diff\n${act.diff}\n\`\`\`\n\n` : `### 推奨コード変更 (Diff):\n\`\`\`diff\n${act.diff}\n\`\`\`\n\n`;
@@ -10591,7 +10601,33 @@
         : `## 🤖 AIエージェント修正指示プロンプト (Claude Code / Cursor / Codex / Antigravity 用)\n\n`;
       md += `\`\`\`text\n${aiPrompt}\n\`\`\`\n\n`;
       md += `---\n*Generated by RepoAUDT Mac — Architecture & Vulnerability AI Studio*\n`;
+      return { md, safeTitle };
+    }
 
+    async function copySingleActionReport(actData, repoNameData, btnEl) {
+      const { md } = buildSingleActionReportMarkdown(actData, repoNameData);
+      if (!md) return;
+      try {
+        await navigator.clipboard.writeText(md);
+        const isEn = (typeof currentLang !== 'undefined' && currentLang === 'en');
+        if (typeof showToast === 'function') {
+          showToast(isEn ? 'Copied report with repository & source URLs.' : 'リポジトリURL付きの監査レポートをコピーしました。', 'info');
+        }
+        if (btnEl) {
+          const orig = btnEl.textContent;
+          btnEl.textContent = isEn ? 'Copied!' : 'コピーしました!';
+          setTimeout(() => { btnEl.textContent = orig; }, 1600);
+        }
+      } catch (_) {}
+    }
+
+    function downloadSingleActionReport(actData, repoNameData) {
+      const { md, safeTitle } = buildSingleActionReportMarkdown(actData, repoNameData);
+      if (!md) return;
+      const isEn = (typeof currentLang !== 'undefined' && currentLang === 'en');
+      const fileName = isEn
+        ? `RepoAUDT_Mac_Remediation_Report_${safeTitle}.md`
+        : `RepoAUDT_Mac_改善レポート_${safeTitle}.md`;
       saveFileToUser(fileName, md, false, 'text/markdown;charset=utf-8');
     }
 
