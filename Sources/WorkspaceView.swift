@@ -321,13 +321,23 @@ struct MainContentView: View {
                             HStack(spacing: 6) {
                                 Label(repo.name, systemImage: "folder")
                                     .lineLimit(1)
+                                Spacer(minLength: 4)
                                 if busyRepoIDs.contains(repo.id) {
-                                    Spacer(minLength: 4)
                                     ProgressView()
                                         .controlSize(.small)
+                                } else if repo.findings > 0 {
+                                    let sevColor = SemanticColors.severityColor(repo.severity)
+                                    Text("\(repo.findings)")
+                                        .font(.caption2.monospacedDigit().weight(.semibold))
+                                        .foregroundStyle(sevColor)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(sevColor.opacity(0.18), in: Capsule())
                                 }
                             }
-                            .help(repo.name)
+                            .help(repo.findings > 0
+                                  ? (english ? "\(repo.name) — \(repo.findings) findings (\(repo.severity))" : "\(repo.name) — 指摘 \(repo.findings)件（\(repo.severity)）")
+                                  : repo.name)
                             .tag("repo:" + repo.id)
                             .contextMenu {
                                 repositoryContextMenu(for: repo)
