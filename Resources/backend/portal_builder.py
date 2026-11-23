@@ -6437,6 +6437,14 @@ def build_portal_html(data, is_shareable=False):
           if (timeEl) timeEl.textContent = syncTime;
 
           if (!isAuto && modal) {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.notify) {
+              window.webkit.messageHandlers.notify.postMessage({
+                title: currentLang === 'en' ? 'Analysis Complete' : 'RepoAUDT Mac 解析完了',
+                body: currentLang === 'en'
+                  ? `Finished analyzing ${targetUrl ? 'repository' : 'repositories'} (${syncTime}).`
+                  : `${targetUrl ? 'リポジトリ' : '全リポジトリ'}の解析が完了しました（${syncTime}）。`
+              });
+            }
             spinner.style.display = 'none';
             if (currentLang === 'en') {
               title.textContent = '✨ Architecture Diagrams Successfully Updated!';
@@ -8684,7 +8692,7 @@ def build_portal_html(data, is_shareable=False):
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
               <span>${en ? `${issues.length} findings` : `${issues.length}件`}${repoAuditDateFull ? ` · ${en ? 'Audited' : '指摘日'}: ${escapeHtml(repoAuditDateFull)}` : ''}</span>
               <select id="finding-sort-select" aria-label="${en ? 'Sort findings' : '指摘の並び替え'}" style="font-size: 0.82rem; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-surface); color: var(--workspace-text);">
-                <option value="severityDesc" ${findingSortOrder === 'severityDesc' ? 'selected' : ''}>${en ? 'Highest severity first' : 'ヤバい順（重要度が高い順）'}</option>
+                <option value="severityDesc" ${findingSortOrder === 'severityDesc' ? 'selected' : ''}>${en ? 'Highest severity first' : '危険度の高い順'}</option>
                 <option value="severityAsc" ${findingSortOrder === 'severityAsc' ? 'selected' : ''}>${en ? 'Lowest severity first' : '低い順（重要度が低い順）'}</option>
                 <option value="dateDesc" ${findingSortOrder === 'dateDesc' ? 'selected' : ''}>${en ? 'Newest date first' : '指摘日が新しい順'}</option>
                 <option value="fileAsc" ${findingSortOrder === 'fileAsc' ? 'selected' : ''}>${en ? 'By file path' : 'ファイルパス順'}</option>

@@ -28,7 +28,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 echo "[1/4] Compiling Swift native macOS binary..."
 swiftc -O -parse-as-library -target arm64-apple-macos14.0 \
-    -framework SwiftUI -framework AppKit -framework WebKit -framework Combine \
+    -framework SwiftUI -framework AppKit -framework WebKit -framework Combine -framework UserNotifications \
     "$DIR"/Sources/*.swift -o "$APP/Contents/MacOS/$APP_NAME"
 
 echo "[2/4] Bundling Info.plist, AppIcon.icns, backend analyzer engine, and WebUI resources..."

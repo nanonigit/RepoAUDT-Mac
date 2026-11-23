@@ -48,7 +48,7 @@ enum DashboardSortOrder: String, CaseIterable, Identifiable {
 
     func title(english: Bool) -> String {
         switch self {
-        case .severityDesc: return english ? "Highest risk first" : "ヤバい順（危険度が高い順）"
+        case .severityDesc: return english ? "Highest risk first" : "危険度の高い順"
         case .severityAsc: return english ? "Lowest risk first" : "安全な順（危険度が低い順）"
         case .analyzedDesc: return english ? "Analyzed (newest)" : "解析日時が新しい順"
         case .analyzedAsc: return english ? "Analyzed (oldest)" : "解析日時が古い順"
@@ -1106,6 +1106,12 @@ struct MainContentView: View {
             listRefreshNote = english
                 ? "Analyzed \(time) · \(dashboardRepositories.count) items"
                 : "解析完了 \(time) · \(dashboardRepositories.count)件"
+            AppNotificationManager.sendAnalysisCompleted(
+                title: english ? "Analysis Complete" : "RepoAUDT Mac 解析完了",
+                body: english
+                    ? "Finished analyzing \(dashboardRepositories.count) repositories."
+                    : "\(dashboardRepositories.count)件のリポジトリの解析が完了しました。"
+            )
         } catch {
             listRefreshNote = error.localizedDescription
         }

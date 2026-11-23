@@ -1,7 +1,33 @@
 import AppKit
 import Foundation
 import SwiftUI
+import UserNotifications
 import WebKit
+
+enum AppNotificationManager {
+    static func requestAuthorization() {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+    }
+
+    static func sendAnalysisCompleted(title: String, body: String) {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "repoaudt-analysis-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                NSLog("Failed to deliver analysis notification: \(error)")
+            }
+        }
+    }
+}
 
 @MainActor
 final class BackendServerManager: ObservableObject {
@@ -156,8 +182,17 @@ final class WebViewCoordinator: NSObject, ObservableObject, WKNavigationDelegate
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.name == "workspace", message.frameInfo.isMainFrame,
-              message.frameInfo.request.url?.host == "127.0.0.1",
+        guard message.frameInfo.isMainFrame,
+              message.frameInfo.request.url?.host == "127.0.0.1" else { return }
+        if message.name == "notify" {
+            if let dict = message.body as? [String: Any] {
+                let title = dict["title"] as? String ?? "RepoAUDT Mac"
+                let body = dict["body"] as? String ?? (language == "en" ? "Repository analysis completed." : "リポジトリの解析が完了しました。")
+                AppNotificationManager.sendAnalysisCompleted(title: title, body: body)
+            }
+            return
+        }
+        guard message.name == "workspace",
               let data = try? JSONSerialization.data(withJSONObject: message.body),
               let snapshot = try? JSONDecoder().decode(WorkspaceSnapshot.self, from: data) else { return }
         // Keep a single sidebar row for each saved repository.
@@ -262,6 +297,7 @@ struct PortalWebView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         config.userContentController.add(coordinator, name: "workspace")
+        config.userContentController.add(coordinator, name: "notify")
         config.userContentController.addUserScript(WKUserScript(
             source: "document.documentElement.classList.add('native-host')",
             injectionTime: .atDocumentStart, forMainFrameOnly: true))
@@ -279,17 +315,29 @@ struct PortalWebView: NSViewRepresentable {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     let coordinator = WebViewCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        if Bundle.main.bundleIdentifier != nil {
+            UNUserNotificationCenter.current().delegate = self
+            AppNotificationManager.requestAuthorization()
+        }
         if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
            let iconImg = NSImage(contentsOfFile: iconPath) {
             NSApp.applicationIconImage = iconImg
         }
         BackendServerManager.shared.startIfNeeded()
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
     }
 
     func applicationWillTerminate(_ notification: Notification) {
