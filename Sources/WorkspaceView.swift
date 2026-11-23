@@ -939,6 +939,17 @@ struct MainContentView: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(copyingHighRiskReport || !backend.isReady)
+
+                            Button {
+                                Task { await copySlackDigestReport() }
+                            } label: {
+                                Label(
+                                    english ? "Slack Digest" : "Slack共有サマリー",
+                                    systemImage: "text.bubble"
+                                )
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(copyingHighRiskReport || !backend.isReady)
                         }
                         Button {
                             showPage(.audit)
@@ -2035,6 +2046,31 @@ struct MainContentView: View {
             )
         } catch {
             listRefreshNote = error.localizedDescription
+        }
+    }
+
+    private func copySlackDigestReport() async {
+        guard !copyingHighRiskReport else { return }
+        copyingHighRiskReport = true
+        highRiskCopyStatus = nil
+        defer { copyingHighRiskReport = false }
+
+        do {
+            let langParam = english ? "en" : "ja"
+            let json = try await requestJSON("/api/report/slack?lang=\(langParam)")
+            let markdown = json["markdown"] as? String ?? ""
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(markdown, forType: .string)
+            highRiskCopyStatus = english ? "✓ Copied Slack digest" : "✓ Slackサマリーをコピーしました"
+            Task {
+                try? await Task.sleep(for: .seconds(4))
+                if highRiskCopyStatus != nil {
+                    highRiskCopyStatus = nil
+                }
+            }
+        } catch {
+            highRiskCopyStatus = error.localizedDescription
         }
     }
 

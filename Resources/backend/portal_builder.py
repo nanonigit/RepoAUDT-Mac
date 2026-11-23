@@ -8727,6 +8727,30 @@ def build_portal_html(data, is_shareable=False):
         ? Math.max(0, Math.round(((enrichedIssues.length - actionableCnt) / enrichedIssues.length) * 100))
         : 0;
 
+      // Phase B: Safe Batch Update Plan (Patch/Minor vs Breaking Major)
+      const scaActive = activePool.filter(it => it._cat === 'Dependencies (SCA)');
+      const safeBatchItems = [];
+      const majorReviewItems = [];
+      const npmSafeSpecs = [];
+      const seenSpecs = new Set();
+      scaActive.forEach(it => {
+        const cmd = String(it.fix_cmd || '').trim();
+        const isPre = /-(?:rc|alpha|beta|dev|canary|preview|next|pre)(?:[.\-\d]|$)/i.test(cmd);
+        if (!cmd || isPre || cmd.includes('@latest') || it.update_type === 'Breaking Major') {
+          majorReviewItems.push(it);
+        } else if (it.update_type === 'Safe Patch/Minor') {
+          safeBatchItems.push(it);
+          const m = cmd.match(/^npm install\s+([^\s]+)$/);
+          if (m && !seenSpecs.has(m[1])) {
+            seenSpecs.add(m[1]);
+            npmSafeSpecs.push(m[1]);
+          }
+        } else {
+          majorReviewItems.push(it);
+        }
+      });
+      const combinedNpmBatchCmd = npmSafeSpecs.length ? `npm install ${npmSafeSpecs.join(' ')}` : '';
+
       if (!window.__auditTriageState) {
         window.__auditTriageState = {
           tab: actionableCnt > 0 ? 'actionable' : (backlogCnt > 0 ? 'backlog' : 'actionable'),
@@ -8821,6 +8845,14 @@ def build_portal_html(data, is_shareable=False):
                 <option value="titleAsc" ${findingSortOrder === 'titleAsc' ? 'selected' : ''}>${en ? 'By title' : 'タイトル順'}</option>
                 <option value="default" ${findingSortOrder === 'default' ? 'selected' : ''}>${en ? 'Original order' : '検出順（元の並び）'}</option>
               </select>
+              <div style="display: inline-flex; align-items: center; gap: 4px;">
+                <select id="slack-digest-lang" aria-label="${en ? 'Slack digest language' : 'Slackサマリー言語'}" style="font-size: 0.8rem; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-surface); color: var(--workspace-text);">
+                  <option value="ja">🇯🇵 日本語</option>
+                  <option value="en">🇺🇸 English</option>
+                  <option value="both">🌐 日英併記</option>
+                </select>
+                <button type="button" id="copy-slack-digest-btn" class="table-view-btn" style="font-size: 0.8rem;">${en ? '💬 Copy Slack Summary' : '💬 Slack共有サマリー'}</button>
+              </div>
             </div>
           </div>
 
@@ -8878,7 +8910,30 @@ def build_portal_html(data, is_shareable=False):
             </label>
             <input type="search" id="triage-search-input" placeholder="${en ? 'Filter by title, file, CVE…' : 'タイトル・ファイル・CVEで絞り込み…'}" value="${escapeHtml(ts.search)}" style="flex: 1; min-width: 180px; font-size: 0.82rem; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--workspace-border); background: var(--workspace-background); color: var(--workspace-text);">
             ${(ts.tier || ts.category || ts.reachableOnly || ts.newOnly || ts.search) ? `<button type="button" id="triage-reset-filters" class="table-view-btn" style="font-size: 0.78rem;">${en ? 'Reset' : 'リセット'}</button>` : ''}
-          </div>` : ''}
+          </div>
+          ${scaActive.length > 0 ? `
+          <details class="audit-batch-plan" style="margin-bottom: 12px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--workspace-border); background: var(--workspace-surface);">
+            <summary style="cursor: pointer; font-weight: 600; font-size: 0.88rem;">
+              📦 ${en ? `Dependency Autofix Preview (Safe Patch/Minor: ${safeBatchItems.length} · Major Review: ${majorReviewItems.length})` : `依存関係の安全な一括アップデートプレビュー（🟢 Patch/Minor: ${safeBatchItems.length}件 · 🟡 Major要確認: ${majorReviewItems.length}件）`}
+            </summary>
+            <div style="margin-top: 10px; display: grid; gap: 10px;">
+              ${safeBatchItems.length > 0 ? `
+                <div style="padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(34, 197, 94, 0.35); background: rgba(34, 197, 94, 0.08);">
+                  <div style="font-size: 0.82rem; font-weight: 600; color: #4ade80;">🟢 ${en ? 'Safe Patch / Minor Batch Update' : '安全に一括更新可能（Patch / Minor）'} (${safeBatchItems.length})</div>
+                  ${combinedNpmBatchCmd ? `<pre style="margin: 6px 0; font-size: 0.8rem; overflow-x: auto;">${escapeHtml(combinedNpmBatchCmd)}</pre><button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${encodeURIComponent(combinedNpmBatchCmd)}">${en ? 'Copy batch command' : '一括更新コマンドをコピー'}</button>` : ''}
+                </div>
+              ` : ''}
+              ${majorReviewItems.length > 0 ? `
+                <div style="padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.08);">
+                  <div style="font-size: 0.82rem; font-weight: 600; color: #fbbf24;">🟡 ${en ? 'Breaking Major / Manual Review Required' : '要確認（Major アップデート・破壊的変更注意）'} (${majorReviewItems.length})</div>
+                  <ul style="margin: 6px 0 0 18px; padding: 0; font-size: 0.8rem;">
+                    ${majorReviewItems.slice(0, 8).map(m => `<li><code>${escapeHtml(m.package_name || m.title || '')}</code> — <code>${escapeHtml(m.fix_cmd || '')}</code></li>`).join('')}
+                  </ul>
+                </div>
+              ` : ''}
+            </div>
+          </details>` : ''}
+          ` : ''}
           <div class="audit-list">
             ${issues.length ? issues.map(issue => {
               const severity = String(issue.severity || 'info').toLowerCase();
@@ -9029,6 +9084,24 @@ def build_portal_html(data, is_shareable=False):
         sortSelect.addEventListener('change', () => {
           safeStorageSet('repoaudt_finding_sort', sortSelect.value);
           renderCodeRabbitView();
+        });
+      }
+      const slackBtn = view.querySelector('#copy-slack-digest-btn');
+      if (slackBtn) {
+        slackBtn.addEventListener('click', async () => {
+          const lang = view.querySelector('#slack-digest-lang')?.value || (en ? 'en' : 'ja');
+          try {
+            const resp = await fetch(`/api/report/slack?lang=${encodeURIComponent(lang)}&repo=${encodeURIComponent(repo.repo || '')}`);
+            const data = await resp.json();
+            if (data && data.markdown) {
+              await navigator.clipboard.writeText(data.markdown);
+              const orig = slackBtn.textContent;
+              slackBtn.textContent = en ? '✓ Copied!' : '✓ コピー済み';
+              setTimeout(() => { slackBtn.textContent = orig; }, 2000);
+            }
+          } catch (err) {
+            console.warn('Slack digest copy failed:', err);
+          }
         });
       }
       for (const tabBtn of view.querySelectorAll('[data-triage-tab]')) {

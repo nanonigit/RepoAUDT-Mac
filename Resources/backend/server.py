@@ -686,6 +686,20 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 return
             self._send_json(200, security_audit_engine.generate_sarif_report(matched))
             return
+        if self.path.startswith("/api/report/slack"):
+            parsed_url = urllib.parse.urlparse(self.path)
+            qs = urllib.parse.parse_qs(parsed_url.query)
+            lang = (qs.get("lang") or ["ja"])[0].strip().lower()
+            repo_q = (qs.get("repo") or [""])[0].strip()
+            state = analyzer.load_saved_analyses()
+            diagrams = state.get("diagrams", [])
+            if repo_q:
+                matched = mcp_server._find_diagram(diagrams, repo_q)
+                diagrams = [matched] if matched else []
+            import triage_engine
+            digest = triage_engine.build_slack_digest(diagrams, lang=lang)
+            self._send_json(200, {"ok": True, "markdown": digest, "lang": lang})
+            return
         if self.path.startswith("/api/findings/suppressed"):
             self._send_json(200, {"suppressed": analyzer.get_suppressed_findings()})
             return

@@ -361,3 +361,133 @@ def triage_and_validate_findings(
         )
     )
     return processed
+
+
+def build_dependency_batch_plan(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Group active SCA dependency findings into:
+      - safe_patch_minor: Patch/Minor upgrades safe for a single combined install command
+      - breaking_major: Major upgrades or unknown-version items requiring manual review
+    Never includes downgrades or prerelease versions.
+    """
+    safe_items: List[Dict[str, Any]] = []
+    major_items: List[Dict[str, Any]] = []
+    npm_safe_specs: List[str] = []
+    seen_specs: Set[str] = set()
+
+    for raw in items:
+        if not isinstance(raw, dict) or raw.get("suppressed"):
+            continue
+        item = validate_and_sanitize_finding(dict(raw))
+        cat = item.get("category") or classify_category(item)
+        if cat != "Dependencies (SCA)":
+            continue
+        upd = item.get("update_type") or classify_update_type(item)
+        fix_cmd = str(item.get("fix_cmd") or "").strip()
+        if not fix_cmd or _PRERELEASE_VER_RE.search(fix_cmd) or "@latest" in fix_cmd:
+            major_items.append(item)
+            continue
+
+        if upd == "Safe Patch/Minor":
+            safe_items.append(item)
+            m_npm = re.match(r"^npm install\s+([^\s]+)$", fix_cmd)
+            if m_npm:
+                spec = m_npm.group(1)
+                if spec not in seen_specs:
+                    seen_specs.add(spec)
+                    npm_safe_specs.append(spec)
+        else:
+            major_items.append(item)
+
+    combined_npm_cmd = f"npm install {' '.join(npm_safe_specs)}" if npm_safe_specs else ""
+    return {
+        "safe_patch_minor": safe_items,
+        "breaking_major": major_items,
+        "combined_npm_command": combined_npm_cmd,
+    }
+
+
+def _sanitize_slack_text(text: str) -> str:
+    """Strip any accidental raw secret tokens and escape Slack-breaking chars."""
+    s = str(text or "").strip()
+    s = re.sub(r"AKIA[0-9A-Z]{16}", "[REDACTED_AWS_KEY]", s)
+    s = re.sub(r"sk-[A-Za-z0-9_-]{16,}", "[REDACTED_API_KEY]", s)
+    s = re.sub(r"ghp_[A-Za-z0-9]{20,}", "[REDACTED_GH_TOKEN]", s)
+    return s
+
+
+def build_slack_digest(diagrams: List[Dict[str, Any]], *, lang: str = "ja") -> str:
+    """Build a Slack mrkdwn summary of P0/P1 findings without ever exposing raw secrets."""
+    lines: List[str] = []
+    is_en = lang == "en"
+    is_both = lang == "both"
+
+    if is_both:
+        lines.append("*🛡️ RepoAUDT Mac セキュリティ監査ダイジェスト / Security Audit Digest*")
+    elif is_en:
+        lines.append("*🛡️ RepoAUDT Mac Security Audit Digest (P0 / P1)*")
+    else:
+        lines.append("*🛡️ RepoAUDT Mac セキュリティ監査ダイジェスト（P0 / P1）*")
+
+    total_p0 = 0
+    total_p1 = 0
+    repo_blocks: List[str] = []
+
+    for d in diagrams:
+        if not isinstance(d, dict) or d.get("is_root"):
+            continue
+        repo_name = str(d.get("repo") or d.get("github_url") or "Repository").strip()
+        cr = d.get("coderabbit") or {}
+        items = [
+            it for it in (list(cr.get("action_items") or []) + list(cr.get("findings") or []))
+            if isinstance(it, dict) and not it.get("suppressed")
+        ]
+        seen = set()
+        priority_items = []
+        for it in items:
+            tier = str(it.get("priority_tier") or "").upper()
+            sev = str(it.get("severity") or "").lower()
+            if tier not in ("P0", "P1") and sev not in ("critical", "high"):
+                continue
+            key = f"{it.get('title', '')}|{it.get('file', '')}"
+            if key in seen:
+                continue
+            seen.add(key)
+            eff_tier = tier if tier in ("P0", "P1") else ("P0" if sev == "critical" else "P1")
+            if eff_tier == "P0":
+                total_p0 += 1
+            else:
+                total_p1 += 1
+            priority_items.append((eff_tier, it))
+
+        if not priority_items:
+            continue
+        priority_items.sort(key=lambda pair: 0 if pair[0] == "P0" else 1)
+        block = [f"\n*• {repo_name}* (`{len(priority_items)}`件)"]
+        for eff_tier, it in priority_items[:6]:
+            title = _sanitize_slack_text(str(it.get("title") or "Finding"))
+            file_loc = _sanitize_slack_text(str(it.get("file") or "").split(" (Target:", 1)[0].strip())
+            kev = " 🔥KEV" if it.get("in_cisa_kev") else ""
+            fix_cmd = _sanitize_slack_text(str(it.get("fix_cmd") or "").splitlines()[0] if it.get("fix_cmd") else "")
+            line = f"  - `[{eff_tier}]`{kev} {title}"
+            if file_loc:
+                line += f" (`{file_loc}`)"
+            if fix_cmd and not fix_cmd.startswith("sed -n"):
+                line += f" → `{fix_cmd}`"
+            block.append(line)
+        if len(priority_items) > 6:
+            block.append(f"  - _…ほか {len(priority_items) - 6} 件_")
+        repo_blocks.append("\n".join(block))
+
+    if is_both:
+        lines.append(f"• *P0 (緊急 / Critical)*: `{total_p0}` | *P1 (高リスク / High)*: `{total_p1}`")
+    elif is_en:
+        lines.append(f"• *P0 (Critical)*: `{total_p0}` | *P1 (High)*: `{total_p1}`")
+    else:
+        lines.append(f"• *P0（緊急）*: `{total_p0}件` | *P1（高リスク）*: `{total_p1}件`")
+
+    if repo_blocks:
+        lines.extend(repo_blocks)
+    else:
+        lines.append("• ✅ P0 / P1 の要対応指摘はありません。" if not is_en else "• ✅ No P0 / P1 actionable findings.")
+    return "\n".join(lines)

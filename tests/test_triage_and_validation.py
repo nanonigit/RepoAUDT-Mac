@@ -235,6 +235,90 @@ class TestTriageAndValidation(unittest.TestCase):
                 self.assertNotIn(fp, reloaded["suppressed_findings"])
                 self.assertFalse(reloaded["diagrams"][0]["coderabbit"]["action_items"][0]["suppressed"])
 
+    def test_dependency_batch_plan_separates_safe_minor_from_breaking_major(self) -> None:
+        items = [
+            {
+                "title": "[依存関係脆弱性集約] next v16.2.0",
+                "package_name": "next",
+                "category": "Dependencies (SCA)",
+                "diff": '- "next": "^16.2.0"\n+ "next": "^16.4.5"',
+                "fix_cmd": "npm install next@^16.4.5",
+                "update_type": "Safe Patch/Minor",
+            },
+            {
+                "title": "[OSV脆弱性検出] axios v1.8.4",
+                "package_name": "axios",
+                "category": "Dependencies (SCA)",
+                "diff": '- "axios": "^1.8.4"\n+ "axios": "^1.20.0"',
+                "fix_cmd": "npm install axios@^1.20.0",
+                "update_type": "Safe Patch/Minor",
+            },
+            {
+                "title": "[OSV脆弱性検出] joi v17.13.3",
+                "package_name": "joi",
+                "category": "Dependencies (SCA)",
+                "diff": '- "joi": "^17.13.3"\n+ "joi": "^18.3.1"',
+                "fix_cmd": "npm install joi@^18.3.1",
+                "update_type": "Breaking Major",
+            },
+            {
+                "title": "[OSV脆弱性検出] sentry rc",
+                "package_name": "@sentry/nextjs",
+                "category": "Dependencies (SCA)",
+                "diff": '- "@sentry/nextjs": "^10.38.0"\n+ "@sentry/nextjs": "^11.0.0-rc.1"',
+                "fix_cmd": "npm install @sentry/nextjs@^11.0.0-rc.1",
+            },
+        ]
+        plan = triage_engine.build_dependency_batch_plan(items)
+        self.assertEqual(len(plan["safe_patch_minor"]), 2)
+        self.assertEqual(len(plan["breaking_major"]), 2)
+        self.assertEqual(plan["combined_npm_command"], "npm install next@^16.4.5 axios@^1.20.0")
+        self.assertNotIn("-rc", plan["combined_npm_command"])
+
+    def test_slack_digest_redacts_secrets_and_formats_p0_p1(self) -> None:
+        raw_secret = "sk-proj-RealSecretValueThatMustNeverAppearInSlack123456"
+        diagrams = [
+            {
+                "repo": "plusimpact/maice-backend",
+                "coderabbit": {
+                    "action_items": [
+                        {
+                            "priority_tier": "P0",
+                            "severity": "critical",
+                            "title": f"🚨 [シークレット漏洩検知] OpenAI API Key ({raw_secret})",
+                            "file": "src/config.ts:6",
+                            "fix_cmd": "sed -n '4,8p' src/config.ts",
+                        },
+                        {
+                            "priority_tier": "P1",
+                            "severity": "high",
+                            "in_cisa_kev": True,
+                            "title": "next RCE",
+                            "file": "package.json",
+                            "fix_cmd": "npm install next@^16.4.5",
+                        },
+                        {
+                            "priority_tier": "P3",
+                            "severity": "low",
+                            "title": "unpinned-uses",
+                            "file": ".github/workflows/ci.yml:10",
+                        },
+                    ]
+                },
+            }
+        ]
+        digest_ja = triage_engine.build_slack_digest(diagrams, lang="ja")
+        self.assertNotIn(raw_secret, digest_ja)
+        self.assertIn("[REDACTED_API_KEY]", digest_ja)
+        self.assertIn("*• plusimpact/maice-backend*", digest_ja)
+        self.assertIn("`[P0]`", digest_ja)
+        self.assertIn("`[P1]` 🔥KEV", digest_ja)
+        self.assertIn("`npm install next@^16.4.5`", digest_ja)
+        self.assertNotIn("unpinned-uses", digest_ja)
+
+        digest_both = triage_engine.build_slack_digest(diagrams, lang="both")
+        self.assertIn("Security Audit Digest", digest_both)
+
 
 if __name__ == "__main__":
     unittest.main()
