@@ -137,7 +137,12 @@ struct MainContentView: View {
         let dirty: Bool
     }
 
-    private var nativePage: Bool { [.dashboard, .ai, .mcp, .system].contains(page) }
+    private var hasSelectedRepository: Bool {
+        selection.contains(where: { $0.hasPrefix("repo:") })
+    }
+    private var nativePage: Bool {
+        [.dashboard, .ai, .mcp, .system].contains(page) || (page == .audit && !hasSelectedRepository)
+    }
     private var english: Bool { language == "en" }
     private var page: WorkspacePage { coordinator.page }
     private var sortOrder: RepositorySortOrder {
@@ -374,6 +379,8 @@ struct MainContentView: View {
                     loadingView
                 } else if page == .dashboard {
                     dashboard
+                } else if page == .audit && !hasSelectedRepository {
+                    auditListView
                 } else if page == .ai {
                     AIConnectionView(english: english, port: backend.port)
                 } else if page == .mcp {
@@ -385,6 +392,14 @@ struct MainContentView: View {
             .navigationTitle(page.title(english: english))
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
+                    if page == .audit && hasSelectedRepository {
+                        Button {
+                            selection = [WorkspacePage.audit.rawValue]
+                        } label: {
+                            Label(english ? "All Repositories" : "一覧へ戻る", systemImage: "list.bullet")
+                        }
+                        .help(english ? "Back to saved analyses list" : "保存済みの解析一覧に戻る")
+                    }
                     if !nativePage && page != .chat {
                         Button {
                             coordinator.send("details")
@@ -680,6 +695,110 @@ struct MainContentView: View {
                     }
                     .padding(18)
                 }
+
+                let allRepos = coordinator.repositories
+                let totalFindings = allRepos.reduce(0) { $0 + $1.findings }
+                let highRiskRepos = allRepos.filter { severityRank($0.severity) >= 4 }
+                let highRiskFindings = highRiskRepos.reduce(0) { $0 + $1.findings }
+                let latestAnalyzed = allRepos
+                    .compactMap { formattedAnalysisDate($0.analyzedAt) }
+                    .max()
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                    summaryMetricCard(
+                        title: english ? "Repositories" : "対象リポジトリ",
+                        value: "\(allRepos.count)",
+                        subtitle: english ? "Saved analyses" : "保存済み解析",
+                        symbol: "folder.fill",
+                        tint: SemanticColors.role("actionText")
+                    )
+                    summaryMetricCard(
+                        title: english ? "Total Findings" : "総指摘件数",
+                        value: "\(totalFindings)",
+                        subtitle: english ? "Across all repos" : "全リポジトリ合計",
+                        symbol: "exclamationmark.bubble.fill",
+                        tint: SemanticColors.role("warningText")
+                    )
+                    summaryMetricCard(
+                        title: english ? "Critical / High" : "重大・高リスク",
+                        value: "\(highRiskRepos.count)",
+                        subtitle: english ? "\(highRiskFindings) findings" : "該当指摘 \(highRiskFindings)件",
+                        symbol: "shield.lefthalf.filled.badge.checkmark",
+                        tint: SemanticColors.role("dangerText")
+                    )
+                    summaryMetricCard(
+                        title: english ? "Latest Analysis" : "最新解析",
+                        value: latestAnalyzed ?? (english ? "Not yet" : "未記録"),
+                        subtitle: english ? "Local scan time" : "ローカル解析日時",
+                        symbol: "clock.fill",
+                        tint: SemanticColors.role("infoText")
+                    )
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text(english ? "Top Priority Repositories" : "優先対応リポジトリ（危険度順）")
+                            .font(.headline)
+                        Spacer()
+                        Button {
+                            showPage(.audit)
+                        } label: {
+                            Label(english ? "Open Audit List" : "監査結果一覧を見る", systemImage: "arrow.right.circle")
+                        }
+                    }
+                    let topRisk = Array(sortDashboardRepositories(allRepos, by: .severityDesc).prefix(5))
+                    if topRisk.isEmpty {
+                        ContentUnavailableView(
+                            english ? "No saved analyses" : "保存済みの解析はありません",
+                            systemImage: "folder.badge.plus",
+                            description: Text(english ? "Add a GitHub URL to begin." : "GitHub URL を追加して始めましょう。")
+                        )
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(topRisk) { repo in
+                                repositoryRow(repo)
+                                if repo.id != topRisk.last?.id { Divider().padding(.leading, 48) }
+                            }
+                        }
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.5)))
+                    }
+                }
+            }
+            .padding(32)
+            .frame(maxWidth: 1100, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private func summaryMetricCard(title: String, value: String, subtitle: String, symbol: String, tint: Color) -> some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: symbol)
+                        .foregroundStyle(tint)
+                }
+                Text(value)
+                    .font(.title3.bold().monospacedDigit())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var auditListView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 10) {
                         Text(english ? "Saved analyses" : "保存済みの解析").font(.headline)
