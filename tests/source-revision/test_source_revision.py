@@ -145,3 +145,89 @@ class SourceRevisionTests(unittest.TestCase):
             )
         self.assertEqual(scan.call_args.args[0], Path("/tmp/pinned-fixture"))
         self.assertEqual(scan.call_args.args[5], revision)
+
+    def test_deleted_repos_stay_deleted_across_org_scan_and_sync(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state_file = Path(folder) / "state.json"
+            with patch.object(analyzer, "STATE_FILE", state_file):
+                org_result = {
+                    "mode": "org",
+                    "owner": "nanonigit",
+                    "diagrams": [
+                        {
+                            "id": "gh-org-nanonigit-ecosystem",
+                            "repo": "nanonigit (全体エコシステム)",
+                            "github_url": "https://github.com/nanonigit",
+                            "is_root": True,
+                        },
+                        {
+                            "id": "gh-nanonigit-desktopcalendar-overall",
+                            "repo": "nanonigit/DesktopCalendar",
+                            "github_url": "https://github.com/nanonigit/DesktopCalendar",
+                            "is_root": False,
+                        },
+                    ],
+                }
+                analyzer.save_analysis_result(org_result)
+                analyzer.delete_saved_diagram(
+                    diagram_id="gh-nanonigit-desktopcalendar-overall"
+                )
+
+                # Org re-scan or background sync must not resurrect deleted child repos
+                state_after_org = analyzer.save_analysis_result(org_result)
+                self.assertEqual(
+                    [d["id"] for d in state_after_org["diagrams"]],
+                    ["gh-org-nanonigit-ecosystem"],
+                )
+                self.assertIn(
+                    "gh-nanonigit-desktopcalendar-overall",
+                    state_after_org["deleted_ids"],
+                )
+
+                # Sync with respect_deleted=True must also keep deleted repos hidden
+                state_after_sync = analyzer.save_analysis_result(
+                    {
+                        "mode": "repo",
+                        "diagrams": [
+                            {
+                                "id": "gh-nanonigit-desktopcalendar-overall",
+                                "repo": "nanonigit/DesktopCalendar",
+                                "github_url": "https://github.com/nanonigit/DesktopCalendar",
+                            }
+                        ],
+                    },
+                    respect_deleted=True,
+                )
+                self.assertEqual(
+                    [d["id"] for d in state_after_sync["diagrams"]],
+                    ["gh-org-nanonigit-ecosystem"],
+                )
+                self.assertIn(
+                    "gh-nanonigit-desktopcalendar-overall",
+                    state_after_sync["deleted_ids"],
+                )
+
+                # Explicit manual re-add (respect_deleted=False, mode="repo") restores it
+                state_after_manual_add = analyzer.save_analysis_result(
+                    {
+                        "mode": "repo",
+                        "diagrams": [
+                            {
+                                "id": "gh-nanonigit-desktopcalendar-overall",
+                                "repo": "nanonigit/DesktopCalendar",
+                                "github_url": "https://github.com/nanonigit/DesktopCalendar",
+                            }
+                        ],
+                    }
+                )
+                self.assertEqual(
+                    {d["id"] for d in state_after_manual_add["diagrams"]},
+                    {
+                        "gh-org-nanonigit-ecosystem",
+                        "gh-nanonigit-desktopcalendar-overall",
+                    },
+                )
+                self.assertNotIn(
+                    "gh-nanonigit-desktopcalendar-overall",
+                    state_after_manual_add["deleted_ids"],
+                )

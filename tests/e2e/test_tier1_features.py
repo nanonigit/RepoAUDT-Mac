@@ -942,6 +942,19 @@ class TestF18McpServerIntegration(unittest.TestCase):
             findings = security_audit_engine.scan_github_actions_workflows(Path(tmp), lambda _: "CI")
             self.assertGreaterEqual(len(findings), 4)
 
+    def test_lightweight_unscanned_repo_has_no_dummy_findings(self):
+        """Unscanned lightweight org entries must not fabricate README.md/.coderabbit.yaml findings."""
+        import analyzer
+        diag, _ = analyzer.build_lightweight_repo_entry(
+            "example-org",
+            {"name": "sample-service", "language": "TypeScript"},
+            "Service",
+        )
+        self.assertTrue(diag.get("is_unscanned"))
+        self.assertEqual(diag["coderabbit"]["status"], "NOT_SCANNED")
+        self.assertEqual(diag["coderabbit"]["action_items"], [])
+        self.assertEqual(diag["coderabbit"]["findings"], [])
+
     def test_f18_05_cyclonedx_sbom_and_sarif_export(self):
         """CycloneDX 1.5 SBOM and SARIF 2.1.0 generators produce spec-compliant documents."""
         import security_audit_engine

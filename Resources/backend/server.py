@@ -73,7 +73,7 @@ class SyncDaemon:
                         processed.add(url)
                         try:
                             res = analyzer.analyze_any_github_target(url)
-                            analyzer.save_analysis_result(res)
+                            analyzer.save_analysis_result(res, respect_deleted=True)
                         except Exception as exc:
                             print(f"Notice: background sync skipped {url}: {exc}", file=sys.stderr)
                 self.last_sync_time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
@@ -468,7 +468,7 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
 
                 if target_url:
                     res = analyzer.analyze_any_github_target(target_url)
-                    analyzer.save_analysis_result(res)
+                    analyzer.save_analysis_result(res, respect_deleted=True)
                     synced_targets.append(target_url)
                 else:
                     # Collect unique target URLs from saved diagrams and run sync in background worker
@@ -486,7 +486,7 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                             url = d.get("github_url") or ""
                             try:
                                 res = analyzer.analyze_any_github_target(url)
-                                analyzer.save_analysis_result(res)
+                                analyzer.save_analysis_result(res, respect_deleted=True)
                             except Exception as e_sub:
                                 print(f"Warning syncing {url}: {e_sub}", flush=True)
                         done_local, done_utc = analyzer.now_timestamps()

@@ -1301,18 +1301,8 @@ def build_lightweight_repo_entry(owner: str, rmeta: Dict[str, Any], category_lab
     mermaid_code = build_mermaid_flowchart(components)
     sequences = build_mermaid_sequences(repo, components)
 
-    # Check if stale (> 90 days) to surface a helpful CodeRabbit maintenance item
-    action_items = [
-        {
-            "severity": "low",
-            "title": f"{repo} のディープ静的解析・.coderabbit.yaml ガードレール確認",
-            "file": f"README.md (Target: {repo} Core Logic)",
-            "target_node": f"{repo} Core Logic",
-            "desc": f"`{owner}/{repo}` は組織階層（`https://github.com/{owner}`）から自動検出されました。個別ディープスキャンまたは `.coderabbit.yaml` の整備により、行単位の静的解析を実行できます。",
-            "diff": "+ language: ja-JP\n+ reviews:\n+   profile: assertive",
-            "fix_cmd": f"gh repo clone {owner}/{repo}",
-        }
-    ]
+    # Unscanned lightweight entries must not fabricate dummy audit findings or broken diffs.
+    action_items: List[Dict[str, Any]] = []
 
     specs = {}
     for c in components:
@@ -1354,12 +1344,13 @@ def build_lightweight_repo_entry(owner: str, rmeta: Dict[str, Any], category_lab
         },
         "github_url": github_url,
         "sequences": sequences,
+        "is_unscanned": True,
         "coderabbit": {
-            "score": 92,
-            "status": "CLEAN",
-            "summary": f"{owner}/{repo} ({lang}) を親階層 ({owner}) から自動検出し、アーキテクチャマップに統合しました。",
-            "stats": {"files_reviewed": 10, "Security": 95, "Reliability": 92, "Maintainability": 90, "Performance": 92},
-            "walkthrough": [{"path": c["path"], "summary": c["desc"]} for c in components],
+            "score": None,
+            "status": "NOT_SCANNED",
+            "summary": f"{owner}/{repo} ({lang}) は親階層 ({owner}) から自動検出された未スキャン（個別スキャン待ち）リポジトリです。",
+            "stats": {"files_reviewed": 0, "Security": None, "Reliability": None, "Maintainability": None, "Performance": None},
+            "walkthrough": [],
             "action_items": action_items,
             "findings": action_items,
         },
@@ -1666,10 +1657,26 @@ def load_saved_analyses() -> Dict[str, Any]:
         return _load_saved_analyses_unlocked()
 
 
-def save_analysis_result(result: Dict[str, Any]) -> Dict[str, Any]:
+def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) -> Dict[str, Any]:
     with _STATE_LOCK:
         state = _load_saved_analyses_unlocked()
         new_diagrams = result.get("diagrams") or ([result["diagram"]] if "diagram" in result else [])
+        existing_deleted_ids = set(state.get("deleted_ids", []))
+        is_org_scan = result.get("mode") == "org"
+
+        # Prevent background/manual syncs or org-level scans from resurrecting
+        # repositories that the user explicitly deleted.
+        if respect_deleted:
+            new_diagrams = [
+                d for d in new_diagrams
+                if isinstance(d, dict) and d.get("id") not in existing_deleted_ids
+            ]
+        elif is_org_scan:
+            new_diagrams = [
+                d for d in new_diagrams
+                if isinstance(d, dict) and (d.get("is_root") or d.get("id") not in existing_deleted_ids)
+            ]
+
         local_ts, utc_ts = now_timestamps()
         now_analyzed = str(result.get("analyzed_at") or local_ts)
         now_analyzed_utc = str(result.get("analyzed_at_utc") or utc_ts)
@@ -1685,10 +1692,13 @@ def save_analysis_result(result: Dict[str, Any]) -> Dict[str, Any]:
 
         # If this is a full Organization/User scan, prune any old repos under that owner
         # that no longer exist on GitHub (e.g. deleted or renamed repositories)
-        org_owner = str(result.get("owner") or "").strip().lower() if result.get("mode") == "org" else ""
+        org_owner = str(result.get("owner") or "").strip().lower() if is_org_scan else ""
 
-        # If user re-adds a previously deleted repo, remove it from deleted_ids
-        deleted_ids = (set(state.get("deleted_ids", [])) - new_ids) | replaced_ids
+        # Only clear deleted_ids when the user explicitly re-adds a repository (not during sync)
+        if respect_deleted:
+            deleted_ids = existing_deleted_ids | replaced_ids
+        else:
+            deleted_ids = (existing_deleted_ids - new_ids) | replaced_ids
         state["deleted_ids"] = list(deleted_ids)
 
         existing = []
