@@ -142,12 +142,26 @@ struct MainContentView: View {
     @State private var monitorSummary = ""
     @State private var seenMonitorUpdateKeys: Set<String> = []
     @State private var monitorUpdates: [MonitorUpdateEvent] = []
+    @State private var revocationChecks: [SecretRevocationItem] = []
 
     private struct ResolvedFindingSummary: Identifiable {
         let id = UUID()
         let title: String
         let file: String
         let severity: String
+        let requiresRevoke: Bool
+    }
+
+    private struct SecretRevocationItem: Identifiable {
+        let id: String
+        let repo: String
+        let title: String
+        let file: String
+        let severity: String
+        let newCommit: String
+        let resolvedAt: String
+        let revokedConfirmed: Bool
+        let confirmedAt: String?
     }
 
     private struct MonitorUpdateEvent: Identifiable {
@@ -844,6 +858,9 @@ struct MainContentView: View {
 
                 if !allRepos.isEmpty {
                     commitMonitorBar()
+                    if !revocationChecks.isEmpty {
+                        revocationChecklistCard()
+                    }
                     if !monitorUpdates.isEmpty {
                         monitorUpdatesCard()
                     }
@@ -1572,7 +1589,113 @@ struct MainContentView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            if item.requiresRevoke {
+                Text(english ? "Verify Revoked" : "要Revoke確認")
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(SemanticColors.role("warningText").opacity(0.18), in: Capsule())
+                    .foregroundStyle(SemanticColors.role("warningText"))
+            }
         }
+    }
+
+    @ViewBuilder
+    private func revocationChecklistCard() -> some View {
+        let pendingCount = revocationChecks.filter { !$0.revokedConfirmed }.count
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: pendingCount > 0 ? "key.fill" : "checkmark.shield.fill")
+                        .foregroundStyle(pendingCount > 0 ? SemanticColors.role("warningText") : SemanticColors.role("successText"))
+                    Text(
+                        english
+                            ? "Git History & Provider Key Revocation Checklist"
+                            : "Git 履歴残存・キー失効（Revoke / Rotate）確認"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text(
+                        pendingCount > 0
+                            ? (english ? "\(pendingCount) pending" : "未確認 \(pendingCount)件")
+                            : (english ? "All verified" : "すべて確認済み")
+                    )
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(
+                        (pendingCount > 0 ? SemanticColors.role("warningText") : SemanticColors.role("successText")).opacity(0.16),
+                        in: Capsule()
+                    )
+                    .foregroundStyle(pendingCount > 0 ? SemanticColors.role("warningText") : SemanticColors.role("successText"))
+                }
+                Text(
+                    english
+                        ? "Even after removal from HEAD, keys remain in Git commit history. Confirm that each key has been revoked/rotated in AWS IAM, OpenAI, or RDS."
+                        : "HEAD から削除されても過去コミット履歴にはキーが残るため、AWS IAM / OpenAI / RDS 等での無効化・変更が完了したらチェックを入れてください。"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                ForEach(revocationChecks.prefix(10)) { rev in
+                    revocationRow(rev)
+                }
+            }
+            .padding(12)
+        }
+    }
+
+    @ViewBuilder
+    private func revocationRow(_ rev: SecretRevocationItem) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                Task { await toggleRevocationConfirmation(key: rev.id, confirmed: !rev.revokedConfirmed) }
+            } label: {
+                Image(systemName: rev.revokedConfirmed ? "checkmark.square.fill" : "square")
+                    .font(.title3)
+                    .foregroundStyle(rev.revokedConfirmed ? SemanticColors.role("successText") : .secondary)
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(rev.repo)
+                        .font(.caption.weight(.semibold))
+                    if !rev.newCommit.isEmpty {
+                        Text("HEAD: \(rev.newCommit)")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                    if !rev.file.isEmpty {
+                        Text(rev.file)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Text(rev.title)
+                    .font(.caption)
+                    .strikethrough(rev.revokedConfirmed, color: .secondary)
+                    .foregroundStyle(rev.revokedConfirmed ? .secondary : .primary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            if rev.revokedConfirmed {
+                Text(english ? "Revoked ✓" : "Revoke済み ✓")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(SemanticColors.role("successText"))
+            } else {
+                Button(english ? "Mark Revoked" : "失効確認済みにする") {
+                    Task { await toggleRevocationConfirmation(key: rev.id, confirmed: true) }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
     }
 
     private func applyMonitorStatusPayload(_ json: [String: Any]) {
@@ -1606,7 +1729,8 @@ struct MainContentView: View {
                     ResolvedFindingSummary(
                         title: rf["title"] as? String ?? "",
                         file: rf["file"] as? String ?? "",
-                        severity: rf["severity"] as? String ?? "info"
+                        severity: rf["severity"] as? String ?? "info",
+                        requiresRevoke: rf["requires_revoke"] as? Bool ?? false
                     )
                 }
                 let evt = MonitorUpdateEvent(
@@ -1657,6 +1781,32 @@ struct MainContentView: View {
                     body: bodyText
                 )
             }
+        }
+        if let rawRevocations = json["revocation_checks"] as? [[String: Any]] {
+            revocationChecks = rawRevocations.compactMap { item in
+                guard let key = item["key"] as? String, !key.isEmpty else { return nil }
+                return SecretRevocationItem(
+                    id: key,
+                    repo: item["repo"] as? String ?? "",
+                    title: item["title"] as? String ?? "",
+                    file: item["file"] as? String ?? "",
+                    severity: item["severity"] as? String ?? "critical",
+                    newCommit: item["new_commit"] as? String ?? "",
+                    resolvedAt: item["resolved_at"] as? String ?? "",
+                    revokedConfirmed: item["revoked_confirmed"] as? Bool ?? false,
+                    confirmedAt: item["confirmed_at"] as? String
+                )
+            }
+        }
+    }
+
+    private func toggleRevocationConfirmation(key: String, confirmed: Bool) async {
+        guard backend.isReady else { return }
+        if let json = try? await requestJSON("/api/monitor/revoke", body: [
+            "key": key,
+            "confirmed": confirmed,
+        ]) {
+            applyMonitorStatusPayload(json)
         }
     }
 

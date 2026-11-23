@@ -19,7 +19,9 @@ class TestCommitMonitor(unittest.TestCase):
     def test_check_once_reanalyzes_only_repos_with_new_head_commit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             cfg_file = Path(tmp) / "commit_monitor.json"
-            with mock.patch.object(server, "_monitor_config_path", return_value=cfg_file):
+            rev_file = Path(tmp) / "secret_revocations.json"
+            with mock.patch.object(server, "_monitor_config_path", return_value=cfg_file), \
+                 mock.patch.object(server, "_revocations_path", return_value=rev_file):
                 daemon = server.SyncDaemon(interval_sec=300)
 
                 saved_state = {
@@ -104,6 +106,13 @@ class TestCommitMonitor(unittest.TestCase):
                     status["detected_updates"][0]["resolved_findings"][0]["title"],
                     "Hardcoded AWS Key",
                 )
+                self.assertTrue(status["detected_updates"][0]["resolved_findings"][0]["requires_revoke"])
+                self.assertEqual(len(status["revocation_checks"]), 1)
+                self.assertFalse(status["revocation_checks"][0]["revoked_confirmed"])
+
+                rev_key = status["revocation_checks"][0]["key"]
+                updated_status = daemon.confirm_revocation(rev_key, True)
+                self.assertTrue(updated_status["revocation_checks"][0]["revoked_confirmed"])
                 self.assertIn("2件確認", status["last_check_summary"])
                 self.assertIn("1件の新着コミット", status["last_check_summary"])
 

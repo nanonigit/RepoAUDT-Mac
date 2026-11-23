@@ -45,6 +45,24 @@ def _monitor_config_path() -> Path:
     return analyzer.APP_SUPPORT_DIR / "commit_monitor.json"
 
 
+def _revocations_path() -> Path:
+    analyzer.ensure_dirs()
+    return analyzer.APP_SUPPORT_DIR / "secret_revocations.json"
+
+
+def _is_secret_finding(title: str) -> bool:
+    low = str(title or "").lower()
+    return (
+        "シークレット" in title
+        or "[gitleaks]" in low
+        or "private cryptographic key" in low
+        or "openai api key" in low
+        or "aws access key" in low
+        or "aws key" in low
+        or "hardcoded password" in low
+    )
+
+
 class SyncDaemon:
     """Background worker that periodically checks HEAD commits and re-audits only changed repos."""
 
@@ -61,11 +79,41 @@ class SyncDaemon:
         self.last_check_summary: str = ""
         self.checking: bool = False
         self.detected_updates: List[Dict[str, Any]] = []
+        self.revocations: Dict[str, Dict[str, Any]] = {}
         self.running: bool = False
         self._thread: Optional[threading.Thread] = None
         self._wake_event = threading.Event()
         self._lock = threading.Lock()
         self._load_config()
+        self._load_revocations()
+
+    def _load_revocations(self) -> None:
+        try:
+            p = _revocations_path()
+            if p.exists():
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    self.revocations = {
+                        str(k): v for k, v in data.items() if isinstance(v, dict)
+                    }
+        except Exception:
+            self.revocations = {}
+
+    def _save_revocations(self) -> None:
+        try:
+            p = _revocations_path()
+            p.write_text(json.dumps(self.revocations, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    def confirm_revocation(self, key: str, confirmed: bool = True) -> Dict[str, Any]:
+        now_local, _ = analyzer.now_timestamps()
+        with self._lock:
+            if key in self.revocations:
+                self.revocations[key]["revoked_confirmed"] = bool(confirmed)
+                self.revocations[key]["confirmed_at"] = now_local if confirmed else None
+                self._save_revocations()
+        return self.status_dict()
 
     def _load_config(self) -> None:
         try:
@@ -102,6 +150,10 @@ class SyncDaemon:
 
     def status_dict(self) -> Dict[str, Any]:
         with self._lock:
+            rev_list = sorted(
+                self.revocations.values(),
+                key=lambda r: (bool(r.get("revoked_confirmed")), str(r.get("resolved_at") or "")),
+            )
             return {
                 "enabled": self.enabled,
                 "running": self.running,
@@ -111,6 +163,7 @@ class SyncDaemon:
                 "last_sync_time": self.last_sync_time,
                 "last_check_summary": self.last_check_summary,
                 "detected_updates": list(self.detected_updates),
+                "revocation_checks": rev_list[:30],
             }
 
     def start(self) -> None:
@@ -135,7 +188,12 @@ class SyncDaemon:
                 continue
             key = f"{title}|{file_raw}"
             if key not in sigs:
-                sigs[key] = {"title": title, "file": file_raw, "severity": sev}
+                sigs[key] = {
+                    "title": title,
+                    "file": file_raw,
+                    "severity": sev,
+                    "requires_revoke": _is_secret_finding(title),
+                }
         return sigs
 
     def check_once(self) -> Dict[str, Any]:
@@ -187,8 +245,28 @@ class SyncDaemon:
                         cr = new_diagram.get("coderabbit") or {}
                         findings_cnt = len(cr.get("action_items") or [])
                         now_local, _ = analyzer.now_timestamps()
+                        repo_label = str(d.get("repo") or slug)
+                        new_revocations: Dict[str, Dict[str, Any]] = {}
+                        for rf in resolved_list:
+                            if rf.get("requires_revoke"):
+                                rev_key = f"{repo_label}|{rf['title']}|{rf['file']}"
+                                new_revocations[rev_key] = {
+                                    "key": rev_key,
+                                    "repo": repo_label,
+                                    "title": rf["title"],
+                                    "file": rf["file"],
+                                    "severity": rf["severity"],
+                                    "new_commit": latest_sha[:7],
+                                    "resolved_at": now_local,
+                                    "revoked_confirmed": False,
+                                    "confirmed_at": None,
+                                }
+                        if new_revocations:
+                            with self._lock:
+                                self.revocations.update(new_revocations)
+                                self._save_revocations()
                         updated_items.append({
-                            "repo": str(d.get("repo") or slug),
+                            "repo": repo_label,
                             "old_commit": saved_commit[:7] if saved_commit else "",
                             "new_commit": latest_sha[:7],
                             "findings": findings_cnt,
@@ -625,6 +703,19 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
 
         if self.path.startswith("/api/monitor/check"):
             self._send_json(200, _SYNC_DAEMON.trigger_check_async())
+            return
+
+        if self.path.startswith("/api/monitor/revoke"):
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                rev_key = str(body.get("key") or "").strip()
+                confirmed = bool(body.get("confirmed", True))
+                if not rev_key:
+                    self._send_json(400, {"error": "Missing revocation key"})
+                    return
+                self._send_json(200, _SYNC_DAEMON.confirm_revocation(rev_key, confirmed))
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
             return
 
         if self.path.startswith("/api/sync"):
