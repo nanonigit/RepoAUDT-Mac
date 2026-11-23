@@ -96,6 +96,7 @@ struct MainContentView: View {
     @State private var appUpdateStatusMessage: String?
     @State private var refreshingList = false
     @State private var listRefreshNote = ""
+    @State private var didInitializeLaunchPage = false
 
     private struct AppUpdateInfo {
         let localCommit: String
@@ -374,7 +375,14 @@ struct MainContentView: View {
             coordinator.language = value
             coordinator.send("language", value: value)
         }
-        .onAppear { coordinator.language = language }
+        .onAppear {
+            coordinator.language = language
+            if !didInitializeLaunchPage {
+                didInitializeLaunchPage = true
+                coordinator.page = .dashboard
+                selection = [WorkspacePage.dashboard.rawValue]
+            }
+        }
         .confirmationDialog(
             reposPendingDeletion.count > 1
                 ? (english
