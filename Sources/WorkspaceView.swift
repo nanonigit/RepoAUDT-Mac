@@ -152,9 +152,7 @@ struct MainContentView: View {
     }
     private var dashboardRepositories: [WorkspaceRepository] {
         let filtered = coordinator.repositories.filter { repo in
-            let hasAnalyzed = !(repo.analyzedAt ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let matchesQuery = query.isEmpty || repo.name.localizedCaseInsensitiveContains(query)
-            return hasAnalyzed && matchesQuery
+            query.isEmpty || repo.name.localizedCaseInsensitiveContains(query)
         }
         return sortDashboardRepositories(filtered, by: dashboardSortOrder)
     }

@@ -1659,6 +1659,10 @@ def save_analysis_result(result: Dict[str, Any]) -> Dict[str, Any]:
     with _STATE_LOCK:
         state = _load_saved_analyses_unlocked()
         new_diagrams = result.get("diagrams") or ([result["diagram"]] if "diagram" in result else [])
+        now_analyzed = str(result.get("analyzed_at") or datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
+        for d in new_diagrams:
+            if isinstance(d, dict) and not d.get("analyzed_at"):
+                d["analyzed_at"] = now_analyzed
         new_ids = {d["id"] for d in new_diagrams}
         new_urls = {(d.get("github_url"), d.get("perspective")) for d in new_diagrams}
         replaced_ids = set(result.get("replaced_ids") or [])
