@@ -18,7 +18,7 @@ import subprocess
 import sys
 import threading
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import unquote
@@ -32,6 +32,13 @@ REPOS_CACHE_DIR = APP_SUPPORT_DIR / "repos"
 STATE_FILE = APP_SUPPORT_DIR / "analyzed_repos.json"
 _STATE_LOCK = threading.Lock()
 _GITHUB_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def now_timestamps() -> Tuple[str, str]:
+    """Return (local_iso_with_offset, utc_iso) for local-location display and UTC storage."""
+    local_now = datetime.now().astimezone()
+    utc_now = local_now.astimezone(timezone.utc)
+    return local_now.isoformat(timespec="seconds"), utc_now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _validate_github_segment(segment: str, kind: str) -> str:
@@ -315,7 +322,7 @@ def extract_git_metadata(repo_dir: Path, owner: str, repo: str, fallback_meta: O
     files_raw = run_cmd(["git", "show", "--name-status", "--format=", "HEAD"], cwd=repo_dir)
     commit_files = [line.strip() for line in files_raw.splitlines() if line.strip()][:15]
 
-    now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
         "createdAt": created_at or first_commit_date or now_iso,
         "updatedAt": updated_at or commit_date or now_iso,
@@ -1232,13 +1239,15 @@ def analyze_checkout(
         "coderabbit": coderabbit,
     }
 
+    local_ts, utc_ts = now_timestamps()
     return {
         "diagram": diagram_entry,
         "diagrams": [diagram_entry],
         "replaced_ids": replaced_ids,
         "techSpecs": repo_tech_specs,
         "tableSchemas": extracted_schemas,
-        "analyzed_at": datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
+        "analyzed_at": local_ts,
+        "analyzed_at_utc": utc_ts,
     }
 
 
@@ -1251,7 +1260,7 @@ def build_lightweight_repo_entry(owner: str, rmeta: Dict[str, Any], category_lab
     lang = rmeta.get("language") or "TypeScript"
     desc = rmeta.get("description") or f"{owner}/{repo} ({lang}) アーキテクチャ構成とCodeRabbit監査"
     github_url = rmeta.get("url") or f"https://github.com/{owner}/{repo}"
-    now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     components = [
         {
@@ -1483,7 +1492,7 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
     Hub-->>Dev: エコシステム全体の稼働ステータス更新
     deactivate Hub"""
 
-    now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     latest_pushed = repos_meta[0].get("pushedAt") or now_iso
     earliest_created = repos_meta[-1].get("createdAt") or now_iso
 
@@ -1557,6 +1566,7 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
     }
 
     all_diagrams = [eco_diagram] + child_diagrams
+    local_ts, utc_ts = now_timestamps()
     return {
         "mode": "org",
         "owner": owner,
@@ -1565,7 +1575,8 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
         "diagrams": all_diagrams,
         "techSpecs": all_specs,
         "tableSchemas": all_schemas,
-        "analyzed_at": datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
+        "analyzed_at": local_ts,
+        "analyzed_at_utc": utc_ts,
     }
 
 
@@ -1659,10 +1670,15 @@ def save_analysis_result(result: Dict[str, Any]) -> Dict[str, Any]:
     with _STATE_LOCK:
         state = _load_saved_analyses_unlocked()
         new_diagrams = result.get("diagrams") or ([result["diagram"]] if "diagram" in result else [])
-        now_analyzed = str(result.get("analyzed_at") or datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
+        local_ts, utc_ts = now_timestamps()
+        now_analyzed = str(result.get("analyzed_at") or local_ts)
+        now_analyzed_utc = str(result.get("analyzed_at_utc") or utc_ts)
         for d in new_diagrams:
-            if isinstance(d, dict) and not d.get("analyzed_at"):
-                d["analyzed_at"] = now_analyzed
+            if isinstance(d, dict):
+                if not d.get("analyzed_at"):
+                    d["analyzed_at"] = now_analyzed
+                if not d.get("analyzed_at_utc"):
+                    d["analyzed_at_utc"] = now_analyzed_utc
         new_ids = {d["id"] for d in new_diagrams}
         new_urls = {(d.get("github_url"), d.get("perspective")) for d in new_diagrams}
         replaced_ids = set(result.get("replaced_ids") or [])

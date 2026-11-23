@@ -489,12 +489,13 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                                 analyzer.save_analysis_result(res)
                             except Exception as e_sub:
                                 print(f"Warning syncing {url}: {e_sub}", flush=True)
-                        done_str = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-                        _SYNC_DAEMON.last_sync_time = done_str
+                        done_local, done_utc = analyzer.now_timestamps()
+                        _SYNC_DAEMON.last_sync_time = done_local
                         with _SYNC_JOBS_LOCK:
                             if jid in _SYNC_JOBS:
                                 _SYNC_JOBS[jid]["status"] = "completed"
-                                _SYNC_JOBS[jid]["last_sync_time"] = done_str
+                                _SYNC_JOBS[jid]["last_sync_time"] = done_local
+                                _SYNC_JOBS[jid]["last_sync_time_utc"] = done_utc
 
                     if batch_items:
                         threading.Thread(
@@ -503,12 +504,14 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                             daemon=True,
                         ).start()
 
-                _SYNC_DAEMON.last_sync_time = now_str
+                now_local, now_utc = analyzer.now_timestamps()
+                _SYNC_DAEMON.last_sync_time = now_local
                 job_payload = {
                     "job_id": job_id,
                     "status": "running" if batch_items else "completed",
                     "ok": True,
-                    "last_sync_time": now_str,
+                    "last_sync_time": now_local,
+                    "last_sync_time_utc": now_utc,
                     "synced_targets": synced_targets,
                 }
                 with _SYNC_JOBS_LOCK:
@@ -518,10 +521,11 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                     "status": "success",
                     "ok": True,
                     "job_id": job_id,
-                    "last_sync_time": now_str,
+                    "last_sync_time": now_local,
+                    "last_sync_time_utc": now_utc,
                     "synced_targets": synced_targets,
-                    "message": f"Sync completed ({now_str})",
-                    "message_ja": f"最新データの同期が完了しました ({now_str})"
+                    "message": f"Sync completed ({now_local})",
+                    "message_ja": f"最新データの同期が完了しました ({now_local})"
                 })
             except Exception as exc:
                 self._send_json(500, {"status": "error", "message": str(exc)})

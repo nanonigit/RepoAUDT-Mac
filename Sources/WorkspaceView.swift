@@ -282,12 +282,14 @@ struct MainContentView: View {
 
         let out = DateFormatter()
         out.dateFormat = "yyyy/MM/dd HH:mm"
+        out.timeZone = .current
 
         if let date = iso.date(from: raw) ?? isoNoFrac.date(from: raw) {
             return out.string(from: date)
         }
         let slashFmt = DateFormatter()
         slashFmt.dateFormat = "yyyy/MM/dd HH:mm:ss"
+        slashFmt.timeZone = .current
         if let date = slashFmt.date(from: raw) {
             return out.string(from: date)
         }
