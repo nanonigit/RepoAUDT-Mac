@@ -124,6 +124,8 @@ struct MainContentView: View {
     @State private var appUpdateStatusMessage: String?
     @State private var refreshingList = false
     @State private var listRefreshNote = ""
+    @State private var syncProgress: SyncProgressInfo?
+    @State private var lastCompletedSyncAt: String?
     @State private var didInitializeLaunchPage = false
     @State private var triggerSidebarAppUpdate = false
     @State private var headerCommit = ""
@@ -131,6 +133,16 @@ struct MainContentView: View {
     @State private var githubConnectionIssue: String?
     @State private var githubConnectionGuide: String?
     @State private var checkingGithubHealth = false
+
+    private struct SyncProgressInfo {
+        let status: String
+        let total: Int
+        let completed: Int
+        let currentRepo: String
+        let currentStage: String
+        let etaSeconds: Int?
+        let logs: [String]
+    }
 
     private struct AppUpdateInfo {
         let localCommit: String
@@ -793,12 +805,16 @@ struct MainContentView: View {
                     .padding(18)
                 }
 
+                if let progress = syncProgress {
+                    liveSyncProgressCard(progress)
+                }
+
                 let totalFindings = allRepos.reduce(0) { $0 + $1.findings }
                 let highRiskRepos = allRepos.filter { severityRank($0.severity) >= 4 }
                 let highRiskFindings = highRiskRepos.reduce(0) { $0 + $1.findings }
-                let latestAnalyzed = allRepos
-                    .compactMap { formattedAnalysisDate($0.analyzedAt) }
-                    .max()
+                let repoLatestAnalyzed = allRepos.compactMap { formattedAnalysisDate($0.analyzedAt) }
+                let syncLatestAnalyzed = formattedAnalysisDate(lastCompletedSyncAt)
+                let latestAnalyzed = (repoLatestAnalyzed + (syncLatestAnalyzed.map { [$0] } ?? [])).max()
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                     summaryMetricCard(
@@ -852,15 +868,27 @@ struct MainContentView: View {
                             description: Text(english ? "Add a GitHub URL to begin." : "GitHub URL を追加して始めましょう。")
                         )
                     } else if topRisk.isEmpty {
-                        ContentUnavailableView(
-                            english ? "No Critical or High risk repositories" : "重大・高リスクのリポジトリはありません",
-                            systemImage: "checkmark.shield.fill",
-                            description: Text(
-                                english
-                                    ? "All \(allRepos.count) analyzed repositories are medium/low risk or clean. Open the Audit List for details."
-                                    : "全 \(allRepos.count) 件の解析済みリポジトリは中・低リスク以下またはクリーンです。詳細は「監査結果一覧を見る」から確認できます。"
-                            )
-                        )
+                        HStack(spacing: 12) {
+                            Image(systemName: "checkmark.shield.fill")
+                                .font(.title3)
+                                .foregroundStyle(SemanticColors.role("successText"))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(english ? "No Critical or High risk repositories" : "重大・高リスクのリポジトリはありません")
+                                    .font(.subheadline.weight(.semibold))
+                                Text(
+                                    english
+                                        ? "All \(allRepos.count) analyzed repositories are medium/low risk or clean. Open the Audit List for details."
+                                        : "全 \(allRepos.count) 件の解析済みリポジトリは中・低リスク以下またはクリーンです。詳細は「監査結果一覧を見る」から確認できます。"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.5)))
                     } else {
                         VStack(spacing: 0) {
                             ForEach(topRisk) { repo in
@@ -1285,10 +1313,124 @@ struct MainContentView: View {
         }
     }
 
+    @ViewBuilder
+    private func liveSyncProgressCard(_ progress: SyncProgressInfo) -> some View {
+        let isRunning = progress.status != "completed"
+        let etaLabel: String = {
+            guard isRunning else {
+                return english ? "Completed" : "完了"
+            }
+            guard let eta = progress.etaSeconds, eta > 0 else {
+                return english ? "Estimating…" : "計測中…"
+            }
+            if eta >= 60 {
+                let mins = eta / 60
+                let secs = eta % 60
+                return english ? "ETA: ~\(mins)m \(secs)s" : "残り目安: 約 \(mins)分\(secs)秒"
+            }
+            return english ? "ETA: ~\(eta)s" : "残り目安: 約 \(eta)秒"
+        }()
+
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    if isRunning {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(SemanticColors.role("successText"))
+                    }
+                    Text(
+                        isRunning
+                            ? (english ? "Live Security Audit Progress" : "リアルタイム監査ログ・進捗")
+                            : (english ? "Audit Run Summary" : "今回の監査実行ログ")
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text("\(progress.completed) / \(max(1, progress.total))")
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(SemanticColors.role("actionText"))
+                    Text("· \(etaLabel)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    if !isRunning {
+                        Button {
+                            syncProgress = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help(english ? "Dismiss" : "閉じる")
+                    }
+                }
+
+                ProgressView(
+                    value: Double(min(progress.completed, max(1, progress.total))),
+                    total: Double(max(1, progress.total))
+                )
+                .tint(isRunning ? SemanticColors.role("actionText") : SemanticColors.role("successText"))
+
+                if !progress.currentRepo.isEmpty || !progress.currentStage.isEmpty {
+                    HStack(spacing: 6) {
+                        if !progress.currentRepo.isEmpty {
+                            Text(progress.currentRepo)
+                                .font(.caption.monospaced().weight(.semibold))
+                                .lineLimit(1)
+                        }
+                        if !progress.currentStage.isEmpty {
+                            Text("— \(progress.currentStage)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+
+                if !progress.logs.isEmpty {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 3) {
+                                ForEach(Array(progress.logs.enumerated()), id: \.offset) { idx, line in
+                                    Text(line)
+                                        .font(.caption2.monospaced())
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .id(idx)
+                                }
+                            }
+                            .padding(8)
+                        }
+                        .frame(height: 108)
+                        .background(Color(nsColor: .textBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
+                        .onChange(of: progress.logs.count) { _, newCount in
+                            if newCount > 0 {
+                                withAnimation(.easeOut(duration: 0.15)) {
+                                    proxy.scrollTo(newCount - 1, anchor: .bottom)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(12)
+        }
+    }
+
     private func reloadAndAnalyzeRepositories() async {
         guard !refreshingList else { return }
         refreshingList = true
         listRefreshNote = english ? "Starting analysis…" : "解析を開始しています…"
+        syncProgress = SyncProgressInfo(
+            status: "running",
+            total: max(1, dashboardRepositories.count),
+            completed: 0,
+            currentRepo: "",
+            currentStage: english ? "Preparing repositories…" : "対象リポジトリを準備中…",
+            etaSeconds: nil,
+            logs: [english ? "▶ Starting security audit…" : "▶ セキュリティ監査を開始しています…"]
+        )
         defer { refreshingList = false }
 
         do {
@@ -1296,10 +1438,30 @@ struct MainContentView: View {
             let jobId = syncResp["job_id"] as? String ?? ""
             if !jobId.isEmpty {
                 listRefreshNote = english ? "Analyzing repositories…" : "全リポジトリを解析中…"
-                for attempt in 0..<180 {
+                for attempt in 0..<1800 {
                     try? await Task.sleep(for: .seconds(1))
-                    let statusResp = try? await requestJSON("/api/sync/status?job_id=\(jobId)")
-                    let status = statusResp?["status"] as? String ?? ""
+                    guard let statusResp = try? await requestJSON("/api/sync/status?job_id=\(jobId)") else {
+                        continue
+                    }
+                    let status = statusResp["status"] as? String ?? ""
+                    let total = statusResp["total"] as? Int ?? max(1, dashboardRepositories.count)
+                    let completed = statusResp["completed"] as? Int ?? 0
+                    let currentRepo = statusResp["current_repo"] as? String ?? ""
+                    let currentStage = statusResp["current_stage"] as? String ?? ""
+                    let etaSeconds = statusResp["eta_seconds"] as? Int
+                    let logs = statusResp["logs"] as? [String] ?? []
+                    if let syncTime = statusResp["last_sync_time"] as? String, !syncTime.isEmpty {
+                        lastCompletedSyncAt = syncTime
+                    }
+                    syncProgress = SyncProgressInfo(
+                        status: status,
+                        total: total,
+                        completed: completed,
+                        currentRepo: currentRepo,
+                        currentStage: currentStage,
+                        etaSeconds: etaSeconds,
+                        logs: logs
+                    )
                     if attempt % 3 == 2 {
                         coordinator.send("refresh")
                     }
@@ -1316,6 +1478,11 @@ struct MainContentView: View {
             let formatter = DateFormatter()
             formatter.dateFormat = "HH:mm:ss"
             let time = formatter.string(from: Date())
+            if lastCompletedSyncAt == nil {
+                let fullFmt = DateFormatter()
+                fullFmt.dateFormat = "yyyy/MM/dd HH:mm:ss"
+                lastCompletedSyncAt = fullFmt.string(from: Date())
+            }
             listRefreshNote = english
                 ? "Analyzed \(time) · \(dashboardRepositories.count) items"
                 : "解析完了 \(time) · \(dashboardRepositories.count)件"

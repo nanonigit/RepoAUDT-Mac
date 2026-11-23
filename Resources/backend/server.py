@@ -471,51 +471,138 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                     analyzer.save_analysis_result(res, respect_deleted=True)
                     synced_targets.append(target_url)
                 else:
-                    # Collect unique target URLs from saved diagrams and run sync in background worker
+                    # Collect unique repository URLs from saved diagrams (skipping org root entries)
                     processed = set()
                     batch_items: List[Dict[str, Any]] = []
                     for d in diagrams:
-                        url = d.get("github_url") or ""
+                        if d.get("is_root"):
+                            continue
+                        url = (analyzer.automatic_refresh_url(d) or d.get("github_url") or "").strip()
                         if url and url not in processed:
                             processed.add(url)
                             synced_targets.append(d.get("repo", url))
                             batch_items.append(d)
 
-                    def _run_batch_sync(items: List[Dict[str, Any]], jid: str) -> None:
-                        for d in items:
-                            url = d.get("github_url") or ""
+                    started_epoch = time.time()
+                    total_items = len(batch_items)
+                    now_local, now_utc = analyzer.now_timestamps()
+                    _SYNC_DAEMON.last_sync_time = now_local
+                    initial_logs = [
+                        f"[{datetime.now().strftime('%H:%M:%S')}] ▶ 解析開始: 全 {total_items} 件のリポジトリ"
+                        if total_items > 0
+                        else f"[{datetime.now().strftime('%H:%M:%S')}] ✓ 解析対象リポジトリはありません"
+                    ]
+                    job_payload = {
+                        "job_id": job_id,
+                        "status": "running" if batch_items else "completed",
+                        "ok": True,
+                        "total": total_items,
+                        "completed": 0,
+                        "current_repo": synced_targets[0] if synced_targets else "",
+                        "current_stage": "準備中 / Preparing…" if batch_items else "",
+                        "eta_seconds": (total_items * 4) if batch_items else 0,
+                        "logs": initial_logs,
+                        "last_sync_time": now_local,
+                        "last_sync_time_utc": now_utc,
+                        "synced_targets": synced_targets,
+                    }
+                    with _SYNC_JOBS_LOCK:
+                        _SYNC_JOBS[job_id] = job_payload
+
+                    def _append_job_log(jid: str, line: str, **updates: Any) -> None:
+                        with _SYNC_JOBS_LOCK:
+                            job = _SYNC_JOBS.get(jid)
+                            if not job:
+                                return
+                            for k, v in updates.items():
+                                job[k] = v
+                            logs = list(job.get("logs") or [])
+                            logs.append(line)
+                            if len(logs) > 60:
+                                logs = logs[-60:]
+                            job["logs"] = logs
+
+                    def _run_batch_sync(items: List[Dict[str, Any]], jid: str, t0: float) -> None:
+                        total = len(items)
+                        for idx, d in enumerate(items, 1):
+                            url = (analyzer.automatic_refresh_url(d) or d.get("github_url") or "").strip()
+                            repo_label = str(d.get("repo") or url)
+                            stage_text = "OSV / Trivy / Semgrep / Gitleaks / Actions 監査中"
+                            elapsed = max(0.1, time.time() - t0)
+                            eta = int((elapsed / (idx - 1)) * (total - (idx - 1))) if idx > 1 else max(3, total * 4)
+                            _append_job_log(
+                                jid,
+                                f"[{datetime.now().strftime('%H:%M:%S')}] 🔍 ({idx}/{total}) {repo_label}: {stage_text}…",
+                                completed=idx - 1,
+                                current_repo=repo_label,
+                                current_stage=stage_text,
+                                eta_seconds=eta,
+                            )
+                            item_t0 = time.time()
                             try:
                                 res = analyzer.analyze_any_github_target(url)
                                 analyzer.save_analysis_result(res, respect_deleted=True)
+                                item_dt = time.time() - item_t0
+                                cr = (res.get("diagram") or {}).get("coderabbit") or {}
+                                findings_cnt = len(cr.get("action_items") or [])
+                                elapsed_now = max(0.1, time.time() - t0)
+                                eta_after = int((elapsed_now / idx) * (total - idx)) if idx < total else 0
+                                _append_job_log(
+                                    jid,
+                                    f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ({idx}/{total}) {repo_label} 完了 (指摘 {findings_cnt}件 · {item_dt:.1f}s)",
+                                    completed=idx,
+                                    eta_seconds=eta_after,
+                                )
                             except Exception as e_sub:
+                                item_dt = time.time() - item_t0
+                                elapsed_now = max(0.1, time.time() - t0)
+                                eta_after = int((elapsed_now / idx) * (total - idx)) if idx < total else 0
                                 print(f"Warning syncing {url}: {e_sub}", flush=True)
+                                _append_job_log(
+                                    jid,
+                                    f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ ({idx}/{total}) {repo_label} スキップ ({str(e_sub)[:80]} · {item_dt:.1f}s)",
+                                    completed=idx,
+                                    eta_seconds=eta_after,
+                                )
                         done_local, done_utc = analyzer.now_timestamps()
                         _SYNC_DAEMON.last_sync_time = done_local
-                        with _SYNC_JOBS_LOCK:
-                            if jid in _SYNC_JOBS:
-                                _SYNC_JOBS[jid]["status"] = "completed"
-                                _SYNC_JOBS[jid]["last_sync_time"] = done_local
-                                _SYNC_JOBS[jid]["last_sync_time_utc"] = done_utc
+                        _append_job_log(
+                            jid,
+                            f"[{datetime.now().strftime('%H:%M:%S')}] 🎉 全 {total} 件の監査が完了しました ({done_local})",
+                            status="completed",
+                            completed=total,
+                            current_repo="",
+                            current_stage="完了 / Completed",
+                            eta_seconds=0,
+                            last_sync_time=done_local,
+                            last_sync_time_utc=done_utc,
+                        )
 
                     if batch_items:
                         threading.Thread(
                             target=_run_batch_sync,
-                            args=(batch_items, job_id),
+                            args=(batch_items, job_id, started_epoch),
                             daemon=True,
                         ).start()
 
-                now_local, now_utc = analyzer.now_timestamps()
-                _SYNC_DAEMON.last_sync_time = now_local
-                job_payload = {
-                    "job_id": job_id,
-                    "status": "running" if batch_items else "completed",
-                    "ok": True,
-                    "last_sync_time": now_local,
-                    "last_sync_time_utc": now_utc,
-                    "synced_targets": synced_targets,
-                }
-                with _SYNC_JOBS_LOCK:
-                    _SYNC_JOBS[job_id] = job_payload
+                if target_url:
+                    now_local, now_utc = analyzer.now_timestamps()
+                    _SYNC_DAEMON.last_sync_time = now_local
+                    with _SYNC_JOBS_LOCK:
+                        _SYNC_JOBS[job_id] = {
+                            "job_id": job_id,
+                            "status": "completed",
+                            "ok": True,
+                            "total": 1,
+                            "completed": 1,
+                            "current_repo": target_url,
+                            "current_stage": "完了 / Completed",
+                            "eta_seconds": 0,
+                            "logs": [f"[{datetime.now().strftime('%H:%M:%S')}] ✅ {target_url} 完了 ({now_local})"],
+                            "last_sync_time": now_local,
+                            "last_sync_time_utc": now_utc,
+                            "synced_targets": synced_targets,
+                        }
 
                 self._send_json(200, {
                     "status": "success",
