@@ -506,7 +506,7 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 _SYNC_DAEMON.last_sync_time = now_str
                 job_payload = {
                     "job_id": job_id,
-                    "status": "completed",
+                    "status": "running" if batch_items else "completed",
                     "ok": True,
                     "last_sync_time": now_str,
                     "synced_targets": synced_targets,

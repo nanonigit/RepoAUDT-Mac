@@ -35,6 +35,30 @@ enum RepositorySortOrder: String, CaseIterable, Identifiable {
     }
 }
 
+enum DashboardSortOrder: String, CaseIterable, Identifiable {
+    case severityDesc
+    case severityAsc
+    case analyzedDesc
+    case analyzedAsc
+    case byRepository
+    case nameAsc
+    case nameDesc
+
+    var id: String { rawValue }
+
+    func title(english: Bool) -> String {
+        switch self {
+        case .severityDesc: return english ? "Highest risk first" : "ヤバい順（危険度が高い順）"
+        case .severityAsc: return english ? "Lowest risk first" : "安全な順（危険度が低い順）"
+        case .analyzedDesc: return english ? "Analyzed (newest)" : "解析日時が新しい順"
+        case .analyzedAsc: return english ? "Analyzed (oldest)" : "解析日時が古い順"
+        case .byRepository: return english ? "By repository" : "リポジトリごと"
+        case .nameAsc: return english ? "Name (A–Z)" : "名前順 (A → Z)"
+        case .nameDesc: return english ? "Name (Z–A)" : "名前順 (Z → A)"
+        }
+    }
+}
+
 struct WorkspaceSnapshot: Decodable {
     let repositories: [WorkspaceRepository]
     let selectedID: String?
@@ -85,9 +109,12 @@ struct MainContentView: View {
     @ObservedObject var coordinator: WebViewCoordinator
     @AppStorage("workspaceLanguage") private var language = "ja"
     @AppStorage("repositorySortOrder") private var sortOrderRaw = RepositorySortOrder.defaultOrder.rawValue
+    @AppStorage("dashboardSortOrder") private var dashboardSortOrderRaw = DashboardSortOrder.severityDesc.rawValue
+    @AppStorage("dashboardPageSize") private var dashboardPageSize = 10
     @AppStorage("repositoriesSectionExpanded") private var repositoriesExpanded = true
     @State private var selection: Set<String> = [WorkspacePage.dashboard.rawValue]
     @State private var query = ""
+    @State private var dashboardPageIndex = 0
     @State private var busyRepoIDs: Set<String> = []
     @State private var reposPendingDeletion: [WorkspaceRepository] = []
     @State private var repoActionError: String?
@@ -114,11 +141,81 @@ struct MainContentView: View {
     private var sortOrder: RepositorySortOrder {
         RepositorySortOrder(rawValue: sortOrderRaw) ?? .defaultOrder
     }
+    private var dashboardSortOrder: DashboardSortOrder {
+        DashboardSortOrder(rawValue: dashboardSortOrderRaw) ?? .severityDesc
+    }
     private var repositories: [WorkspaceRepository] {
         let filtered = coordinator.repositories.filter {
             query.isEmpty || $0.name.localizedCaseInsensitiveContains(query)
         }
         return sortRepositories(filtered, by: sortOrder)
+    }
+    private var dashboardRepositories: [WorkspaceRepository] {
+        let filtered = coordinator.repositories.filter { repo in
+            let hasAnalyzed = !(repo.analyzedAt ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let matchesQuery = query.isEmpty || repo.name.localizedCaseInsensitiveContains(query)
+            return hasAnalyzed && matchesQuery
+        }
+        return sortDashboardRepositories(filtered, by: dashboardSortOrder)
+    }
+    private var dashboardPageCount: Int {
+        let size = max(10, dashboardPageSize)
+        return max(1, Int(ceil(Double(dashboardRepositories.count) / Double(size))))
+    }
+    private var pagedDashboardRepositories: [WorkspaceRepository] {
+        let items = dashboardRepositories
+        let size = max(10, dashboardPageSize)
+        let safePage = min(max(0, dashboardPageIndex), max(0, dashboardPageCount - 1))
+        let start = safePage * size
+        guard start < items.count else { return [] }
+        let end = min(items.count, start + size)
+        return Array(items[start..<end])
+    }
+
+    private func sortDashboardRepositories(_ items: [WorkspaceRepository], by order: DashboardSortOrder) -> [WorkspaceRepository] {
+        switch order {
+        case .severityDesc:
+            return items.sorted {
+                let lhs = severityRank($0.severity)
+                let rhs = severityRank($1.severity)
+                if lhs != rhs { return lhs > rhs }
+                if $0.findings != $1.findings { return $0.findings > $1.findings }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        case .severityAsc:
+            return items.sorted {
+                let lhs = severityRank($0.severity)
+                let rhs = severityRank($1.severity)
+                if lhs != rhs { return lhs < rhs }
+                if $0.findings != $1.findings { return $0.findings < $1.findings }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        case .analyzedDesc:
+            return items.sorted {
+                let lhs = normalizedTimestamp($0.analyzedAt)
+                let rhs = normalizedTimestamp($1.analyzedAt)
+                if lhs != rhs { return lhs > rhs }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        case .analyzedAsc:
+            return items.sorted {
+                let lhs = normalizedTimestamp($0.analyzedAt)
+                let rhs = normalizedTimestamp($1.analyzedAt)
+                if lhs != rhs { return lhs < rhs }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        case .byRepository:
+            return items.sorted {
+                let lKey = ($0.url.isEmpty ? $0.name : $0.url).lowercased()
+                let rKey = ($1.url.isEmpty ? $1.name : $1.url).lowercased()
+                if lKey != rKey { return lKey.localizedStandardCompare(rKey) == .orderedAscending }
+                return normalizedTimestamp($0.analyzedAt) > normalizedTimestamp($1.analyzedAt)
+            }
+        case .nameAsc:
+            return items.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .nameDesc:
+            return items.sorted { $0.name.localizedStandardCompare($1.name) == .orderedDescending }
+        }
     }
 
     private func sortRepositories(_ items: [WorkspaceRepository], by order: RepositorySortOrder) -> [WorkspaceRepository] {
@@ -345,6 +442,15 @@ struct MainContentView: View {
                 selection = [value.rawValue]
             }
         }
+        .onChange(of: dashboardPageSize) { _, _ in
+            dashboardPageIndex = 0
+        }
+        .onChange(of: dashboardSortOrderRaw) { _, _ in
+            dashboardPageIndex = 0
+        }
+        .onChange(of: query) { _, _ in
+            dashboardPageIndex = 0
+        }
         .onChange(of: language) { _, value in
             coordinator.language = value
             coordinator.send("language", value: value)
@@ -538,17 +644,25 @@ struct MainContentView: View {
                     .padding(18)
                 }
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
+                    HStack(spacing: 10) {
                         Text(english ? "Saved analyses" : "保存済みの解析").font(.headline)
-                        Text("\(coordinator.repositories.count)").foregroundStyle(.secondary)
+                        Text("\(dashboardRepositories.count)").foregroundStyle(.secondary)
                         Spacer()
                         if !listRefreshNote.isEmpty {
                             Text(listRefreshNote)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                        Picker(english ? "Sort" : "並び替え", selection: $dashboardSortOrderRaw) {
+                            ForEach(DashboardSortOrder.allCases) { option in
+                                Text(option.title(english: english)).tag(option.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 195)
+                        .help(english ? "Sort saved analyses" : "保存済みの解析を並び替え")
                         Button {
-                            reloadSavedRepositories()
+                            Task { await reloadAndAnalyzeRepositories() }
                         } label: {
                             HStack(spacing: 6) {
                                 if refreshingList {
@@ -558,29 +672,67 @@ struct MainContentView: View {
                                     Image(systemName: "arrow.clockwise")
                                 }
                                 Text(refreshingList
-                                     ? (english ? "Reloading…" : "更新中…")
+                                     ? (english ? "Analyzing…" : "解析中…")
                                      : (english ? "Reload list" : "一覧を更新"))
                             }
                         }
                         .disabled(refreshingList || !coordinator.ready)
                     }
-                    if repositories.isEmpty {
+                    if dashboardRepositories.isEmpty {
                         ContentUnavailableView(
-                            query.isEmpty ? (english ? "No saved analyses" : "保存済みの解析はありません") :
+                            query.isEmpty ? (english ? "No timestamped analyses yet" : "解析日時付きの保存データはありません") :
                                 (english ? "No matching repositories" : "一致するリポジトリはありません"),
                             systemImage: query.isEmpty ? "folder.badge.plus" : "magnifyingglass",
                             description: Text(query.isEmpty ?
-                                (english ? "Add a GitHub URL to begin." : "GitHub URL を追加して始めましょう。") :
+                                (english ? "Click \"Reload list\" or re-scan a repository to record an analysis timestamp." : "「一覧を更新」またはリポジトリの再スキャンを実行すると解析日時が記録されてここに表示されます。") :
                                 (english ? "Try another search." : "検索語を変更してください。")))
                     } else {
+                        let visibleRepos = pagedDashboardRepositories
                         VStack(spacing: 0) {
-                            ForEach(repositories) { repo in
+                            ForEach(visibleRepos) { repo in
                                 repositoryRow(repo)
-                                if repo.id != repositories.last?.id { Divider().padding(.leading, 48) }
+                                if repo.id != visibleRepos.last?.id { Divider().padding(.leading, 48) }
                             }
                         }
                         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.5)))
+
+                        HStack(spacing: 12) {
+                            HStack(spacing: 6) {
+                                Text(english ? "Per page" : "表示件数")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Picker(english ? "Per page" : "表示件数", selection: $dashboardPageSize) {
+                                    ForEach([10, 20, 30, 40, 50], id: \.self) { size in
+                                        Text(english ? "\(size)" : "\(size)件").tag(size)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 78)
+                            }
+                            Spacer()
+                            let currentPage = min(dashboardPageIndex, max(0, dashboardPageCount - 1)) + 1
+                            Text(english
+                                 ? "Page \(currentPage) of \(dashboardPageCount) (\(dashboardRepositories.count) items)"
+                                 : "\(currentPage) / \(dashboardPageCount) ページ（全 \(dashboardRepositories.count) 件）")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                Button {
+                                    dashboardPageIndex = max(0, min(dashboardPageIndex, dashboardPageCount - 1) - 1)
+                                } label: {
+                                    Label(english ? "Previous" : "前へ", systemImage: "chevron.left")
+                                }
+                                .disabled(currentPage <= 1)
+                                Button {
+                                    dashboardPageIndex = min(dashboardPageCount - 1, currentPage)
+                                } label: {
+                                    Label(english ? "Next" : "次へ", systemImage: "chevron.right")
+                                }
+                                .disabled(currentPage >= dashboardPageCount)
+                            }
+                        }
+                        .padding(.top, 4)
                     }
                     Text(english ? "Counts reflect saved findings. Open a repository to inspect evidence and scan details." :
                             "件数は保存済みの指摘です。根拠や解析の詳細は各リポジトリで確認できます。")
@@ -749,22 +901,42 @@ struct MainContentView: View {
         }
     }
 
-    private func reloadSavedRepositories() {
+    private func reloadAndAnalyzeRepositories() async {
         guard !refreshingList else { return }
         refreshingList = true
-        listRefreshNote = ""
-        coordinator.send("refresh") {
-            Task { @MainActor in
-                // Keep spinner briefly visible so quick local reloads still give clear feedback.
-                try? await Task.sleep(for: .milliseconds(350))
-                refreshingList = false
-                let formatter = DateFormatter()
-                formatter.dateFormat = "HH:mm:ss"
-                let time = formatter.string(from: Date())
-                listRefreshNote = english
-                    ? "Updated \(time) · \(coordinator.repositories.count) items"
-                    : "更新済み \(time) · \(coordinator.repositories.count)件"
+        listRefreshNote = english ? "Starting analysis…" : "解析を開始しています…"
+        defer { refreshingList = false }
+
+        do {
+            let syncResp = try await requestJSON("/api/sync", body: [:])
+            let jobId = syncResp["job_id"] as? String ?? ""
+            if !jobId.isEmpty {
+                listRefreshNote = english ? "Analyzing repositories…" : "全リポジトリを解析中…"
+                for attempt in 0..<180 {
+                    try? await Task.sleep(for: .seconds(1))
+                    let statusResp = try? await requestJSON("/api/sync/status?job_id=\(jobId)")
+                    let status = statusResp?["status"] as? String ?? ""
+                    if attempt % 3 == 2 {
+                        coordinator.send("refresh")
+                    }
+                    if status == "completed" {
+                        break
+                    }
+                }
             }
+            await withCheckedContinuation { continuation in
+                coordinator.send("refresh") {
+                    continuation.resume()
+                }
+            }
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm:ss"
+            let time = formatter.string(from: Date())
+            listRefreshNote = english
+                ? "Analyzed \(time) · \(dashboardRepositories.count) items"
+                : "解析完了 \(time) · \(dashboardRepositories.count)件"
+        } catch {
+            listRefreshNote = error.localizedDescription
         }
     }
 
