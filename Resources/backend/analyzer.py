@@ -838,6 +838,75 @@ def build_mermaid_sequences(repo_name: str, components: List[Dict[str, Any]]) ->
     ]
 
 
+def build_advisory_remediation(adv: Dict[str, Any]) -> Dict[str, str]:
+    """Build ecosystem-aware target file, diff, and shell fix_cmd from an OSV advisory."""
+    raw_pkg = str(adv.get("pkg") or "").strip()
+    pkg_name = str(adv.get("package_name") or "").strip()
+    if not pkg_name:
+        pkg_name = re.sub(r"\s*\([^)]+\)\s*$", "", raw_pkg).strip()
+
+    eco = str(adv.get("ecosystem") or "").strip()
+    if not eco:
+        m_eco = re.search(r"\(([^)]+)\)\s*$", raw_pkg)
+        eco = m_eco.group(1).strip() if m_eco else "npm"
+
+    installed = str(adv.get("installed") or "").strip()
+    fixed = str(adv.get("fixed_version") or adv.get("safe_version") or "").strip()
+    eco_low = eco.lower()
+
+    if eco_low == "npm":
+        target_file = "package.json"
+        if fixed and installed:
+            diff_text = f'- "{pkg_name}": "^{installed}"\n+ "{pkg_name}": "^{fixed}"'
+        elif fixed:
+            diff_text = f'+ "{pkg_name}": "^{fixed}"'
+        else:
+            diff_text = ""
+        fix_cmd = f"npm install {pkg_name}@^{fixed}" if fixed else f"npm install {pkg_name}@latest"
+    elif eco_low == "pypi":
+        target_file = "requirements.txt"
+        if fixed and installed:
+            diff_text = f"- {pkg_name}=={installed}\n+ {pkg_name}>={fixed}"
+        elif fixed:
+            diff_text = f"+ {pkg_name}>={fixed}"
+        else:
+            diff_text = ""
+        fix_cmd = f'pip install --upgrade "{pkg_name}>={fixed}"' if fixed else f'pip install --upgrade "{pkg_name}"'
+    elif eco_low == "go":
+        target_file = "go.mod"
+        norm_inst = f"v{installed.lstrip('v')}" if installed else ""
+        norm_fix = f"v{fixed.lstrip('v')}" if fixed else ""
+        if norm_fix and norm_inst:
+            diff_text = f"- {pkg_name} {norm_inst}\n+ {pkg_name} {norm_fix}"
+        elif norm_fix:
+            diff_text = f"+ {pkg_name} {norm_fix}"
+        else:
+            diff_text = ""
+        fix_cmd = f"go get {pkg_name}@{norm_fix}" if norm_fix else f"go get -u {pkg_name}"
+    elif eco_low == "packagist":
+        target_file = "composer.json"
+        diff_text = (
+            f'- "{pkg_name}": "^{installed}"\n+ "{pkg_name}": "^{fixed}"'
+            if (fixed and installed)
+            else ""
+        )
+        fix_cmd = f"composer require {pkg_name}:^{fixed}" if fixed else f"composer update {pkg_name}"
+    elif eco_low in ("crates.io", "cargo"):
+        target_file = "Cargo.toml"
+        diff_text = (
+            f'- {pkg_name} = "{installed}"\n+ {pkg_name} = "{fixed}"'
+            if (fixed and installed)
+            else ""
+        )
+        fix_cmd = f"cargo update -p {pkg_name}"
+    else:
+        target_file = "dependencies"
+        diff_text = ""
+        fix_cmd = f"# Upgrade {pkg_name}" + (f" to {fixed}" if fixed else "")
+
+    return {"file": target_file, "diff": diff_text, "fix_cmd": fix_cmd}
+
+
 def run_coderabbit_static_audit(
     repo_dir: Path,
     repo_name: str,
@@ -861,14 +930,15 @@ def run_coderabbit_static_audit(
         return components[0]["name"] if components else repo_name
 
     for adv in deps.get("security_advisories", []):
+        remediation = build_advisory_remediation(adv)
         item = {
             "severity": "high",
-            "title": adv.get("title", f"{adv.get('pkg')} の脆弱性対応"),
-            "file": "package.json",
-            "target_node": match_component_for_file("package.json"),
+            "title": adv.get("title", f"{adv.get('package_name') or adv.get('pkg')} の脆弱性対応"),
+            "file": remediation["file"],
+            "target_node": match_component_for_file(remediation["file"]),
             "desc": adv.get("summary", "既知の脆弱性が報告されています。安全版へのアップデートが必要です。"),
-            "diff": f'- "{adv.get("pkg")}": "old"\n+ "{adv.get("pkg")}": "^1.7.4"',
-            "fix_cmd": f"npm install {adv.get('pkg')}@latest",
+            "diff": remediation["diff"],
+            "fix_cmd": remediation["fix_cmd"],
         }
         action_items.append(item)
         findings.append({**item, "line": "dependencies"})

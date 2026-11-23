@@ -202,6 +202,40 @@ def get_masked_settings(settings: Optional[Dict[str, Any]] = None) -> Dict[str, 
     }
 
 
+def _extract_osv_fixed_version(vuln_obj: Dict[str, Any], pkg_name: str, eco: str) -> Optional[str]:
+    """Extract the fixed version for (pkg_name, eco) from an OSV vulnerability record."""
+    if not isinstance(vuln_obj, dict):
+        return None
+    affected_list = vuln_obj.get("affected") or []
+    if not isinstance(affected_list, list):
+        return None
+
+    def _collect_fixed(entries: List[Dict[str, Any]]) -> List[str]:
+        versions: List[str] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            for rng in entry.get("ranges") or []:
+                if not isinstance(rng, dict):
+                    continue
+                for ev in rng.get("events") or []:
+                    if isinstance(ev, dict) and ev.get("fixed"):
+                        versions.append(str(ev["fixed"]).strip())
+        return versions
+
+    matched = [
+        e for e in affected_list
+        if isinstance(e, dict)
+        and str((e.get("package") or {}).get("name") or "").lower() == pkg_name.lower()
+        and (
+            not (e.get("package") or {}).get("ecosystem")
+            or str((e.get("package") or {}).get("ecosystem") or "").lower() == eco.lower()
+        )
+    ]
+    candidates = _collect_fixed(matched) or _collect_fixed(affected_list)
+    return candidates[-1] if candidates else None
+
+
 def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]]:
     """
     Query OSV.dev (Google Open Source Vulnerability MCP/API) for real CVEs across
@@ -247,7 +281,8 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                         aliases = list(v0.get("aliases") or [])
                         osv_summary = str(v0.get("summary") or "").strip()
                         osv_details = str(v0.get("details") or "").strip()
-                        if not osv_summary and len(advisories) < 8:
+                        fixed_ver = _extract_osv_fixed_version(v0, pkg_name, eco)
+                        if (not osv_summary or not fixed_ver) and len(advisories) < 8:
                             try:
                                 vreq = urllib.request.Request(
                                     f"https://api.osv.dev/v1/vulns/{vid}",
@@ -256,8 +291,12 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                                 with urllib.request.urlopen(vreq, timeout=4) as vresp:
                                     if getattr(vresp, "status", 200) == 200:
                                         vfull = json.loads(vresp.read().decode("utf-8", errors="ignore"))
-                                        osv_summary = str(vfull.get("summary") or "").strip()
-                                        osv_details = str(vfull.get("details") or "").strip()
+                                        if not osv_summary:
+                                            osv_summary = str(vfull.get("summary") or "").strip()
+                                        if not osv_details:
+                                            osv_details = str(vfull.get("details") or "").strip()
+                                        if not fixed_ver:
+                                            fixed_ver = _extract_osv_fixed_version(vfull, pkg_name, eco)
                                         for al in vfull.get("aliases") or []:
                                             if al not in aliases:
                                                 aliases.append(al)
@@ -269,8 +308,12 @@ def query_osv_batch(packages: List[Tuple[str, str, str]]) -> List[Dict[str, Any]
                         first_sentence = clean_details.split("\n\n")[0].replace("\n", " ")[:240] if clean_details else ""
                         detail_suffix = f" 脆弱性の内容: {osv_summary} ({first_sentence})" if osv_summary else ""
                         advisories.append({
+                            "package_name": pkg_name,
+                            "ecosystem": eco,
                             "pkg": f"{pkg_name} ({eco})",
                             "installed": clean_ver,
+                            "fixed_version": fixed_ver,
+                            "safe_version": fixed_ver,
                             "cve": display_cve,
                             "osv_id": vid,
                             "severity": "HIGH",
@@ -390,9 +433,109 @@ SECRET_PATTERNS = [
         "Database / Hardcoded Password",
         r"(?i)(?:db_password|database_password|api_secret|client_secret)\s*[:=]\s*['\"]([^'\"\s]{8,})['\"]",
         "平文のデータベース接続パスワードまたはクライアントシークレット",
-        "process.env.DB_PASSWORD || os.environ.get('DB_PASSWORD')",
+        "DB_PASSWORD",
     ),
 ]
+
+
+_TEST_DIR_NAMES = {
+    "__tests__",
+    "tests",
+    "test",
+    "__mocks__",
+    "fixtures",
+    "__fixtures__",
+    "spec",
+    "specs",
+}
+_PLACEHOLDER_MARKERS = (
+    "example",
+    "dummy",
+    "your_",
+    "<api_key>",
+    "unit-test",
+    "unittest",
+    "test-",
+    "test_",
+    "-test",
+    "_test",
+    "mock",
+    "fake",
+    "sample",
+    "placeholder",
+    "changeme",
+    "change_me",
+    "replace_me",
+    "redact",
+)
+_KNOWN_WEAK_PASSWORDS = {"12345678", "password", "password123", "qwertyui"}
+
+
+def _is_test_or_fixture_path(rel_path: str) -> bool:
+    parts = [p.lower() for p in Path(rel_path).parts]
+    if any(part in _TEST_DIR_NAMES for part in parts[:-1]):
+        return True
+    name = parts[-1] if parts else ""
+    if ".test." in name or ".spec." in name:
+        return True
+    if name.startswith("test_") and name.endswith(".py"):
+        return True
+    if name.endswith(("_test.py", "_test.go", "test.swift", "tests.swift", "test.java", "spec.rb")):
+        return True
+    return False
+
+
+def _is_placeholder_secret_line(line: str, raw_secret: str = "") -> bool:
+    low_line = line.lower()
+    low_secret = raw_secret.lower().strip()
+    if any(marker in low_line for marker in _PLACEHOLDER_MARKERS):
+        return True
+    if low_secret:
+        if any(marker in low_secret for marker in _PLACEHOLDER_MARKERS):
+            return True
+        if low_secret in _KNOWN_WEAK_PASSWORDS or len(set(low_secret)) <= 2:
+            return True
+    return False
+
+
+def _infer_env_var_name(stripped_line: str, secret_name: str, default_fix: str) -> str:
+    m_lhs = re.search(r"([A-Za-z_][A-Za-z0-9_]{2,})\s*[:=]", stripped_line)
+    if m_lhs:
+        cand = m_lhs.group(1).upper()
+        if any(k in cand for k in ("SECRET", "PASSWORD", "TOKEN", "KEY", "PASS", "AUTH")):
+            return cand
+    m_env = re.search(r"([A-Z][A-Z0-9_]{2,})", default_fix)
+    if m_env:
+        return m_env.group(1)
+    return "APP_SECRET"
+
+
+def _build_secret_fix_replacement(
+    rel_path: str, stripped_line: str, secret_name: str, default_fix: str
+) -> str:
+    if secret_name == "Private Cryptographic Key":
+        return default_fix
+    env_var = _infer_env_var_name(stripped_line, secret_name, default_fix)
+    suffix = Path(rel_path).suffix.lower()
+    if suffix in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"):
+        return f"process.env.{env_var} ?? '' // Load {env_var} from runtime environment / secret manager"
+    if suffix == ".py":
+        return f'os.environ.get("{env_var}", "")'
+    if suffix == ".go":
+        return f'os.Getenv("{env_var}")'
+    if suffix == ".php":
+        return f"getenv('{env_var}')"
+    if suffix == ".rb":
+        return f"ENV.fetch('{env_var}', '')"
+    if suffix == ".swift":
+        return f'ProcessInfo.processInfo.environment["{env_var}"]'
+    if suffix in (".tf", ".tfvars"):
+        return f"var.{env_var.lower()} # Supply via TF_VAR_{env_var.lower()} or Secrets Manager"
+    if suffix in (".yml", ".yaml"):
+        if ".github/workflows" in rel_path.replace("\\", "/"):
+            return f"${{{{ secrets.{env_var} }}}}"
+        return f"${{{env_var}}}"
+    return f"# Load {env_var} from environment variable or secret manager"
 
 
 _TERRAFORM_SECRET_ARN = re.compile(
@@ -481,26 +624,29 @@ def scan_secrets_and_credentials(
                         continue
 
                 for secret_name, pattern, desc_label, fix_replacement in SECRET_PATTERNS:
-                    # Ignore obvious test/placeholder strings
-                    low = stripped.lower()
-                    if "example" in low or "dummy" in low or "your_" in low or "<api_key>" in low:
+                    if secret_name == "Database / Hardcoded Password" and _is_test_or_fixture_path(rel_path):
                         continue
                     m = re.search(pattern, stripped)
                     if m:
                         raw_secret = m.group(1) if m.groups() else m.group(0)
+                        if _is_placeholder_secret_line(stripped, raw_secret):
+                            continue
                         if secret_name == "Database / Hardcoded Password" and (
                             len(raw_secret) < 8 or is_terraform_secret_arn(rel_path, stripped)
                         ):
                             continue
                         masked = mask_detected_secret(raw_secret)
                         target_node = match_comp(rel_path)
+                        safe_replacement = _build_secret_fix_replacement(
+                            rel_path, stripped, secret_name, fix_replacement
+                        )
                         findings.append({
                             "severity": "critical",
                             "title": f"🚨 [シークレット漏洩検知] {secret_name} が平文でハードコードされています ({file_path.name}:{line_no})",
                             "file": f"{rel_path}:{line_no} (Target: {target_node})",
                             "target_node": target_node,
                             "desc": f"`{rel_path}` の {line_no}行目で、{desc_label}（`{masked}`）が平文で検出されました。ソースコード内に認証情報が存在すると、閲覧権限を持つ全員に漏洩し、不正利用やデータ侵害の原因となります。直ちに該当サービスでキーを無効化（Revoke/Rotate）し、環境変数または秘密情報マネージャーへ退避してください。",
-                            "diff": f"- {stripped.replace(raw_secret, '[REDACTED]', 1)}\n+ {fix_replacement}",
+                            "diff": f"- {stripped.replace(raw_secret, '[REDACTED]', 1)}\n+ {safe_replacement}",
                             "fix_cmd": f"sed -n '{max(1, line_no-2)},{line_no+2}p' {rel_path}",
                         })
                         if len(findings) >= 20:

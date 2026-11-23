@@ -9008,15 +9008,33 @@ def build_portal_html(data, is_shareable=False):
 
       advisories.forEach(adv => {
         if (!actionItems.some(x => x.title.includes(adv.cve || adv.pkg))) {
+          const pkgName = String(adv.package_name || adv.pkg || '').replace(/\s*\([^)]+\)\s*$/, '').trim();
+          const eco = String(adv.ecosystem || ((String(adv.pkg || '').match(/\(([^)]+)\)\s*$/) || [])[1]) || 'npm').toLowerCase();
+          const fixedVer = adv.fixed_version || adv.safe_version || '';
+          const installedVer = adv.installed || '';
+          let targetFile = 'package.json (依存ライブラリ)';
+          let fixCmd = fixedVer ? `npm install ${pkgName}@^${fixedVer}` : `npm install ${pkgName}@latest`;
+          let diffText = (fixedVer && installedVer) ? `- "${pkgName}": "^${installedVer}"\n+ "${pkgName}": "^${fixedVer}"` : '';
+          if (eco === 'pypi') {
+            targetFile = 'requirements.txt (依存ライブラリ)';
+            fixCmd = fixedVer ? `pip install --upgrade "${pkgName}>=${fixedVer}"` : `pip install --upgrade "${pkgName}"`;
+            diffText = (fixedVer && installedVer) ? `- ${pkgName}==${installedVer}\n+ ${pkgName}>=${fixedVer}` : '';
+          } else if (eco === 'go') {
+            targetFile = 'go.mod (依存ライブラリ)';
+            const normFix = fixedVer ? `v${String(fixedVer).replace(/^v/, '')}` : '';
+            const normInst = installedVer ? `v${String(installedVer).replace(/^v/, '')}` : '';
+            fixCmd = normFix ? `go get ${pkgName}@${normFix}` : `go get -u ${pkgName}`;
+            diffText = (normFix && normInst) ? `- ${pkgName} ${normInst}\n+ ${pkgName} ${normFix}` : '';
+          }
           actionItems.push({
             id: adv.cve || 'cve',
             severity: adv.severity || 'CRITICAL',
-            title: `${adv.cve || 'CVE'}: ${adv.title || adv.pkg}`,
-            file: 'package.json (依存ライブラリ)',
+            title: `${adv.cve || 'CVE'}: ${adv.title || pkgName}`,
+            file: targetFile,
             desc: adv.summary || adv.msg || '既知のセキュリティ脆弱性が報告されています。',
-            fix_cmd: `npm install ${adv.pkg}@${adv.safe_version || 'latest'}`,
+            fix_cmd: fixCmd,
             official_source: (adv.sources && adv.sources[0]) ? adv.sources[0].url : 'https://nvd.nist.gov/',
-            diff: `- "${adv.pkg}": "${adv.installed || '*'}"\n+ "${adv.pkg}": "${adv.safe_version || '最新パッチ版'}"`
+            diff: diffText
           });
         }
       });
