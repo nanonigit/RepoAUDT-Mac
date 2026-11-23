@@ -8717,7 +8717,7 @@ def build_portal_html(data, is_shareable=False):
                   ` : ''}
                   <div class="issue-actions">
                     ${issue.scanner !== 'runtime-inventory' ? `<button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${prompt}">${en ? 'Copy fix prompt' : '修正プロンプトをコピー'}</button>` : ''}
-                    <button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${report}">${en ? 'Copy report' : 'レポートをコピー'}</button>
+                    <button type="button" class="table-view-btn" onclick="copySingleActionReport('${report}', '${name}', this)">${en ? 'Copy report' : 'レポートをコピー'}</button>
                     <button type="button" class="table-view-btn" onclick="downloadSingleActionReport('${report}', '${name}')">${en ? 'Save report' : 'レポートを保存'}</button>
                     ${sourceLink}
                   </div>

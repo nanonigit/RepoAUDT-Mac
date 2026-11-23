@@ -891,6 +891,9 @@ function renderAuditChat() {
 
   section.innerHTML = `<div class="audit-chat-inner">
     <header>
+      <div class="issue-actions" style="margin-bottom: 8px;">
+        <button type="button" id="audit-chat-back" class="table-view-btn">${auditLabel('← Back to Audit Results', '← 監査結果に戻る')}</button>
+      </div>
       <h2>${escapeHtml(displayTitle)}</h2>
       <p style="font-size: 0.88rem; margin-top: 2px;">
         ${auditLabel('Audit chat', '監査チャット')}${displayRepo ? ` · <strong>${escapeHtml(displayRepo)}</strong>` : ''}
@@ -938,6 +941,10 @@ function renderAuditChat() {
       <p class="audit-note">${auditLabel('Your question, recent conversation and evidence metadata are sent to the configured AI provider.', '質問・直近の会話・監査の比較結果を設定済みAIに送ります。')}</p>
     </form>`}
   </div>`;
+  const backBtn = section.querySelector('#audit-chat-back');
+  if (backBtn) {
+    backBtn.onclick = () => jumpToAuditRepoPage(state.repository, state.context?.title || '');
+  }
   const historySelect = section.querySelector('#audit-chat-history');
   if (historySelect) {
     historySelect.onchange = () => selectAuditConversationById(historySelect.value);

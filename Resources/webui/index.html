@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/23 08:26:13</strong>
+              <strong id="portal-sync-time">2026/11/23 08:59:31</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -8603,7 +8603,7 @@
                   ` : ''}
                   <div class="issue-actions">
                     ${issue.scanner !== 'runtime-inventory' ? `<button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${prompt}">${en ? 'Copy fix prompt' : '修正プロンプトをコピー'}</button>` : ''}
-                    <button type="button" class="table-view-btn" onclick="copyCmdFromButton(this)" data-cmd="${report}">${en ? 'Copy report' : 'レポートをコピー'}</button>
+                    <button type="button" class="table-view-btn" onclick="copySingleActionReport('${report}', '${name}', this)">${en ? 'Copy report' : 'レポートをコピー'}</button>
                     <button type="button" class="table-view-btn" onclick="downloadSingleActionReport('${report}', '${name}')">${en ? 'Save report' : 'レポートを保存'}</button>
                     ${sourceLink}
                   </div>
@@ -12508,6 +12508,9 @@ function renderAuditChat() {
 
   section.innerHTML = `<div class="audit-chat-inner">
     <header>
+      <div class="issue-actions" style="margin-bottom: 8px;">
+        <button type="button" id="audit-chat-back" class="table-view-btn">${auditLabel('← Back to Audit Results', '← 監査結果に戻る')}</button>
+      </div>
       <h2>${escapeHtml(displayTitle)}</h2>
       <p style="font-size: 0.88rem; margin-top: 2px;">
         ${auditLabel('Audit chat', '監査チャット')}${displayRepo ? ` · <strong>${escapeHtml(displayRepo)}</strong>` : ''}
@@ -12555,6 +12558,10 @@ function renderAuditChat() {
       <p class="audit-note">${auditLabel('Your question, recent conversation and evidence metadata are sent to the configured AI provider.', '質問・直近の会話・監査の比較結果を設定済みAIに送ります。')}</p>
     </form>`}
   </div>`;
+  const backBtn = section.querySelector('#audit-chat-back');
+  if (backBtn) {
+    backBtn.onclick = () => jumpToAuditRepoPage(state.repository, state.context?.title || '');
+  }
   const historySelect = section.querySelector('#audit-chat-history');
   if (historySelect) {
     historySelect.onchange = () => selectAuditConversationById(historySelect.value);
