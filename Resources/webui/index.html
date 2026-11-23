@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/23 12:08:37</strong>
+              <strong id="portal-sync-time">2026/11/23 13:11:43</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -12741,6 +12741,57 @@ if (!window.__repoaudtFindingMenuBound) {
   });
 }
 
+function renderChatReferences(refs) {
+  if (!Array.isArray(refs) || refs.length === 0) return '';
+  const summary = auditLabel(`Used ${refs.length} references`, `参照したコンテキスト (${refs.length}件)`);
+  const kindIcon = kind => ({
+    file: '📄',
+    commit: '🔖',
+    finding: '🛡️',
+    instruction: '📘',
+    advisories: '⚠️',
+    eol: '⏳'
+  }[kind] || '•');
+  return `<details class="audit-chat-refs" style="margin: 6px 0 8px; font-size: 0.82rem; color: var(--workspace-muted);">
+    <summary style="cursor: pointer; user-select: none;">${escapeHtml(summary)}</summary>
+    <ul style="margin: 6px 0 0 18px; padding: 0; display: grid; gap: 3px;">
+      ${refs.map(ref => `<li>${kindIcon(ref.kind)} <code>${escapeHtml(ref.label || ref.path || '')}</code></li>`).join('')}
+    </ul>
+  </details>`;
+}
+
+function renderDiffPathChecks(checks) {
+  if (!Array.isArray(checks) || checks.length === 0) return '';
+  return `<div class="audit-diff-checks" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+    ${checks.map(item => {
+      const ok = Boolean(item.verified);
+      const border = ok ? 'rgba(34, 197, 94, 0.45)' : 'rgba(245, 158, 11, 0.55)';
+      const bg = ok ? 'rgba(34, 197, 94, 0.12)' : 'rgba(245, 158, 11, 0.14)';
+      const color = ok ? '#4ade80' : '#fbbf24';
+      const label = ok
+        ? auditLabel(`✓ Verified path: ${item.path}`, `✓ 実在確認済み: ${item.path}`)
+        : auditLabel(`⚠ Unverified path: ${item.path}`, `⚠ 未確認パス: ${item.path}`);
+      return `<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; border: 1px solid ${border}; background: ${bg}; color: ${color}; font-size: 0.78rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${escapeHtml(label)}</span>`;
+    }).join('')}
+  </div>`;
+}
+
+function regenerateLastAuditAnswer(state) {
+  if (!state || state.pending || !Array.isArray(state.messages) || state.messages.length === 0) return;
+  let lastUserIdx = -1;
+  for (let i = state.messages.length - 1; i >= 0; i--) {
+    if (state.messages[i].role === 'user') {
+      lastUserIdx = i;
+      break;
+    }
+  }
+  if (lastUserIdx < 0) return;
+  const question = state.messages[lastUserIdx].text;
+  state.messages = state.messages.slice(0, lastUserIdx);
+  state.draft = question;
+  sendAuditQuestion(state);
+}
+
 function renderAuditChat() {
   const state = auditConversation;
   if (!state) return;
@@ -12831,20 +12882,33 @@ function renderAuditChat() {
       </article>` : ''}
       ${state.latest ? `<details><summary>${auditLabel('Latest GitHub evidence', '最新のGitHub確認結果')}</summary>
         ${state.latest.path ? sourceComparison(state.latest) : repositoryFacts(state.latest)}</details>` : ''}
-      ${state.messages.map(message => `<article>
-        <strong>${message.role === 'user'
-          ? auditLabel('You', 'あなた')
-          : escapeHtml(message.provider ? `AI (${AUDIT_PROVIDER_LABELS[message.provider] || message.provider}${message.model ? ' · ' + message.model : ''})` : 'AI')}</strong>
+      ${state.messages.map((message, idx) => {
+        const isLastAssistant = message.role === 'assistant' && idx === state.messages.length - 1 && !state.pending;
+        return `<article>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <strong>${message.role === 'user'
+            ? auditLabel('You', 'あなた')
+            : escapeHtml(message.provider ? `AI (${AUDIT_PROVIDER_LABELS[message.provider] || message.provider}${message.model ? ' · ' + message.model : ''})` : 'AI')}</strong>
+          ${isLastAssistant ? `<button type="button" class="table-view-btn" data-audit-regenerate="1" style="font-size: 0.78rem; padding: 2px 8px;">${auditLabel('↻ Regenerate', '↻ 再生成')}</button>` : ''}
+        </div>
+        ${message.role === 'assistant' ? renderChatReferences(message.references) : ''}
         <p>${escapeHtml(message.text)}</p>
-      </article>`).join('')}
+        ${message.role === 'assistant' ? renderDiffPathChecks(message.diffPathChecks) : ''}
+      </article>`;
+      }).join('')}
       ${state.pending ? `<p class="audit-chat-pending" role="status"><span class="audit-spinner" aria-hidden="true"></span><span>${auditLabel('Checking GitHub and waiting for AI…', 'GitHub を確認し、AI の回答を待っています…')}</span></p>` : ''}
       ${state.error ? `<p class="audit-chat-error" role="alert">${escapeHtml(state.error)}</p>` : ''}
     </div>
+    ${!state.pending ? `<div class="issue-actions" style="margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+      <button type="button" class="table-view-btn" data-audit-slash="/explain">${auditLabel('💡 /explain — Explain risk', '💡 /explain — 影響を解説')}</button>
+      <button type="button" class="table-view-btn" data-audit-slash="/fix">${auditLabel('🔧 /fix — Suggest fix', '🔧 /fix — 修正案を提示')}</button>
+      <button type="button" class="table-view-btn" data-audit-slash="/tests">${auditLabel('🧪 /tests — Regression tests', '🧪 /tests — 回帰テスト案')}</button>
+    </div>` : ''}
     ${state.suggestions && state.suggestions.length && !state.pending ? `<div class="issue-actions" style="margin-bottom: 8px; flex-wrap: wrap;">
       ${state.suggestions.map((item, idx) => `<button type="button" class="table-view-btn" data-audit-suggestion="${idx}">${escapeHtml(item.label)}</button>`).join('')}
     </div>` : ''}
     <form>
-      <label for="audit-question">${auditLabel('Question', '質問')}</label>
+      <label for="audit-question">${auditLabel('Question (supports /explain, /fix, /tests)', '質問（/explain, /fix, /tests 対応）')}</label>
       <textarea id="audit-question" required maxlength="4000" rows="3" placeholder="${auditLabel('What changed since the audit?', '監査時点から何が変わった？')}">${escapeHtml(state.draft)}</textarea>
       <div class="issue-actions">
         <button class="table-view-btn workspace-primary" type="submit" ${state.pending ? 'disabled' : ''}>
@@ -12886,6 +12950,18 @@ function renderAuditChat() {
       state.draft = item.prompt;
       sendAuditQuestion(state);
     };
+  }
+  for (const btn of section.querySelectorAll('[data-audit-slash]')) {
+    btn.onclick = () => {
+      const cmd = btn.dataset.auditSlash;
+      if (!cmd) return;
+      state.draft = cmd;
+      sendAuditQuestion(state);
+    };
+  }
+  const regenBtn = section.querySelector('[data-audit-regenerate]');
+  if (regenBtn) {
+    regenBtn.onclick = () => regenerateLastAuditAnswer(state);
   }
   const input = section.querySelector('textarea');
   if (!input) return;
@@ -12945,7 +13021,9 @@ async function sendAuditQuestion(state) {
         role: 'assistant',
         text: response.answer,
         provider: response.provider,
-        model: response.model
+        model: response.model,
+        references: Array.isArray(response.references) ? response.references : [],
+        diffPathChecks: Array.isArray(response.diff_path_checks) ? response.diff_path_checks : []
       });
     } else state.error = response.ai_error;
   } catch (error) {

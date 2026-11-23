@@ -22,6 +22,7 @@ import copilot_bridge
 from workflow_audit import MAX_FILES, find_template_injections_in_workflow, read_small_file, run_actionlint, run_zizmor, workflow_files
 from source_scanners import scan_semgrep_and_trivy, scan_source
 from runtime_patches import scan_runtime_patches
+from eol_checker import evaluate_runtime_eol
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -899,11 +900,14 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
     source_scan = {**source_scan, **ext_scan}
     security_advisories = enrich_advisories_with_epss(security_advisories)
 
+    runtime_eol = evaluate_runtime_eol(runtime_info) if runtime_info else []
+
     return {
         "frameworks": frameworks,
         "databases": databases,
         "ai_sdks": ai_sdks,
         "runtime": runtime_info,
+        "runtime_eol": runtime_eol,
         "security_advisories": security_advisories,
         "sast_findings": sast_findings,
         "workflow_scan": workflow_scan,
