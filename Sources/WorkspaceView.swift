@@ -126,6 +126,8 @@ struct MainContentView: View {
     @State private var listRefreshNote = ""
     @State private var didInitializeLaunchPage = false
     @State private var triggerSidebarAppUpdate = false
+    @State private var headerCommit = ""
+    @State private var lastUpdateCheckLabel = ""
 
     private struct AppUpdateInfo {
         let localCommit: String
@@ -620,7 +622,7 @@ struct MainContentView: View {
 
     private var appVersionLabel: String {
         let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.0"
-        return "v\(ver)"
+        return headerCommit.isEmpty ? "v\(ver)" : "v\(ver) (\(headerCommit))"
     }
 
     private var dashboard: some View {
@@ -629,13 +631,34 @@ struct MainContentView: View {
                 HStack(alignment: .center, spacing: 12) {
                     Text("RepoAUDT Mac")
                         .font(.title2.bold())
-                    Spacer()
                     Text(appVersionLabel)
                         .font(.caption.monospaced())
-                        .foregroundStyle(SemanticColors.role("actionText"))
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(SemanticColors.role("action").opacity(0.15), in: Capsule())
+                        .background(Color.secondary.opacity(0.16), in: Capsule())
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(appVersionLabel)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                        if !lastUpdateCheckLabel.isEmpty {
+                            Text(english ? "Checked: \(lastUpdateCheckLabel)" : "確認: \(lastUpdateCheckLabel)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Button {
+                        triggerSidebarAppUpdate = true
+                        showPage(.system)
+                    } label: {
+                        Label(english ? "Update" : "アップデート", systemImage: "arrow.down.circle")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!backend.isReady)
+                }
+                .task {
+                    await refreshDashboardVersionHeader()
                 }
                 GroupBox {
                     HStack(spacing: 20) {
@@ -912,6 +935,21 @@ struct MainContentView: View {
             coordinator.send("refresh")
         } catch {
             repoActionError = error.localizedDescription
+        }
+    }
+
+    private func refreshDashboardVersionHeader() async {
+        guard backend.isReady else { return }
+        do {
+            let json = try await requestJSON("/api/app/update/check")
+            if let commit = json["local_commit"] as? String, !commit.isEmpty {
+                headerCommit = commit
+            }
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy/MM/dd HH:mm"
+            lastUpdateCheckLabel = fmt.string(from: Date())
+        } catch {
+            // Keep silent in background header check.
         }
     }
 
