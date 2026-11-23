@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/23 22:25:05</strong>
+              <strong id="portal-sync-time">2026/11/23 22:54:16</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -8586,9 +8586,10 @@
       };
       const inferTier = it => {
         if (it.priority_tier) return String(it.priority_tier).toUpperCase();
+        const title = String(it.title || '');
+        if (it.is_malware || it.category === 'malware' || it.category === 'secrets' || title.includes('シークレット設定ファイル漏洩') || title.includes('シークレット漏洩検知')) return 'P0';
         const s = String(it.severity || 'medium').toLowerCase();
-        if (s === 'critical') return 'P0';
-        if (s === 'high') return 'P1';
+        if (s === 'critical' || s === 'high') return 'P1';
         if (s === 'medium' || s === 'warning') return 'P2';
         return 'P3';
       };

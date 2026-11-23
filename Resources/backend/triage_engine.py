@@ -19,19 +19,22 @@ KEV_TIMEOUT_SECONDS = 2.5
 TIER_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "warning": 2, "low": 3, "info": 4}
 
-_P1_KEYWORDS = (
+_P1_PHRASES = (
     "remote code execution",
-    "rce",
+    "execute arbitrary code",
+    "arbitrary code execution",
+    "auth bypass",
     "authentication bypass",
     "middleware bypass",
     "authorization bypass",
-    "ssrf",
+    "oauth",
+    "ip spoofing",
     "server-side request forgery",
     "sql injection",
     "arbitrary file read",
-    "prototype pollution",
     "improper categorization in ispublic",
 )
+_P1_WORD_RE = re.compile(r"\b(?:rce|ssrf|sqli|xss)\b", re.IGNORECASE)
 _P3_LOW_IMPACT_PACKAGES = {"postcss", "source-map-js", "nanoid", "brace-expansion", "picomatch"}
 _CVE_RE = re.compile(r"\b(CVE-\d{4}-\d{4,7})\b", re.IGNORECASE)
 _PRERELEASE_VER_RE = re.compile(r"-(?:rc|alpha|beta|dev|canary|preview|next|pre)(?:[.\-\d]|$)", re.IGNORECASE)
@@ -212,7 +215,8 @@ def classify_priority_tier(item: Dict[str, Any], kev_set: Optional[Set[str]] = N
     if item.get("is_malware") or str(item.get("category") or "").lower() == "malware" or "マルウェアパッケージ検出" in title:
         return "P0", "OpenSSF Malicious Package (MAL-*) — 即時アンインストール・侵害調査が必要"
     if (
-        "シークレット設定ファイル漏洩" in title
+        str(item.get("category") or "").lower() == "secrets"
+        or "シークレット設定ファイル漏洩" in title
         or "シークレット漏洩検知" in title
         or scanner == "gitleaks"
         or rule_id in ("aws-access-token", "openai-api-key", "private-key")
@@ -230,10 +234,32 @@ def classify_priority_tier(item: Dict[str, Any], kev_set: Optional[Set[str]] = N
         return "P1", "CISA KEV 登録済み（実環境での悪用確認済みCVE）"
     if epss_val >= 0.10:
         return "P1", f"EPSS 悪用確率が高い脆弱性 ({epss_val:.0%})"
-    if reachability not in ("unlikely", "mitigated") and any(kw in low_blob for kw in _P1_KEYWORDS):
-        if any(pkg in low_title for pkg in _P3_LOW_IMPACT_PACKAGES) and "rce" not in low_blob:
+
+    # Preserve highest inherited priority on aggregated dependency findings
+    existing_tier = str(item.get("priority_tier") or "").upper()
+    if ("[依存関係脆弱性集約]" in title or item.get("aggregated")) and existing_tier in ("P0", "P1"):
+        if reachability not in ("unlikely", "mitigated"):
+            return existing_tier, str(item.get("priority_reason") or "集約CVE内の最高優先度を引き継ぎ")
+
+    has_p1_keyword = (
+        bool(_P1_WORD_RE.search(low_blob))
+        or any(kw in low_blob for kw in _P1_PHRASES)
+        or ("prototype pollution" in low_blob and sev in ("critical", "high"))
+    )
+    if reachability not in ("unlikely", "mitigated") and has_p1_keyword:
+        if any(pkg in low_title for pkg in _P3_LOW_IMPACT_PACKAGES) and not _P1_WORD_RE.search(low_blob):
             return "P3", "ビルドツール/間接依存の軽微な影響"
         return "P1", "RCE・認証/認可バイパス・SSRF等の重大脆弱性"
+
+    is_dependency_vuln = bool(
+        item.get("package_name")
+        or item.get("pkg")
+        or cves
+        or "[依存関係脆弱性集約]" in title
+        or str(item.get("category") or "").lower() == "sca"
+    )
+    if is_dependency_vuln and sev == "critical" and reachability not in ("unlikely", "mitigated"):
+        return "P1", "CRITICAL 重要度の依存関係脆弱性"
 
     # P3: Build/dev-tool minor DoS, zizmor unpinned-uses, unlikely/mitigated, low/info
     if reachability in ("unlikely", "mitigated"):

@@ -983,6 +983,21 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
         raw_fixed = str(adv.get("fixed_versions_all") or adv.get("fixed_version") or adv.get("safe_version") or "").strip()
         adv_safe = select_safe_upgrade_version(raw_fixed, installed, pick_highest_same_major=False)
 
+        from triage_engine import TIER_ORDER, classify_priority_tier
+
+        adv_probe = {
+            "severity": sev,
+            "title": str(adv.get("title") or "").strip(),
+            "desc": str(adv.get("summary") or "").strip(),
+            "package_name": pkg_name,
+            "cve": cve_label,
+            "epss_score": adv.get("epss_score"),
+            "in_cisa_kev": bool(adv.get("in_cisa_kev") or adv.get("is_kev")),
+            "category": "sca",
+        }
+        adv_tier, adv_reason = classify_priority_tier(adv_probe)
+        adv_kev = bool(adv_probe.get("in_cisa_kev"))
+
         if key not in groups:
             order.append(key)
             groups[key] = {
@@ -991,6 +1006,9 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
                 "installed": installed,
                 "target_file": target_file,
                 "severity": sev,
+                "best_tier": adv_tier,
+                "best_reason": adv_reason,
+                "in_cisa_kev": adv_kev,
                 "cves": [cve_label] if cve_label else [],
                 "fixed_version": adv_safe,
                 "epss_score": adv.get("epss_score"),
@@ -1002,6 +1020,11 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
             g = groups[key]
             if _SEV_ORDER.get(sev, 0) > _SEV_ORDER.get(g["severity"], 0):
                 g["severity"] = sev
+            if TIER_ORDER.get(adv_tier, 99) < TIER_ORDER.get(g["best_tier"], 99):
+                g["best_tier"] = adv_tier
+                g["best_reason"] = adv_reason
+            if adv_kev:
+                g["in_cisa_kev"] = True
             if cve_label and cve_label not in g["cves"]:
                 g["cves"].append(cve_label)
             if adv_safe and (not g["fixed_version"] or _adv_version_tuple(adv_safe) > _adv_version_tuple(g["fixed_version"])):
@@ -1047,6 +1070,10 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
             desc = g["first_summary"] or "既知の脆弱性が報告されています。安全版へのアップデートが必要です。"
         grouped_items.append({
             "severity": g["severity"],
+            "priority_tier": g["best_tier"],
+            "priority_reason": g["best_reason"],
+            "aggregated": len(cves) > 1,
+            "category": "sca",
             "title": title,
             "file": g["target_file"],
             "desc": desc,
@@ -1054,6 +1081,7 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
             "fix_cmd": rem["fix_cmd"],
             "official_source": g["official_source"],
             "package_name": pkg_name,
+            **({"in_cisa_kev": True} if g.get("in_cisa_kev") else {}),
             **({"epss_score": g["epss_score"]} if g.get("epss_score") is not None else {}),
         })
     return malware_items + grouped_items

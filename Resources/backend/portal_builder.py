@@ -8700,9 +8700,10 @@ def build_portal_html(data, is_shareable=False):
       };
       const inferTier = it => {
         if (it.priority_tier) return String(it.priority_tier).toUpperCase();
+        const title = String(it.title || '');
+        if (it.is_malware || it.category === 'malware' || it.category === 'secrets' || title.includes('シークレット設定ファイル漏洩') || title.includes('シークレット漏洩検知')) return 'P0';
         const s = String(it.severity || 'medium').toLowerCase();
-        if (s === 'critical') return 'P0';
-        if (s === 'high') return 'P1';
+        if (s === 'critical' || s === 'high') return 'P1';
         if (s === 'medium' || s === 'warning') return 'P2';
         return 'P3';
       };

@@ -694,6 +694,9 @@ def scan_secrets_and_credentials(
                 target_node = match_comp(rel_path)
                 findings.append({
                     "severity": "critical",
+                    "priority_tier": "P0",
+                    "priority_reason": "実シークレット漏洩 / 認証ファイル露出（即時無効化が必要）",
+                    "category": "secrets",
                     "title": f"🚨 [シークレット設定ファイル漏洩] `{file_path.name}` がリポジトリにコミットされています",
                     "file": f"{rel_path}:1 (Target: {target_node})",
                     "target_node": target_node,
@@ -734,6 +737,9 @@ def scan_secrets_and_credentials(
                         redacted_removed = _build_redacted_diff_removed_line(rel_path, stripped)
                         findings.append({
                             "severity": "critical",
+                            "priority_tier": "P0",
+                            "priority_reason": "実シークレット漏洩 / 認証ファイル露出（即時無効化が必要）",
+                            "category": "secrets",
                             "title": f"🚨 [シークレット漏洩検知] {secret_name} が平文でハードコードされています ({file_path.name}:{line_no})",
                             "file": f"{rel_path}:{line_no} (Target: {target_node})",
                             "target_node": target_node,
