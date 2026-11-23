@@ -91,3 +91,90 @@ class WorkflowAuditTests(unittest.TestCase):
         self.assertEqual(
             workflow_audit.run_zizmor([self.file], str), (None, "tool_error")
         )
+
+    def test_template_injection_detects_run_and_generates_valid_yaml_diff(self):
+        self.file.write_text(
+            "name: PR Check\n"
+            "on: pull_request\n"
+            "jobs:\n"
+            "  build:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            '      - run: echo "${{ github.event.pull_request.title }}"\n',
+            encoding="utf-8",
+        )
+        findings = engine.scan_github_actions_workflows(self.repo, lambda _: "CI")
+        inj = [f for f in findings if f["rule_id"] == "template-injection"]
+        self.assertEqual(len(inj), 1)
+        diff = inj[0]["diff"]
+        self.assertNotIn("UNTRUSTED_INPUT", diff)
+        self.assertIn("PR_TITLE: ${{ github.event.pull_request.title }}", diff)
+        self.assertIn('run: echo "$PR_TITLE"', diff)
+
+    def test_template_injection_excludes_safe_env_with_and_concurrency_contexts(self):
+        self.file.write_text(
+            "name: ${{ github.event.pull_request.title }}\n"
+            "on: pull_request\n"
+            "concurrency:\n"
+            "  group: ci-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.ref }}\n"
+            "jobs:\n"
+            "  notify:\n"
+            "    if: github.event.pull_request.title != ''\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - uses: actions/checkout@v4\n"
+            "        with:\n"
+            "          fetch-depth: 0\n"
+            "          ref: ${{ github.event.pull_request.head.ref }}\n"
+            "      - name: Post to Slack and capture thread_ts\n"
+            "        uses: actions/github-script@v7\n"
+            "        env:\n"
+            "          PR_BODY: ${{ github.event.pull_request.body }}\n"
+            "        with:\n"
+            "          script: |\n"
+            "            const prBody = process.env.PR_BODY || '';\n",
+            encoding="utf-8",
+        )
+        findings = engine.scan_github_actions_workflows(self.repo, lambda _: "CI")
+        inj = [f for f in findings if f["rule_id"] == "template-injection"]
+        self.assertEqual(inj, [])
+
+    def test_template_injection_detects_github_script_without_broken_run_diff(self):
+        self.file.write_text(
+            "name: Script\n"
+            "on: pull_request\n"
+            "jobs:\n"
+            "  comment:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - uses: actions/github-script@v7\n"
+            "        with:\n"
+            "          script: |\n"
+            '            const title = "${{ github.event.pull_request.title }}";\n',
+            encoding="utf-8",
+        )
+        findings = engine.scan_github_actions_workflows(self.repo, lambda _: "CI")
+        inj = [f for f in findings if f["rule_id"] == "template-injection"]
+        self.assertEqual(len(inj), 1)
+        self.assertNotIn("diff", inj[0])
+        self.assertIn("process.env.PR_TITLE", inj[0]["remediation"])
+
+    def test_template_injection_pwsh_multiline_run_diff(self):
+        self.file.write_text(
+            "name: Windows\n"
+            "on: pull_request\n"
+            "jobs:\n"
+            "  win:\n"
+            "    runs-on: windows-latest\n"
+            "    steps:\n"
+            "      - name: Print title\n"
+            "        shell: pwsh\n"
+            "        run: |\n"
+            '          Write-Host "${{ github.event.pull_request.title }}"\n',
+            encoding="utf-8",
+        )
+        findings = engine.scan_github_actions_workflows(self.repo, lambda _: "CI")
+        inj = [f for f in findings if f["rule_id"] == "template-injection"]
+        self.assertEqual(len(inj), 1)
+        self.assertIn("$env:PR_TITLE", inj[0]["diff"])
+        self.assertIn("PR_TITLE: ${{ github.event.pull_request.title }}", inj[0]["diff"])

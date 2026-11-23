@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from connection_utils import validate_endpoint, open_endpoint
 import copilot_bridge
-from workflow_audit import MAX_FILES, read_small_file, run_zizmor, workflow_files
+from workflow_audit import MAX_FILES, find_template_injections_in_workflow, read_small_file, run_zizmor, workflow_files
 from source_scanners import scan_source
 from runtime_patches import scan_runtime_patches
 import uuid
@@ -879,10 +879,6 @@ def scan_github_actions_workflows(
     """
     findings: List[Dict[str, Any]] = []
 
-    untrusted_expr_re = re.compile(
-        r"\$\{\{\s*github\.(?:head_ref|event\.(?:issue|pull_request|comment|review|discussion|commits|head_commit|pages)\.[A-Za-z0-9_.\[\]]*(?:title|body|message|ref|label|name|email|page_name))\s*\}\}",
-        re.IGNORECASE,
-    )
     unpinned_uses_re = re.compile(
         r"^\s*-?\s*uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@(main|master|HEAD|develop)\b"
     )
@@ -901,25 +897,28 @@ def scan_github_actions_workflows(
         tnode = match_comp(rel_path)
         has_pr_target = bool(re.search(r"\bpull_request_target\b", content))
 
+        # 1. Script injection via ${{ github.event.* }} in executable contexts only
+        for inj in find_template_injections_in_workflow(content):
+            inj_idx = inj["line_no"]
+            expr = inj["expr"]
+            item: Dict[str, Any] = {
+                "severity": "critical",
+                "rule_id": "template-injection",
+                "title": f"🚨 [GitHub Actions監査] `${{{{ ... }}}}` によるシェルインジェクションリスク ({wf.name}:{inj_idx})",
+                "file": f"{rel_path}:{inj_idx} (Target: {tnode})",
+                "target_node": tnode,
+                "desc": f"`{rel_path}` の {inj_idx}行目で外部入力由来のコンテキスト式 `{expr}` が直接展開されています。PRタイトルやブランチ名にシェルメタ文字が含まれると任意コマンド実行 (RCE) につながるため、{inj['remediation']}",
+                "remediation": inj["remediation"],
+                "fix_cmd": f"sed -n '{max(1, inj_idx-2)},{inj_idx+2}p' {rel_path}",
+            }
+            if inj["diff"]:
+                item["diff"] = inj["diff"]
+            findings.append(item)
+
         for idx, line in enumerate(lines, start=1):
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
-
-            # 1. Script injection via ${{ github.event.* }}
-            m_inj = untrusted_expr_re.search(stripped)
-            if m_inj:
-                expr = m_inj.group(0)
-                findings.append({
-                    "severity": "critical",
-                    "rule_id": "template-injection",
-                    "title": f"🚨 [GitHub Actions監査] `${{{{ ... }}}}` によるシェルインジェクションリスク ({wf.name}:{idx})",
-                    "file": f"{rel_path}:{idx} (Target: {tnode})",
-                    "target_node": tnode,
-                    "desc": f"`{rel_path}` の {idx}行目で外部入力由来のコンテキスト式 `{expr}` が直接展開されています。PRタイトルやブランチ名にシェルメタ文字が含まれると任意コマンド実行 (RCE) につながるため、`env:` 環境変数経由で参照してください。",
-                    "diff": f"- {stripped}\n+ env:\n+   UNTRUSTED_INPUT: {expr}\n+ run: echo \"$UNTRUSTED_INPUT\"",
-                    "fix_cmd": f"sed -n '{max(1, idx-2)},{idx+2}p' {rel_path}",
-                })
 
             # 2. Pwn request: pull_request_target + checkout of PR head
             if has_pr_target and "github.event.pull_request.head" in stripped and ("ref:" in stripped or "sha" in stripped):
