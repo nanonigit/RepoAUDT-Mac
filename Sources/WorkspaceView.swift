@@ -730,6 +730,7 @@ struct MainContentView: View {
                         .padding(14)
                     }
                 }
+                let allRepos = coordinator.repositories
                 GroupBox {
                     HStack(spacing: 20) {
                         Image(systemName: "checkmark.shield").font(.system(size: 32)).foregroundStyle(SemanticColors.role("actionText"))
@@ -740,18 +741,48 @@ struct MainContentView: View {
                                     "監査結果・コードの構成・実行フローをひとつの場所で確認できます。")
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
+                            if !listRefreshNote.isEmpty {
+                                Text(listRefreshNote)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(SemanticColors.role("actionText"))
+                            }
                         }
                         Spacer(minLength: 0)
-                        Button(english ? "Add repository" : "リポジトリを追加") {
-                            showPage(.audit)
-                            coordinator.send("analyze")
+                        HStack(spacing: 10) {
+                            if !allRepos.isEmpty {
+                                Button {
+                                    Task { await reloadAndAnalyzeRepositories() }
+                                } label: {
+                                    if refreshingList {
+                                        HStack(spacing: 6) {
+                                            ProgressView().controlSize(.small)
+                                            Text(english ? "Analyzing…" : "解析中…")
+                                        }
+                                    } else {
+                                        Label(english ? "Start Analysis" : "解析を開始", systemImage: "play.fill")
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(refreshingList || !backend.isReady)
+                            }
+                            if allRepos.isEmpty {
+                                Button(english ? "Add repository" : "リポジトリを追加") {
+                                    showPage(.audit)
+                                    coordinator.send("analyze")
+                                }
+                                .buttonStyle(.borderedProminent)
+                            } else {
+                                Button(english ? "Add repository" : "リポジトリを追加") {
+                                    showPage(.audit)
+                                    coordinator.send("analyze")
+                                }
+                                .buttonStyle(.bordered)
+                            }
                         }
-                        .buttonStyle(.borderedProminent)
                     }
                     .padding(18)
                 }
 
-                let allRepos = coordinator.repositories
                 let totalFindings = allRepos.reduce(0) { $0 + $1.findings }
                 let highRiskRepos = allRepos.filter { severityRank($0.severity) >= 4 }
                 let highRiskFindings = highRiskRepos.reduce(0) { $0 + $1.findings }
