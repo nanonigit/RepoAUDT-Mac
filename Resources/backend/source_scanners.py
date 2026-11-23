@@ -118,8 +118,26 @@ _DOC_OR_TEST_PLACEHOLDERS = (
 )
 
 
+_PUBLIC_CLIENT_KEY_RE = re.compile(
+    r"(?:reCaptchaKey|RECAPTCHA_SITE_KEY|NEXT_PUBLIC_[A-Z0-9_]+|VITE_PUBLIC_[A-Z0-9_]+)",
+)
+
+
+def _is_public_client_key_line(line: str) -> bool:
+    low = line.lower()
+    if any(priv in low for priv in ("private_key", "secret_key", "client_secret", "api_secret")):
+        return False
+    return bool(_PUBLIC_CLIENT_KEY_RE.search(line))
+
+
 def _is_benign_generic_api_key(directory: Path, relative: str, line: int) -> bool:
-    """Return True if a generic-api-key hit is an obvious doc/test/example/seed entry."""
+    """Return True if a generic-api-key hit is an obvious doc/test/example/seed entry or public client key."""
+    try:
+        lines = (directory / relative).read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        lines = []
+    if 1 <= line <= len(lines) and _is_public_client_key_line(lines[line - 1]):
+        return True
     rel_low = relative.lower().replace("\\", "/")
     parts = [p.lower() for p in Path(relative).parts]
     name = parts[-1] if parts else ""
@@ -494,7 +512,24 @@ def _select_best_fixed_version(raw_fixed: str, installed: str = "") -> str:
     return select_safe_upgrade_version(raw_fixed, installed, pick_highest_same_major=False)
 
 
-def parse_trivy(raw, files, match_component):
+def _is_internal_alb_terraform(repo_dir: Optional[Path], target: str) -> bool:
+    """Return True if the Terraform module containing target defines an internal=true aws_lb."""
+    if not repo_dir:
+        return False
+    mod_dir = (Path(repo_dir) / target).parent
+    if not mod_dir.is_dir():
+        return False
+    for tf in mod_dir.glob("*.tf"):
+        try:
+            text = tf.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if re.search(r'resource\s+"aws_lb"\s+"', text) and re.search(r"^\s*internal\s*=\s*true\b", text, re.MULTILINE):
+            return True
+    return False
+
+
+def parse_trivy(raw, files, match_component, *, repo_dir: Optional[Path] = None):
     """Parse Trivy FS JSON output into (misconfig_findings, vulnerability_advisories)."""
     text = raw.decode("utf-8", errors="ignore").strip() if isinstance(raw, (bytes, bytearray)) else str(raw).strip()
     if not text:
@@ -568,7 +603,12 @@ def parse_trivy(raw, files, match_component):
             if resolution:
                 desc = f"{desc} 修正案: {resolution}"
             ref_url = str(misconf.get("PrimaryURL") or "https://avd.aquasec.com/")
-            findings.append({
+            reachability = None
+            if rule_id.upper() == "AVD-AWS-0054" and _is_internal_alb_terraform(repo_dir, target):
+                sev = "medium"
+                reachability = "mitigated"
+                desc = f"{desc} （VPC内部専用ALB: internal = true を検知）"
+            item_dict = {
                 "severity": sev,
                 "title": f"[trivy] {title} ({Path(target).name}:{line_int})",
                 "file": f"{target}:{line_int} (Target: {component})",
@@ -577,7 +617,10 @@ def parse_trivy(raw, files, match_component):
                 "official_source": ref_url,
                 "scanner": "trivy",
                 "rule_id": rule_id,
-            })
+            }
+            if reachability:
+                item_dict["reachability"] = reachability
+            findings.append(item_dict)
 
     return findings, advisories
 
@@ -673,7 +716,7 @@ def scan_semgrep_and_trivy(repo, match_component, *, include_sast=True, include_
             ]
             try:
                 raw = run_read_only(cmd, directory, base_env, allowed=(0,), timeout=35)
-                misconfs, vulns = parse_trivy(raw, files, match_component)
+                misconfs, vulns = parse_trivy(raw, files, match_component, repo_dir=directory)
                 if include_sast:
                     sast_findings.extend(misconfs)
                 if include_vuln:

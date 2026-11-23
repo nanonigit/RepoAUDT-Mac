@@ -963,6 +963,7 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
                 "severity": sev,
                 "cves": [cve_label] if cve_label else [],
                 "fixed_version": adv_safe,
+                "epss_score": adv.get("epss_score"),
                 "first_title": str(adv.get("title") or "").strip(),
                 "first_summary": str(adv.get("summary") or "").strip(),
                 "official_source": (adv.get("sources") or [{}])[0].get("url", "") if isinstance(adv.get("sources"), list) and adv.get("sources") else "",
@@ -975,6 +976,14 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
                 g["cves"].append(cve_label)
             if adv_safe and (not g["fixed_version"] or _adv_version_tuple(adv_safe) > _adv_version_tuple(g["fixed_version"])):
                 g["fixed_version"] = adv_safe
+            if adv.get("epss_score") is not None:
+                try:
+                    cur_e = float(g.get("epss_score") or 0.0)
+                    new_e = float(adv["epss_score"])
+                    if new_e > cur_e:
+                        g["epss_score"] = new_e
+                except (TypeError, ValueError):
+                    pass
             if not g["installed"] and installed:
                 g["installed"] = installed
             if Path(target_file).name.lower() in manifest_names:
@@ -1014,6 +1023,8 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
             "diff": rem["diff"],
             "fix_cmd": rem["fix_cmd"],
             "official_source": g["official_source"],
+            "package_name": pkg_name,
+            **({"epss_score": g["epss_score"]} if g.get("epss_score") is not None else {}),
         })
     return grouped_items
 
@@ -1180,6 +1191,22 @@ def run_coderabbit_static_audit(
         }
         for c in components
     ]
+
+    from triage_engine import fetch_cisa_kev_set, triage_and_validate_findings
+
+    kev_set = fetch_cisa_kev_set()
+    action_items = triage_and_validate_findings(
+        action_items,
+        repo_id=repo_name,
+        repo_dir=repo_dir,
+        kev_set=kev_set,
+    )
+    findings = triage_and_validate_findings(
+        findings,
+        repo_id=repo_name,
+        repo_dir=repo_dir,
+        kev_set=kev_set,
+    )
 
     crit_cnt = sum(1 for a in action_items if str(a.get("severity", "")).lower() in ("critical", "high"))
     warn_cnt = sum(1 for a in action_items if str(a.get("severity", "")).lower() in ("warning", "medium"))
@@ -1868,6 +1895,7 @@ def _load_saved_analyses_unlocked() -> Dict[str, Any]:
             data.setdefault("techSpecs", {})
             data.setdefault("tableSchemas", {})
             data.setdefault("deleted_ids", [])
+            data.setdefault("suppressed_findings", {})
             # Normalize any legacy sequence objects missing `diagram` or `id` and coderabbit stats
             for d in data.get("diagrams", []):
                 for idx, s in enumerate(d.get("sequences", [])):
@@ -1925,6 +1953,44 @@ def load_saved_analyses() -> Dict[str, Any]:
         return _load_saved_analyses_unlocked()
 
 
+def set_finding_suppression(
+    fingerprint: str,
+    *,
+    reason: str = "",
+    suppress: bool = True,
+) -> Dict[str, Any]:
+    """Persist or remove a finding fingerprint in suppressed_findings and update saved diagrams."""
+    fp = str(fingerprint or "").strip()
+    if not fp:
+        raise ValueError("fingerprint is required")
+    local_ts, _ = now_timestamps()
+    with _STATE_LOCK:
+        state = _load_saved_analyses_unlocked()
+        supp = state.setdefault("suppressed_findings", {})
+        if suppress:
+            supp[fp] = {"reason": str(reason or "").strip(), "suppressed_at": local_ts}
+        else:
+            supp.pop(fp, None)
+
+        for d in state.get("diagrams", []):
+            cr = d.get("coderabbit")
+            if not isinstance(cr, dict):
+                continue
+            for lst_key in ("action_items", "findings"):
+                for item in cr.get(lst_key) or []:
+                    if isinstance(item, dict) and item.get("fingerprint") == fp:
+                        item["suppressed"] = bool(suppress)
+                        item["suppressed_reason"] = str(reason or "").strip() if suppress else ""
+        _write_json_atomic(STATE_FILE, state)
+        return dict(supp)
+
+
+def get_suppressed_findings() -> Dict[str, Any]:
+    with _STATE_LOCK:
+        state = _load_saved_analyses_unlocked()
+        return dict(state.get("suppressed_findings") or {})
+
+
 def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) -> Dict[str, Any]:
     with _STATE_LOCK:
         state = _load_saved_analyses_unlocked()
@@ -1970,10 +2036,19 @@ def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) 
         state["deleted_ids"] = list(deleted_ids)
 
         existing = []
+        previous_fps_by_id: Dict[str, set] = {}
         for d in state.get("diagrams", []):
             did = str(d.get("id") or "")
             durl = str(d.get("github_url") or "")
             if did in new_ids or did in replaced_ids or (durl, d.get("perspective")) in new_urls:
+                cr_old = d.get("coderabbit") or {}
+                fps = {
+                    str(it.get("fingerprint"))
+                    for it in (list(cr_old.get("action_items") or []) + list(cr_old.get("findings") or []))
+                    if isinstance(it, dict) and it.get("fingerprint")
+                }
+                if fps:
+                    previous_fps_by_id[did] = fps
                 continue
             if org_owner and (
                 did.startswith(f"gh-{org_owner}-")
@@ -1982,6 +2057,32 @@ def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) 
                 # Prune stale/renamed repo from this owner
                 continue
             existing.append(d)
+
+        suppressed_map = state.get("suppressed_findings") or {}
+        if previous_fps_by_id or suppressed_map:
+            from triage_engine import triage_and_validate_findings
+            for d in new_diagrams:
+                if not isinstance(d, dict):
+                    continue
+                cr = d.get("coderabbit")
+                if not isinstance(cr, dict):
+                    continue
+                prev_fps = previous_fps_by_id.get(str(d.get("id") or ""), set())
+                repo_label = str(d.get("repo") or d.get("id") or "")
+                if isinstance(cr.get("action_items"), list):
+                    cr["action_items"] = triage_and_validate_findings(
+                        cr["action_items"],
+                        repo_id=repo_label,
+                        previous_fingerprints=prev_fps,
+                        suppressed_map=suppressed_map,
+                    )
+                if isinstance(cr.get("findings"), list):
+                    cr["findings"] = triage_and_validate_findings(
+                        cr["findings"],
+                        repo_id=repo_label,
+                        previous_fingerprints=prev_fps,
+                        suppressed_map=suppressed_map,
+                    )
 
         state["diagrams"] = new_diagrams + existing
         state.setdefault("techSpecs", {}).update(result.get("techSpecs", {}))

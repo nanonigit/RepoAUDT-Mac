@@ -2064,14 +2064,28 @@ struct MainContentView: View {
                 var seenKeys = Set<String>()
                 var highItems: [[String: Any]] = []
                 for item in actionItems + findings {
+                    if (item["suppressed"] as? Bool) == true { continue }
                     let sev = (item["severity"] as? String ?? "").lowercased()
-                    guard sev == "critical" || sev == "high" else { continue }
+                    let tier = (item["priority_tier"] as? String ?? "").uppercased()
+                    guard sev == "critical" || sev == "high" || tier == "P0" || tier == "P1" else { continue }
                     let title = item["title"] as? String ?? ""
                     let file = item["file"] as? String ?? ""
                     let key = "\(title)|\(file)"
                     if seenKeys.contains(key) { continue }
                     seenKeys.insert(key)
                     highItems.append(item)
+                }
+
+                highItems.sort { lhs, rhs in
+                    let rank: ([String: Any]) -> Int = { it in
+                        switch (it["priority_tier"] as? String ?? "P2").uppercased() {
+                        case "P0": return 0
+                        case "P1": return 1
+                        case "P2": return 2
+                        default: return 3
+                        }
+                    }
+                    return rank(lhs) < rank(rhs)
                 }
 
                 guard !highItems.isEmpty else { continue }
@@ -2085,15 +2099,23 @@ struct MainContentView: View {
 
                 for (idx, item) in highItems.enumerated() {
                     let sev = (item["severity"] as? String ?? "high").uppercased()
+                    let tier = (item["priority_tier"] as? String ?? "").uppercased()
+                    let tierPrefix = tier.isEmpty ? "" : "[\(tier)] "
+                    let kevTag = (item["in_cisa_kev"] as? Bool) == true ? " 🔥[CISA KEV]" : ""
+                    let newTag = (item["is_new"] as? Bool) == true ? " 🆕[NEW]" : ""
                     let title = item["title"] as? String ?? "Finding"
                     let file = item["file"] as? String ?? ""
                     let desc = item["desc"] as? String ?? (item["comment"] as? String ?? "")
+                    let reason = item["priority_reason"] as? String ?? ""
+                    let reachability = item["reachability"] as? String ?? ""
                     let diff = item["diff"] as? String ?? ""
                     let fixCmd = item["fix_cmd"] as? String ?? ""
                     let officialSource = item["official_source"] as? String ?? ""
 
                     repoLines.append("")
-                    repoLines.append("### \(idx + 1). [\(sev)] \(title)")
+                    repoLines.append("### \(idx + 1). \(tierPrefix)[\(sev)]\(kevTag)\(newTag) \(title)")
+                    if !reason.isEmpty { repoLines.append("- **Priority Reason**: \(reason)") }
+                    if !reachability.isEmpty { repoLines.append("- **Reachability**: `\(reachability)`") }
                     if !file.isEmpty { repoLines.append("- **File**: `\(file)`") }
                     if !officialSource.isEmpty { repoLines.append("- **Reference**: \(officialSource)") }
                     if !desc.isEmpty { repoLines.append("- **Details**: \(desc)") }

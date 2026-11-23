@@ -84,8 +84,83 @@ def parse_sarif(raw, staged, match_component):
                 "official_source": f"https://docs.zizmor.sh/audits/#{name}",
                 "scanner": "zizmor",
                 "rule_id": name,
+                "line_num": line,
+                "path": path,
             }
         )
+    return group_zizmor_findings(findings)
+
+
+def group_zizmor_findings(findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Group zizmor findings by (file_path, rule_id) while preserving line list and first line link."""
+    groups: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    order: List[Tuple[str, str]] = []
+    for item in findings:
+        path = str(item.get("path") or "").strip()
+        rule_id = str(item.get("rule_id") or "").strip()
+        line_num = item.get("line_num")
+        if not path or not rule_id or type(line_num) is not int:
+            continue
+        key = (path, rule_id)
+        if key not in groups:
+            order.append(key)
+            groups[key] = {**item, "lines": [line_num]}
+        else:
+            if line_num not in groups[key]["lines"]:
+                groups[key]["lines"].append(line_num)
+
+    grouped: List[Dict[str, Any]] = []
+    for key in order:
+        g = dict(groups[key])
+        path, rule_id = key
+        lines = sorted(g.pop("lines"))
+        g.pop("line_num", None)
+        g.pop("path", None)
+        first_line = lines[0]
+        component = g.get("target_node", "")
+        g["lines"] = lines
+        g["occurrence_count"] = len(lines)
+        g["file"] = f"{path}:{first_line} (Target: {component})"
+        if len(lines) > 1:
+            preview = ", ".join(f"L{ln}" for ln in lines[:5]) + (", ..." if len(lines) > 5 else "")
+            g["title"] = f"[zizmor] {rule_id} ({Path(path).name} — {len(lines)}箇所: {preview})"
+        else:
+            g["title"] = f"[zizmor] {rule_id} ({Path(path).name}:{first_line})"
+        grouped.append(g)
+    return grouped
+
+
+def annotate_workflow_reachability(files: List[Path], findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Detect safe workflow patterns (explicit checkout ref / toJSON) and mark as mitigated."""
+    content_by_name: Dict[str, str] = {}
+    for p in files:
+        try:
+            content_by_name[(WORKFLOWS / p.name).as_posix()] = p.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+
+    for item in findings:
+        file_loc = str(item.get("file") or "").split(" (Target:", 1)[0]
+        rel_path = file_loc.rsplit(":", 1)[0] if ":" in file_loc else file_loc
+        text = content_by_name.get(rel_path, "")
+        if not text:
+            continue
+        rule_id = str(item.get("rule_id") or "")
+        if rule_id == "dangerous-triggers" and "pull_request_target" in text:
+            if re.search(r"ref:\s*\$\{\{\s*github\.(?:workflow_sha|event\.pull_request\.base\.sha)\s*\}\}", text):
+                item["reachability"] = "mitigated"
+                item["severity"] = "medium"
+                item["desc"] = str(item.get("desc") or "") + " [Mitigated: actions/checkout が安全なベース/ワークフローSHAを明示指定しています]"
+        elif rule_id == "template-injection":
+            lines_list = item.get("lines") or []
+            file_lines = text.splitlines()
+            if lines_list and all(
+                1 <= ln <= len(file_lines) and "tojson(" in file_lines[ln - 1].lower()
+                for ln in lines_list
+            ):
+                item["reachability"] = "mitigated"
+                item["severity"] = "medium"
+                item["desc"] = str(item.get("desc") or "") + " [Mitigated: toJSON() による安全なシリアライズを検知]"
     return findings
 
 
@@ -138,7 +213,8 @@ def run_zizmor(files, match_component):
                 raw = report.read(MAX_REPORT_BYTES + 1)
                 if len(raw) > MAX_REPORT_BYTES:
                     return None, "output_limit"
-            return parse_sarif(raw, staged, match_component), "complete"
+            parsed = parse_sarif(raw, staged, match_component)
+            return annotate_workflow_reachability(files, parsed), "complete"
     except subprocess.TimeoutExpired:
         return None, "timeout"
     except (OSError, ValueError, KeyError, IndexError, TypeError):

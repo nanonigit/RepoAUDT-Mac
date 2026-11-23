@@ -686,6 +686,9 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 return
             self._send_json(200, security_audit_engine.generate_sarif_report(matched))
             return
+        if self.path.startswith("/api/findings/suppressed"):
+            self._send_json(200, {"suppressed": analyzer.get_suppressed_findings()})
+            return
         if self.path.startswith("/api/monitor/status"):
             self._send_json(200, _SYNC_DAEMON.status_dict())
             return
@@ -823,6 +826,18 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(200, {"ok": not res.get("isError", False), "result": res})
                 return
             self._send_json(400, {"error": "Provide a JSON-RPC 2.0 request or {'tool': '<name>', 'arguments': {...}}"})
+            return
+
+        if self.path.startswith("/api/findings/suppress"):
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                fp = str(body.get("fingerprint") or "").strip()
+                reason = str(body.get("reason") or "").strip()
+                suppress = bool(body.get("suppress", True))
+                suppressed = analyzer.set_finding_suppression(fp, reason=reason, suppress=suppress)
+                self._send_json(200, {"ok": True, "suppressed": suppressed})
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
             return
 
         if self.path.startswith("/api/monitor/config"):
