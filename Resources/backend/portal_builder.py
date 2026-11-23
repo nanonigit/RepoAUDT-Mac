@@ -6907,7 +6907,7 @@ def build_portal_html(data, is_shareable=False):
             return {
               title: cd.repo,
               subtitle: fwList || cd.category || 'Repository',
-              desc: cd.description || (isEn ? 'Click to inspect architecture and safety.' : 'クリックしてしくみと安全性を確認できます。'),
+              desc: localizeBackendText(cd.description || (isEn ? 'Click to inspect architecture and safety.' : 'クリックしてしくみと安全性を確認できます。')),
               alertCount: cActions.length,
               openRepoIndex: diagrams.indexOf(cd),
               nodeName: cd.repo,
@@ -6946,9 +6946,9 @@ def build_portal_html(data, is_shareable=False):
           cards.push({
             title,
             subtitle,
-            desc: (specObj && specObj.desc) ? specObj.desc : (isEn
+            desc: localizeBackendText((specObj && specObj.desc) ? specObj.desc : (isEn
               ? `Handles ${title} responsibilities within ${item.repo}.`
-              : `${item.repo} の中で「${title}」の役割を担当する部品です。クリックすると右側に詳しい解説が表示されます。`),
+              : `${item.repo} の中で「${title}」の役割を担当する部品です。クリックすると右側に詳しい解説が表示されます。`)),
             alertCount: hasAlert ? 1 : 0,
             openRepoIndex: -1,
             nodeName: title,
@@ -6980,6 +6980,40 @@ def build_portal_html(data, is_shareable=False):
       }
     }
 
+    function localizeBackendText(text) {
+      const s = String(text || '');
+      if (currentLang !== 'en' || !s) return s;
+      const replacements = [
+        ['ローカルリポジトリ', 'Local Repository'],
+        ['のクライアント・API・UIエントリポイント層です。', ' — Client, API & UI Entrypoint Layer.'],
+        ['の主要ドメインロジックおよび非同期処理パイプラインです。', ' — Core Domain Logic & Async Processing Pipeline.'],
+        ['の設定・データ永続化・外部サービス連携層です。', ' — Configuration, Data Persistence & External Service Integration.'],
+        ['の自動解析アーキテクチャ構成図・シーケンスフロー・CodeRabbit監査レポート', ' — Architecture, Sequence Flows & Audit Report'],
+        ['アーキテクチャ構成とCodeRabbit監査', 'Architecture & Security Audit'],
+        ['メイン実行パイプライン', 'Main Execution Pipeline'],
+        ['非同期データ同期・エラーハンドリングフロー', 'Async Data Sync & Error Handling Flow'],
+        ['アクション実行 / リクエスト送信', 'Execute action / Send request'],
+        ['入力検証 & イベントディスパッチ', 'Validate input & dispatch event'],
+        ['コアロジック実行 & データ永続化/取得', 'Run core logic & persist/fetch data'],
+        ['構造化データ / 実行結果返却', 'Return structured data / result'],
+        ['状態更新 & UIレンダリング完了', 'Update state & finish UI render'],
+        ['完了フィードバック表示', 'Show completion feedback'],
+        ['非同期バックグラウンドジョブ開始', 'Start async background job'],
+        ['外部リソース / システムAPI呼び出し', 'Call external resource / system API'],
+        ['正常レスポンス (200 OK)', 'Success response (200 OK)'],
+        ['ペイロード返却', 'Return payload'],
+        ['キャッシュ更新 & 正常ステータス反映', 'Update cache & reflect OK status'],
+        ['タイムアウト / エラー発生', 'Timeout / Error occurred'],
+        ['エラーシグナル / Timeout', 'Error signal / Timeout'],
+        ['フォールバック処理 & アラート記録', 'Run fallback & log alert']
+      ];
+      let out = s;
+      for (const [ja, enText] of replacements) {
+        if (out.includes(ja)) out = out.split(ja).join(enText);
+      }
+      return out;
+    }
+
     function renderRepoSummaryHero(item) {
       const hero = document.getElementById('repo-summary-hero');
       if (!hero || !item) return;
@@ -6992,7 +7026,7 @@ def build_portal_html(data, is_shareable=False):
       hero.innerHTML = `
         <div class="hero-left-info">
           <h2 class="hero-repo-title">${escapeHtml(item.repo)}</h2>
-          <div class="hero-repo-desc">${escapeHtml(item.description || '')}</div>
+          <div class="hero-repo-desc">${escapeHtml(localizeBackendText(item.description || ''))}</div>
           <div class="workspace-commit">${en ? 'Saved commit' : '解析対象コミット'} <code>${escapeHtml(item.commit_hash || (en ? 'Not recorded' : '未記録'))}</code></div>
           <div class="workspace-commit" data-audit-repository-status></div>
           ${currentViewMode === 'coderabbit' ? pullRequestControl(item) : ''}
@@ -11170,15 +11204,15 @@ def build_portal_html(data, is_shareable=False):
       const wtPanel = document.getElementById('sequence-walkthrough-panel');
       if (wtPanel) wtPanel.style.display = 'flex';
       if (seqs.length === 0) {
-        diagramWrapper.innerHTML = '<div style="color: #94a3b8; padding: 40px; text-align: center; font-size: 1rem;">このリポジトリのシーケンス図は準備中です。</div>';
+        diagramWrapper.innerHTML = `<div style="color: #94a3b8; padding: 40px; text-align: center; font-size: 1rem;">${currentLang === 'en' ? 'Sequence diagrams are being prepared for this repository.' : 'このリポジトリのシーケンス図は準備中です。'}</div>`;
         return;
       }
 
       if (currentRepoSeqIndex >= seqs.length) currentRepoSeqIndex = 0;
       const activeSeq = seqs[currentRepoSeqIndex];
-      const activeSeqCode = activeSeq.diagram || activeSeq.mermaid || '';
+      const activeSeqCode = localizeBackendText(activeSeq.diagram || activeSeq.mermaid || '');
       const activeSeqId = activeSeq.id || ('seq-' + (currentRepoSeqIndex + 1));
-      const cleanSeqTitle = (t) => String(t || '実行フロー').replace(/^\\d+\\.\\s*/, '');
+      const cleanSeqTitle = (t) => localizeBackendText(String(t || (currentLang === 'en' ? 'Execution Flow' : '実行フロー'))).replace(/^\\d+\\.\\s*/, '');
 
       const seqBar = document.getElementById('sequence-selector-bar');
       if (seqBar) {
@@ -11194,9 +11228,9 @@ def build_portal_html(data, is_shareable=False):
         <div style="display: flex; align-items: center; gap: 8px;">
           <span class="freshness-badge fresh-today">
             <span class="dot-pulse dot-green"></span>
-            時系列実行フロー (Sequence Diagram)
+            ${currentLang === 'en' ? 'Execution Flow (Sequence Diagram)' : '時系列実行フロー (Sequence Diagram)'}
           </span>
-          <a href="${selectedDiagram.github_url}" target="_blank" class="gh-link-btn" title="GitHubで開く">GitHub ↗</a>
+          <a href="${selectedDiagram.github_url}" target="_blank" class="gh-link-btn" title="${currentLang === 'en' ? 'Open on GitHub' : 'GitHubで開く'}">GitHub ↗</a>
         </div>
       `;
 

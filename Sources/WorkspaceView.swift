@@ -804,11 +804,21 @@ struct MainContentView: View {
                         }
                     }
                     let topRisk = Array(sortDashboardRepositories(highRiskRepos, by: .severityDesc).prefix(5))
-                    if topRisk.isEmpty {
+                    if allRepos.isEmpty {
                         ContentUnavailableView(
                             english ? "No saved analyses" : "保存済みの解析はありません",
                             systemImage: "folder.badge.plus",
                             description: Text(english ? "Add a GitHub URL to begin." : "GitHub URL を追加して始めましょう。")
+                        )
+                    } else if topRisk.isEmpty {
+                        ContentUnavailableView(
+                            english ? "No Critical or High risk repositories" : "重大・高リスクのリポジトリはありません",
+                            systemImage: "checkmark.shield.fill",
+                            description: Text(
+                                english
+                                    ? "All \(allRepos.count) analyzed repositories are medium/low risk or clean. Open the Audit List for details."
+                                    : "全 \(allRepos.count) 件の解析済みリポジトリは中・低リスク以下またはクリーンです。詳細は「監査結果一覧を見る」から確認できます。"
+                            )
                         )
                     } else {
                         VStack(spacing: 0) {
