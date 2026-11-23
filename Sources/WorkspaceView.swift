@@ -490,47 +490,6 @@ struct MainContentView: View {
                     }
                     .padding(18)
                 }
-                GroupBox {
-                    HStack(spacing: 16) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 24))
-                            .foregroundStyle(SemanticColors.role("actionText"))
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(english ? "RepoAUDT Mac Update & Runtime" : "アプリのアップデート・実行環境")
-                                .font(.headline)
-                            Text(english
-                                 ? "Check GitHub for new versions or inspect Python / Copilot SDK status."
-                                 : "GitHub の最新バージョン確認や Python / Copilot SDK の状態を確認できます。")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                        Button(english ? "Diagnostics & Log" : "実行環境・ログ") {
-                            showPage(.system)
-                        }
-                        .disabled(!backend.isReady)
-                        Button {
-                            Task { await checkForAppUpdates() }
-                        } label: {
-                            HStack(spacing: 6) {
-                                if checkingAppUpdate || applyingAppUpdate {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                } else {
-                                    Image(systemName: "arrow.down.circle")
-                                }
-                                Text(applyingAppUpdate
-                                     ? (english ? "Updating…" : "アップデート中…")
-                                     : (checkingAppUpdate
-                                        ? (english ? "Checking…" : "確認中…")
-                                        : (english ? "Update App" : "アプリをアップデート")))
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(checkingAppUpdate || applyingAppUpdate || !backend.isReady)
-                    }
-                    .padding(14)
-                }
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text(english ? "Saved analyses" : "保存済みの解析").font(.headline)

@@ -8628,11 +8628,26 @@ def build_portal_html(data, is_shareable=False):
       }
       const repo = selectedDiagram;
       const issues = getWorkspaceIssues(repo);
+      const formatFindingDate = (raw, withYear = false) => {
+        if (!raw) return '';
+        const normalized = String(raw).trim().replace(/\//g, '-');
+        const dt = new Date(normalized);
+        if (Number.isNaN(dt.valueOf())) {
+          const m = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+          if (!m) return '';
+          return en ? `${m[2]}/${m[3]}` : `${Number(m[2])}月${Number(m[3])}日`;
+        }
+        return dt.toLocaleDateString(en ? 'en-US' : 'ja-JP', withYear
+          ? {year: 'numeric', month: 'short', day: 'numeric'}
+          : {month: 'short', day: 'numeric'});
+      };
+      const repoAuditRawDate = repo.analyzed_at || repo.updatedAt || repo.commit_date || '';
+      const repoAuditDateFull = formatFindingDate(repoAuditRawDate, true);
       view.innerHTML = `
         <section class="workspace-audit">
           <div class="workspace-audit-heading">
             <h2>${en ? 'Saved findings' : '保存済みの指摘'}</h2>
-            <span>${en ? `${issues.length} findings` : `${issues.length}件`}</span>
+            <span>${en ? `${issues.length} findings` : `${issues.length}件`}${repoAuditDateFull ? ` · ${en ? 'Audited' : '指摘日'}: ${escapeHtml(repoAuditDateFull)}` : ''}</span>
           </div>
           <p class="audit-note">${en ? 'Open a finding to inspect the evidence, impact and suggested fix. Results reflect the saved analysis.' : '指摘を開くと、根拠・影響・修正案を確認できます。保存された解析時点の結果です。'}</p>
           <div class="audit-color-key" aria-label="${en ? 'Severity legend' : '重要度の凡例'}">
@@ -8670,12 +8685,14 @@ def build_portal_html(data, is_shareable=False):
               const evidenceCmd = osvPkgMatch
                 ? `grep -n '"${osvPkgMatch[1]}"' ${String(file || 'package.json').split(' ')[0].split(':')[0]}`
                 : '';
+              const findingRawDate = issue.detected_at || repoAuditRawDate;
+              const findingShortDate = formatFindingDate(findingRawDate, false);
               return `<details class="audit-issue">
                 <summary>
                   <span class="issue-severity ${tone}"><span aria-hidden="true">${tone === 'danger' ? '⛔' : tone === 'warning' ? '△' : tone === 'info' ? 'ⓘ' : '—'}</span> ${escapeHtml(severity.toUpperCase())}</span>
                   <div class="issue-heading">
                     <div class="issue-title">${escapeHtml((en && issue.title_en) || issue.title || (en ? 'Review finding' : '確認事項'))}</div>
-                    <div class="issue-path">${escapeHtml(file || (en ? 'Location not recorded' : '場所未記録'))}</div>
+                    <div class="issue-path">${escapeHtml(file || (en ? 'Location not recorded' : '場所未記録'))}${findingShortDate ? ` · <span title="${escapeHtml(String(findingRawDate))}">📅 ${escapeHtml(findingShortDate)}</span>` : ''}</div>
                   </div>
                 </summary>
                 <div class="issue-body">
@@ -8890,6 +8907,7 @@ def build_portal_html(data, is_shareable=False):
             desc: a.desc,
             fix_cmd: a.fix_cmd,
             official_source: a.official_source,
+            detected_at: a.detected_at || '',
             diff: a.diff || ''
           });
         });
