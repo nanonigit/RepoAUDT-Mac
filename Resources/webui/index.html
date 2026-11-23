@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/23 22:10:14</strong>
+              <strong id="portal-sync-time">2026/11/23 22:14:39</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -8753,9 +8753,22 @@
                   <option value="both">🌐 日英併記</option>
                 </select>
                 <button type="button" id="copy-slack-digest-btn" class="table-view-btn" style="font-size: 0.8rem;">${en ? '💬 Copy Slack Summary' : '💬 Slack共有サマリー'}</button>
+                <button type="button" id="export-sbom-btn" class="table-view-btn" style="font-size: 0.8rem;">${en ? '📦 Export SBOM (CycloneDX)' : '📦 SBOM エクスポート'}</button>
+                <button type="button" id="export-pdf-btn" class="table-view-btn" style="font-size: 0.8rem;">${en ? '📄 Export PDF Report' : '📄 監査報告書を PDF 出力'}</button>
               </div>
             </div>
           </div>
+          ${(() => {
+            const ls = repo.deps && repo.deps.license_summary;
+            if (!ls) return '';
+            return `<div style="font-size: 0.8rem; color: var(--workspace-muted); margin-bottom: 10px;">
+              ⚖️ <strong>${en ? 'OSS Licenses:' : 'OSSライセンス構成:'}</strong>
+              MIT: ${ls.MIT || 0} · Apache-2.0: ${ls['Apache-2.0'] || 0} · BSD: ${ls.BSD || 0} ·
+              <span style="color: ${(ls.copyleft_risk || 0) > 0 ? 'var(--workspace-warning-text)' : 'inherit'}; font-weight: ${(ls.copyleft_risk || 0) > 0 ? '700' : '400'};">
+                ${en ? 'Copyleft Risk' : '要確認コピーレフト'}: ${ls.copyleft_risk || 0}
+              </span>
+            </div>`;
+          })()}
 
           ${enrichedIssues.length > 0 ? `
           <div style="padding: 10px 14px; border-radius: 10px; border: 1px solid var(--workspace-border); background: rgba(56, 189, 248, 0.08); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
@@ -9002,6 +9015,45 @@
             }
           } catch (err) {
             console.warn('Slack digest copy failed:', err);
+          }
+        });
+      }
+      const sbomBtn = view.querySelector('#export-sbom-btn');
+      if (sbomBtn) {
+        sbomBtn.addEventListener('click', async () => {
+          try {
+            const resp = await fetch(`/api/sbom?id=${encodeURIComponent(repo.id || '')}&repo=${encodeURIComponent(repo.repo || '')}`);
+            const data = await resp.json();
+            if (!resp.ok) {
+              alert(data.error || 'SBOM export failed');
+              return;
+            }
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${String(repo.repo_slug || repo.repo || 'repo').replace(/[^a-zA-Z0-9._-]/g, '_')}-sbom.cdx.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+          } catch (err) {
+            console.warn('SBOM export failed:', err);
+          }
+        });
+      }
+      const pdfBtn = view.querySelector('#export-pdf-btn');
+      if (pdfBtn) {
+        pdfBtn.addEventListener('click', async () => {
+          if (window.webkit?.messageHandlers?.workspace) {
+            window.webkit.messageHandlers.workspace.postMessage({ action: 'export-pdf', repo: repo.repo || '' });
+            return;
+          }
+          const resp = await fetch(`/api/report/pdf-html?lang=${en ? 'en' : 'ja'}&repo=${encodeURIComponent(repo.repo || '')}`);
+          const data = await resp.json();
+          if (data && data.html) {
+            const w = window.open('', '_blank');
+            if (w) { w.document.write(data.html); w.document.close(); w.print(); }
           }
         });
       }

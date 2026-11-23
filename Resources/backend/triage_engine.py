@@ -141,6 +141,8 @@ def classify_category(item: Dict[str, Any]) -> str:
         return "malware"
     if explicit_cat == "eol" or "[eol検出]" in title:
         return "eol"
+    if explicit_cat == "license" or "[ossライセンス監査]" in title:
+        return "license"
     scanner = str(item.get("scanner") or "").lower()
     file_loc = str(item.get("file") or "").lower()
     if (
@@ -493,8 +495,130 @@ def build_slack_digest(diagrams: List[Dict[str, Any]], *, lang: str = "ja") -> s
     else:
         lines.append(f"• *P0（緊急）*: `{total_p0}件` | *P1（高リスク）*: `{total_p1}件`")
 
-    if repo_blocks:
-        lines.extend(repo_blocks)
+    if block_lines := repo_blocks:
+        lines.extend(block_lines)
     else:
         lines.append("• ✅ P0 / P1 の要対応指摘はありません。" if not is_en else "• ✅ No P0 / P1 actionable findings.")
     return "\n".join(lines)
+
+
+def build_pdf_audit_html(diagrams: List[Dict[str, Any]], *, lang: str = "ja") -> str:
+    """Build a print/PDF-optimized HTML audit report (white background, no raw secrets)."""
+    from html import escape
+    from datetime import datetime, timezone
+
+    is_en = lang == "en"
+    now_str = datetime.now(timezone.utc).strftime("%Y/%m/%d %H:%M UTC")
+    target_repos = [d for d in diagrams if isinstance(d, dict) and not d.get("is_root")]
+
+    counts = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
+    new_cnt = 0
+    repo_sections: List[str] = []
+
+    for d in target_repos:
+        repo_name = str(d.get("repo") or d.get("github_url") or "Repository")
+        commit_sha = str((d.get("source_revision") or {}).get("commit_sha") or d.get("commit_hash") or "HEAD")
+        posture = d.get("github_posture") or {}
+        lic_summary = (d.get("deps") or {}).get("license_summary") or {}
+        cr = d.get("coderabbit") or {}
+        items = [
+            it for it in (list(cr.get("action_items") or []) + list(cr.get("findings") or []))
+            if isinstance(it, dict) and not it.get("suppressed")
+        ]
+        seen = set()
+        deduped = []
+        for it in items:
+            k = f"{it.get('title', '')}|{it.get('file', '')}"
+            if k not in seen:
+                seen.add(k)
+                deduped.append(it)
+                t = str(it.get("priority_tier") or "P2").upper()
+                if t in counts:
+                    counts[t] += 1
+                if it.get("is_new"):
+                    new_cnt += 1
+
+        p0_p1 = [it for it in deduped if str(it.get("priority_tier") or "").upper() in ("P0", "P1")]
+        posture_str = (
+            f"Visibility: {posture.get('visibility', 'unknown')} · "
+            f"Branch Protected: {posture.get('default_branch_protected', 'unknown')}"
+        )
+        lic_str = (
+            f"MIT: {lic_summary.get('MIT', 0)} / Apache-2.0: {lic_summary.get('Apache-2.0', 0)} / "
+            f"BSD: {lic_summary.get('BSD', 0)} / Copyleft Risk: {lic_summary.get('copyleft_risk', 0)}"
+            if lic_summary else ("No license summary recorded" if is_en else "ライセンスサマリー未記録")
+        )
+
+        rows_html = "".join(
+            f"""<div class="finding-card">
+              <div class="finding-head">
+                <span class="badge badge-{escape(str(it.get('priority_tier') or 'P2').lower())}">{escape(str(it.get('priority_tier') or 'P2'))}</span>
+                <strong>{escape(_sanitize_slack_text(str(it.get('title') or '')))}</strong>
+              </div>
+              <div class="meta">{escape(str(it.get('file') or ''))}</div>
+              <p>{escape(_sanitize_slack_text(str(it.get('desc') or it.get('comment') or '')))}</p>
+              {f"<pre>{escape(_sanitize_slack_text(str(it.get('fix_cmd') or '')))}</pre>" if it.get('fix_cmd') else ""}
+              {f"<div class='ref'>Ref: {escape(str(it.get('official_source')))}</div>" if it.get('official_source') else ""}
+            </div>"""
+            for it in p0_p1[:25]
+        ) or f"<p class='clean'>{escape('No P0/P1 actionable findings.' if is_en else 'P0 / P1 の要対応指摘はありません。')}</p>"
+
+        repo_sections.append(
+            f"""<section class="repo-section">
+              <h2>{escape(repo_name)}</h2>
+              <div class="repo-meta">
+                <span>Commit: <code>{escape(commit_sha[:12])}</code></span> ·
+                <span>{escape(posture_str)}</span><br/>
+                <span>OSS Licenses: {escape(lic_str)}</span>
+              </div>
+              {rows_html}
+            </section>"""
+        )
+
+    title_txt = "RepoAUDT Mac Security Audit Report" if is_en else "RepoAUDT Mac セキュリティ監査報告書"
+    return f"""<!DOCTYPE html>
+<html lang="{ 'en' if is_en else 'ja' }">
+<head>
+<meta charset="utf-8"/>
+<title>{escape(title_txt)}</title>
+<style>
+  @page {{ size: A4; margin: 16mm; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Helvetica Neue", sans-serif; background: #ffffff; color: #0f172a; margin: 0; padding: 20px; line-height: 1.5; }}
+  h1 {{ font-size: 20px; margin: 0 0 6px; border-bottom: 2px solid #0284c7; padding-bottom: 6px; }}
+  h2 {{ font-size: 16px; margin: 18px 0 6px; color: #0f172a; border-left: 4px solid #0284c7; padding-left: 8px; }}
+  .header-meta {{ font-size: 12px; color: #475569; margin-bottom: 14px; }}
+  .kpi-grid {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 18px; }}
+  .kpi {{ border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; background: #f8fafc; }}
+  .kpi span {{ display: block; font-size: 11px; color: #475569; font-weight: 600; }}
+  .kpi strong {{ font-size: 18px; }}
+  .repo-section {{ margin-bottom: 20px; }}
+  .repo-meta {{ font-size: 11.5px; color: #475569; margin-bottom: 10px; }}
+  .finding-card {{ border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; page-break-inside: avoid; break-inside: avoid; }}
+  .finding-head {{ display: flex; gap: 8px; align-items: center; margin-bottom: 4px; font-size: 13px; }}
+  .badge {{ display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }}
+  .badge-p0 {{ background: #dc2626; }}
+  .badge-p1 {{ background: #ea580c; }}
+  .badge-p2 {{ background: #ca8a04; }}
+  .badge-p3 {{ background: #2563eb; }}
+  .meta, .ref {{ font-size: 11px; color: #475569; }}
+  p {{ margin: 4px 0; font-size: 12px; }}
+  pre {{ background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 6px 8px; font-size: 11px; white-space: pre-wrap; word-break: break-all; margin: 6px 0 0; }}
+  .clean {{ color: #16a34a; font-weight: 600; }}
+</style>
+</head>
+<body>
+  <h1>🛡️ {escape(title_txt)}</h1>
+  <div class="header-meta">
+    { 'Generated' if is_en else '出力日時' }: {escape(now_str)} ·
+    { 'Repositories' if is_en else '対象リポジトリ数' }: {len(target_repos)}
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><span>P0 Critical</span><strong>{counts['P0']}</strong></div>
+    <div class="kpi"><span>P1 High</span><strong>{counts['P1']}</strong></div>
+    <div class="kpi"><span>P2 Planned</span><strong>{counts['P2']}</strong></div>
+    <div class="kpi"><span>P3 Backlog</span><strong>{counts['P3']}</strong></div>
+    <div class="kpi"><span>New Findings</span><strong>+{new_cnt}</strong></div>
+  </div>
+  {''.join(repo_sections)}
+</body>
+</html>"""

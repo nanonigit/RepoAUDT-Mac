@@ -512,6 +512,92 @@ def _select_best_fixed_version(raw_fixed: str, installed: str = "") -> str:
     return select_safe_upgrade_version(raw_fixed, installed, pick_highest_same_major=False)
 
 
+_RISKY_COPYLEFT_RE = re.compile(r"\b(?:AGPL|GPL|SSPL|BUSL)(?:-[\w.]+)?\b", re.IGNORECASE)
+
+
+def parse_trivy_licenses(raw, files, match_component):
+    """Parse Trivy FS JSON Licenses[] into (copyleft_findings, license_summary)."""
+    text = raw.decode("utf-8", errors="ignore").strip() if isinstance(raw, (bytes, bytearray)) else str(raw).strip()
+    summary = {"MIT": 0, "Apache-2.0": 0, "BSD": 0, "copyleft_risk": 0, "other": 0}
+    if not text:
+        return [], summary
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        return [], summary
+    results = data.get("Results")
+    if not isinstance(results, list):
+        return [], summary
+
+    findings = []
+    seen = set()
+    for res in results:
+        if not isinstance(res, dict):
+            continue
+        target = str(res.get("Target") or "").removeprefix("./")
+        component = match_component(target or "package.json")
+        for lic in res.get("Licenses") or []:
+            if not isinstance(lic, dict):
+                continue
+            pkg_name = str(lic.get("PkgName") or "").strip()
+            lic_name = str(lic.get("Name") or "").strip()
+            if not lic_name:
+                continue
+            low = lic_name.lower()
+            if "mit" in low:
+                summary["MIT"] += 1
+            elif "apache-2.0" in low or "apache 2" in low:
+                summary["Apache-2.0"] += 1
+            elif "bsd" in low:
+                summary["BSD"] += 1
+            elif _RISKY_COPYLEFT_RE.search(lic_name):
+                summary["copyleft_risk"] += 1
+                key = (pkg_name, lic_name)
+                if key in seen:
+                    continue
+                seen.add(key)
+                findings.append({
+                    "severity": "medium",
+                    "priority_tier": "P2",
+                    "priority_reason": "法務・OSSライセンス要確認（強コピーレフト）",
+                    "category": "license",
+                    "package_name": pkg_name,
+                    "title": f"[OSSライセンス監査] 強コピーレフトライセンス検出: {pkg_name} ({lic_name})",
+                    "file": f"{target or 'package.json'}:1 (Target: {component})",
+                    "target_node": component,
+                    "desc": (
+                        f"`{pkg_name}` に強コピーレフト系ライセンス `{lic_name}` が検出されました。"
+                        "商用プロプライエタリ製品への組み込み・配布時のソース開示義務リスクについて法務確認または代替パッケージ検討を推奨します。"
+                    ),
+                    "official_source": str(lic.get("Link") or "https://spdx.org/licenses/"),
+                    "scanner": "trivy-license",
+                    "rule_id": lic_name,
+                })
+            else:
+                summary["other"] += 1
+    return findings, summary
+
+
+def generate_trivy_cyclonedx_sbom(repo_dir: Path) -> Tuple[Optional[Dict[str, Any]], str]:
+    """Generate a CycloneDX JSON SBOM for repo_dir using Trivy FS."""
+    trivy_bin = executable("trivy")
+    if not trivy_bin:
+        return None, "Trivy がインストールされていないため CycloneDX SBOM を生成できません（`brew install trivy` で導入できます）。"
+    if not repo_dir or not repo_dir.is_dir():
+        return None, "対象リポジトリのローカルキャッシュが見つかりません。先にリポジトリを解析してください。"
+    env = {"HOME": str(repo_dir), "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin", "LANG": "en_US.UTF-8"}
+    cmd = [trivy_bin, "fs", "--format", "cyclonedx", "--quiet", "--timeout", "35s", "--output", "-", "."]
+    try:
+        raw = run_read_only(cmd, repo_dir, env, allowed=(0,), timeout=40)
+        data = json.loads(raw.decode("utf-8", errors="ignore"))
+        if isinstance(data, dict):
+            return data, ""
+        return None, "Trivy SBOM の出力形式が不正です。"
+    except subprocess.TimeoutExpired:
+        return None, "Trivy SBOM 生成がタイムアウトしました。"
+    except Exception as exc:
+        return None, f"Trivy SBOM 生成に失敗しました: {exc}"
+
+
 def _is_internal_alb_terraform(repo_dir: Optional[Path], target: str) -> bool:
     """Return True if the Terraform module containing target defines an internal=true aws_lb."""
     if not repo_dir:
@@ -699,7 +785,7 @@ def scan_semgrep_and_trivy(repo, match_component, *, include_sast=True, include_
         if binaries["trivy"]:
             scanners = []
             if include_vuln:
-                scanners.append("vuln")
+                scanners.extend(["vuln", "license"])
             if include_sast:
                 scanners.append("misconfig")
             cmd = [
@@ -717,10 +803,13 @@ def scan_semgrep_and_trivy(repo, match_component, *, include_sast=True, include_
             try:
                 raw = run_read_only(cmd, directory, base_env, allowed=(0,), timeout=35)
                 misconfs, vulns = parse_trivy(raw, files, match_component, repo_dir=directory)
+                lic_findings, lic_summary = parse_trivy_licenses(raw, files, match_component)
                 if include_sast:
                     sast_findings.extend(misconfs)
                 if include_vuln:
                     advisories.extend(vulns)
+                    sast_findings.extend(lic_findings)
+                    statuses["license_summary"] = lic_summary
                 statuses["trivy"] = "partial" if partial else "complete"
             except subprocess.TimeoutExpired:
                 statuses["trivy"] = "timeout"

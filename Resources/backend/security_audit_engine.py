@@ -1160,6 +1160,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         "sast_findings": sast_findings,
         "workflow_scan": workflow_scan,
         "source_scan": source_scan,
+        "license_summary": ext_scan.get("license_summary", {}),
         "runtime_patch_scan": runtime_patch_scan,
     }
 

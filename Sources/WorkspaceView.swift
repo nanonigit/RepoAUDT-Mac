@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WebKit
 
 struct WorkspaceRepository: Decodable, Identifiable {
     let id: String
@@ -541,6 +542,10 @@ struct MainContentView: View {
             coordinator.language = value
             coordinator.send("language", value: value)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .repoAudtExportPdf)) { notif in
+            let targetRepo = notif.userInfo?["repo"] as? String ?? ""
+            Task { await exportAuditPdfReport(repo: targetRepo) }
+        }
         .onAppear {
             coordinator.language = language
             if !didInitializeLaunchPage {
@@ -946,6 +951,17 @@ struct MainContentView: View {
                                 Label(
                                     english ? "Slack Digest" : "Slack共有サマリー",
                                     systemImage: "text.bubble"
+                                )
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(copyingHighRiskReport || !backend.isReady)
+
+                            Button {
+                                Task { await exportAuditPdfReport() }
+                            } label: {
+                                Label(
+                                    english ? "Export PDF" : "PDF報告書",
+                                    systemImage: "doc.richtext"
                                 )
                             }
                             .buttonStyle(.bordered)
@@ -2049,6 +2065,48 @@ struct MainContentView: View {
         }
     }
 
+    private func exportAuditPdfReport(repo: String = "") async {
+        guard !copyingHighRiskReport else { return }
+        copyingHighRiskReport = true
+        highRiskCopyStatus = nil
+        defer { copyingHighRiskReport = false }
+
+        do {
+            let langParam = english ? "en" : "ja"
+            let encodedRepo = repo.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            let query = repo.isEmpty ? "lang=\(langParam)" : "lang=\(langParam)&repo=\(encodedRepo)"
+            let json = try await requestJSON("/api/report/pdf-html?\(query)")
+            guard let html = json["html"] as? String, !html.isEmpty else {
+                highRiskCopyStatus = english ? "Failed to build PDF HTML" : "PDF テンプレート生成に失敗しました"
+                return
+            }
+
+            let pdfData: Data = try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.main.async {
+                    let helper = PdfWebViewRenderer()
+                    helper.render(html: html) { result in
+                        continuation.resume(with: result)
+                    }
+                }
+            }
+
+            let saveURL: URL? = await MainActor.run {
+                let panel = NSSavePanel()
+                panel.allowedContentTypes = [.pdf]
+                let safeSlug = repo.isEmpty ? "RepoAUDT-All" : repo.replacingOccurrences(of: "/", with: "-")
+                panel.nameFieldStringValue = "\(safeSlug)-Security-Audit-Report.pdf"
+                panel.canCreateDirectories = true
+                return panel.runModal() == .OK ? panel.url : nil
+            }
+            guard let targetURL = saveURL else { return }
+            try pdfData.write(to: targetURL, options: .atomic)
+            NSWorkspace.shared.activateFileViewerSelecting([targetURL])
+            highRiskCopyStatus = english ? "✓ Saved PDF report" : "✓ PDF報告書を保存しました"
+        } catch {
+            highRiskCopyStatus = error.localizedDescription
+        }
+    }
+
     private func copySlackDigestReport() async {
         guard !copyingHighRiskReport else { return }
         copyingHighRiskReport = true
@@ -2272,5 +2330,54 @@ struct MainContentView: View {
             throw NSError(domain: "RepoAUDT", code: 2, userInfo: [NSLocalizedDescriptionKey: msg])
         }
         return json
+    }
+}
+
+extension Notification.Name {
+    static let repoAudtExportPdf = Notification.Name("RepoAUDTExportPdfNotification")
+}
+
+private final class PdfWebViewRenderer: NSObject, WKNavigationDelegate {
+    private var webView: WKWebView?
+    private var completion: ((Result<Data, Error>) -> Void)?
+    private var selfRetain: PdfWebViewRenderer?
+
+    func render(html: String, completion: @escaping (Result<Data, Error>) -> Void) {
+        self.selfRetain = self
+        self.completion = completion
+        let config = WKWebViewConfiguration()
+        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 794, height: 1123), configuration: config)
+        wv.navigationDelegate = self
+        self.webView = wv
+        wv.loadHTMLString(html, baseURL: nil)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        let pdfConfig = WKPDFConfiguration()
+        pdfConfig.rect = CGRect(x: 0, y: 0, width: 595.28, height: 841.89)
+        webView.createPDF(configuration: pdfConfig) { [weak self] result in
+            guard let self else { return }
+            let cb = self.completion
+            self.completion = nil
+            self.webView = nil
+            self.selfRetain = nil
+            cb?(result)
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        finishWithError(error)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        finishWithError(error)
+    }
+
+    private func finishWithError(_ error: Error) {
+        let cb = completion
+        completion = nil
+        webView = nil
+        selfRetain = nil
+        cb?(.failure(error))
     }
 }

@@ -665,14 +665,51 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/sbom"):
             parsed_url = urllib.parse.urlparse(self.path)
             qs = urllib.parse.parse_qs(parsed_url.query)
+            id_q = (qs.get("id") or [""])[0].strip()
+            repo_q = (qs.get("repo") or [""])[0].strip()
+            strict_trivy = (qs.get("strict") or ["0"])[0].strip() == "1"
+            state = analyzer.load_saved_analyses()
+            diagrams = state.get("diagrams", [])
+            matched = None
+            if id_q:
+                matched = next((d for d in diagrams if str(d.get("id") or "") == id_q), None)
+            if not matched and repo_q:
+                matched = mcp_server._find_diagram(diagrams, repo_q)
+            if not matched:
+                self._send_json(404, {"error": f"Repository '{id_q or repo_q}' not found"})
+                return
+            sbom_payload = None
+            local_dir = (matched.get("local_path") or (matched.get("source_revision") or {}).get("local_path") or "").strip()
+            if local_dir and Path(local_dir).is_dir():
+                import source_scanners
+                trivy_sbom, err_msg = source_scanners.generate_trivy_cyclonedx_sbom(Path(local_dir))
+                if trivy_sbom:
+                    sbom_payload = trivy_sbom
+                elif strict_trivy and err_msg:
+                    self._send_json(503, {"error": err_msg})
+                    return
+            if sbom_payload is None:
+                if strict_trivy:
+                    import source_scanners
+                    if not source_scanners.executable("trivy"):
+                        self._send_json(503, {"error": "Trivy がインストールされていないため CycloneDX SBOM を生成できません（`brew install trivy` で導入できます）。"})
+                        return
+                sbom_payload = security_audit_engine.generate_cyclonedx_sbom(matched)
+            self._send_json(200, sbom_payload)
+            return
+        if self.path.startswith("/api/report/pdf-html"):
+            parsed_url = urllib.parse.urlparse(self.path)
+            qs = urllib.parse.parse_qs(parsed_url.query)
+            lang = (qs.get("lang") or ["ja"])[0].strip().lower()
             repo_q = (qs.get("repo") or [""])[0].strip()
             state = analyzer.load_saved_analyses()
             diagrams = state.get("diagrams", [])
-            matched = mcp_server._find_diagram(diagrams, repo_q)
-            if not matched:
-                self._send_json(404, {"error": f"Repository '{repo_q}' not found"})
-                return
-            self._send_json(200, security_audit_engine.generate_cyclonedx_sbom(matched))
+            if repo_q:
+                matched = mcp_server._find_diagram(diagrams, repo_q)
+                diagrams = [matched] if matched else []
+            import triage_engine
+            html_doc = triage_engine.build_pdf_audit_html(diagrams, lang=lang)
+            self._send_json(200, {"ok": True, "html": html_doc, "lang": lang})
             return
         if self.path.startswith("/api/sarif"):
             parsed_url = urllib.parse.urlparse(self.path)

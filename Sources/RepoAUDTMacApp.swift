@@ -206,6 +206,17 @@ final class WebViewCoordinator: NSObject, ObservableObject, WKNavigationDelegate
             }
             return
         }
+        if message.name == "workspace",
+           let dict = message.body as? [String: Any],
+           (dict["action"] as? String) == "export-pdf" {
+            let repoName = dict["repo"] as? String ?? ""
+            NotificationCenter.default.post(
+                name: .repoAudtExportPdf,
+                object: nil,
+                userInfo: ["repo": repoName]
+            )
+            return
+        }
         guard message.name == "workspace",
               let data = try? JSONSerialization.data(withJSONObject: message.body),
               let snapshot = try? JSONDecoder().decode(WorkspaceSnapshot.self, from: data) else { return }
