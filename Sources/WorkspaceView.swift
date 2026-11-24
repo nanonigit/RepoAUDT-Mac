@@ -612,8 +612,7 @@ struct MainContentView: View {
                                 let targetId = item.diagramId
                                 drilldownFilter = nil
                                 if !targetId.isEmpty {
-                                    selection = [targetId]
-                                    showPage(.audit)
+                                    selection = ["repo:\(targetId)"]
                                 }
                             }
                             .buttonStyle(.bordered)
@@ -1188,8 +1187,7 @@ struct MainContentView: View {
                             VStack(spacing: 6) {
                                 ForEach(aspmRepos.prefix(8)) { item in
                                     Button {
-                                        selection = [item.id]
-                                        showPage(.audit)
+                                        selection = ["repo:\(item.id)"]
                                     } label: {
                                         HStack(spacing: 10) {
                                             Text(item.gateEmoji + " " + item.releaseGate)
