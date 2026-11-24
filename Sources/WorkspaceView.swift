@@ -1268,6 +1268,7 @@ struct MainContentView: View {
                                                     Spacer()
                                                     Text("Risk \(item.riskScore)/100")
                                                         .font(.caption.monospacedDigit().weight(.semibold))
+                                                        .foregroundStyle(riskScoreColor(item.riskScore))
                                                     Text(item.coverageCompact)
                                                         .font(.caption2.monospaced())
                                                         .foregroundStyle(.secondary)
@@ -1468,10 +1469,21 @@ struct MainContentView: View {
         .buttonStyle(.plain)
     }
 
+    private func riskScoreColor(_ score: Int) -> Color {
+        switch score {
+        case 80...: return SemanticColors.role("dangerText")
+        case 50..<80: return SemanticColors.role("warningText")
+        case 20..<50: return SemanticColors.role("actionText")
+        default: return SemanticColors.role("successText")
+        }
+    }
+
     @ViewBuilder
     private func riskTrendChartCard() -> some View {
         let pts = Array(aspmHistory.suffix(20))
         let latest = pts.last
+        let latestScore = latest?.riskScore ?? 0
+        let latestColor = riskScoreColor(latestScore)
         let avgScore = pts.isEmpty ? 0 : pts.reduce(0) { $0 + $1.riskScore } / pts.count
         let totalNew = pts.reduce(0) { $0 + $1.newCount }
         let totalResolved = pts.reduce(0) { $0 + $1.resolvedCount }
@@ -1518,7 +1530,7 @@ struct MainContentView: View {
                         }
                         .fill(
                             LinearGradient(
-                                colors: [SemanticColors.role("infoText").opacity(0.28), SemanticColors.role("infoText").opacity(0.02)],
+                                colors: [latestColor.opacity(0.28), latestColor.opacity(0.02)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -1537,7 +1549,7 @@ struct MainContentView: View {
                                 }
                             }
                         }
-                        .stroke(SemanticColors.role("infoText"), style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                        .stroke(latestColor, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
                     }
                 }
                 .frame(height: 84)
@@ -1549,11 +1561,12 @@ struct MainContentView: View {
                         Text(english ? "Latest:" : "直近スコア:")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("\(latest?.riskScore ?? 0) / 100")
+                        Text("\(latestScore) / 100")
                             .font(.subheadline.bold().monospacedDigit())
+                            .foregroundStyle(latestColor)
                         Text(english ? "(Avg \(avgScore))" : "(平均 \(avgScore))")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .font(.caption2.monospacedDigit().weight(.medium))
+                            .foregroundStyle(riskScoreColor(avgScore))
                     }
                     Text("P0: \(p0Total) · P1: \(p1Total)")
                         .font(.caption.monospacedDigit().weight(.semibold))
