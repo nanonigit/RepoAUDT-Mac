@@ -139,6 +139,9 @@ struct MainContentView: View {
     @State private var monitorEnabled = true
     @State private var monitorIntervalSec = 900
     @State private var aspmRepos: [AspmRepoItem] = []
+    @State private var drilldownFilter: DashboardDrilldownFilter?
+    @State private var drilldownItems: [DrilldownFindingItem] = []
+    @State private var loadingDrilldown = false
     @State private var monitorChecking = false
     @State private var monitorLastCheckTime = ""
     @State private var monitorSummary = ""
@@ -556,6 +559,72 @@ struct MainContentView: View {
             }
             Task { await refreshAspmPortfolio() }
         }
+        .sheet(item: $drilldownFilter) { filter in
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(filter.title)
+                        .font(.title3.bold())
+                    Spacer()
+                    Text(english ? "\(drilldownItems.count) items" : "\(drilldownItems.count) 件")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Button(english ? "Close" : "閉じる") {
+                        drilldownFilter = nil
+                    }
+                    .keyboardShortcut(.cancelAction)
+                }
+                Divider()
+                if loadingDrilldown {
+                    ProgressView(english ? "Loading findings..." : "指摘を読み込み中…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if drilldownItems.isEmpty {
+                    ContentUnavailableView(
+                        english ? "No matching findings" : "該当する指摘はありません",
+                        systemImage: "checkmark.shield"
+                    )
+                } else {
+                    List(drilldownItems) { item in
+                        HStack(alignment: .top, spacing: 10) {
+                            Text(item.tier)
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(item.tierColor.opacity(0.18), in: Capsule())
+                                .foregroundStyle(item.tierColor)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(2)
+                                Text("\(item.repoName) · \(item.file)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                if !item.reason.isEmpty {
+                                    Text(item.reason)
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            Spacer()
+                            Button(english ? "Open" : "開く") {
+                                let targetId = item.diagramId
+                                drilldownFilter = nil
+                                if !targetId.isEmpty {
+                                    selection = [targetId]
+                                    showPage(.audit)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            .padding(20)
+            .frame(minWidth: 680, minHeight: 460)
+        }
         .confirmationDialog(
             reposPendingDeletion.count > 1
                 ? (english
@@ -894,14 +963,18 @@ struct MainContentView: View {
                         subtitle: english ? "Saved analyses" : "保存済み解析",
                         symbol: "folder.fill",
                         tint: SemanticColors.role("actionText")
-                    )
+                    ) {
+                        showPage(.audit)
+                    }
                     summaryMetricCard(
                         title: english ? "Total Findings" : "総指摘件数",
                         value: "\(totalFindings)",
                         subtitle: english ? "Across all repos" : "全リポジトリ合計",
                         symbol: "exclamationmark.bubble.fill",
                         tint: SemanticColors.role("warningText")
-                    )
+                    ) {
+                        openDrilldown(tier: nil, title: english ? "All Findings" : "全リポジトリの指摘一覧")
+                    }
                     summaryMetricCard(
                         title: english ? "Critical / High" : "重大・高リスク",
                         value: english ? "\(highRiskRepos.count) repos" : "\(highRiskRepos.count) リポジトリ",
@@ -910,14 +983,18 @@ struct MainContentView: View {
                             : "全\(allRepos.count)件中 · 該当指摘 \(highRiskFindings)件",
                         symbol: "shield.lefthalf.filled.badge.checkmark",
                         tint: SemanticColors.role("dangerText")
-                    )
+                    ) {
+                        openDrilldown(tier: "HIGH_CRIT", title: english ? "Critical / High Findings (P0 / P1)" : "重大・高リスク指摘（P0 / P1）")
+                    }
                     summaryMetricCard(
                         title: english ? "Latest Analysis" : "最新解析",
                         value: latestAnalyzed ?? (english ? "Not yet" : "未記録"),
-                        subtitle: english ? "Local scan time" : "ローカル解析日時",
+                        subtitle: english ? "Click to refresh" : "クリックで最新化",
                         symbol: "clock.fill",
                         tint: SemanticColors.role("infoText")
-                    )
+                    ) {
+                        Task { await reloadAndAnalyzeRepositories() }
+                    }
                 }
 
                 let p0Total = aspmRepos.reduce(0) { $0 + $1.p0 }
@@ -931,28 +1008,36 @@ struct MainContentView: View {
                         subtitle: english ? "Secrets / Malware" : "シークレット漏洩 / マルウェア",
                         symbol: "flame.fill",
                         tint: SemanticColors.role("dangerText")
-                    )
+                    ) {
+                        openDrilldown(tier: "P0", title: english ? "P0 Critical Findings" : "P0 緊急対応一覧（シークレット・マルウェア）")
+                    }
                     summaryMetricCard(
                         title: english ? "P1 High (This Week)" : "P1 最優先",
                         value: "\(p1Total)",
                         subtitle: english ? "KEV / RCE / Auth Bypass" : "KEV / RCE / 認証バイパス",
                         symbol: "exclamationmark.triangle.fill",
                         tint: SemanticColors.role("warningText")
-                    )
+                    ) {
+                        openDrilldown(tier: "P1", title: english ? "P1 High Findings" : "P1 最優先対応一覧（KEV / RCE 等）")
+                    }
                     summaryMetricCard(
                         title: english ? "P2 Planned" : "P2 計画対応",
                         value: "\(p2Total)",
                         subtitle: english ? "CI/CD / IaC / License" : "CI/CD / IaC / ライセンス",
                         symbol: "wrench.and.screwdriver.fill",
                         tint: SemanticColors.role("actionText")
-                    )
+                    ) {
+                        openDrilldown(tier: "P2", title: english ? "P2 Planned Findings" : "P2 計画対応一覧")
+                    }
                     summaryMetricCard(
                         title: english ? "P3 Backlog" : "P3 低優先",
                         value: "\(p3Total)",
                         subtitle: english ? "Dev tools / Revoked" : "開発ツール / 失効済み等",
                         symbol: "tray.full.fill",
                         tint: SemanticColors.role("infoText")
-                    )
+                    ) {
+                        openDrilldown(tier: "P3", title: english ? "P3 Backlog Findings" : "P3 低優先バックログ一覧")
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -1167,8 +1252,15 @@ struct MainContentView: View {
         }
     }
 
-    private func summaryMetricCard(title: String, value: String, subtitle: String, symbol: String, tint: Color) -> some View {
-        GroupBox {
+    private func summaryMetricCard(
+        title: String,
+        value: String,
+        subtitle: String,
+        symbol: String,
+        tint: Color,
+        action: (() -> Void)? = nil
+    ) -> some View {
+        let content = GroupBox {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(title)
@@ -1182,12 +1274,31 @@ struct MainContentView: View {
                     .font(.title3.bold().monospacedDigit())
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    if action != nil {
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
             .padding(6)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        return Group {
+            if let action {
+                Button(action: action) {
+                    content
+                }
+                .buttonStyle(.plain)
+            } else {
+                content
+            }
         }
     }
 
@@ -2479,6 +2590,86 @@ struct MainContentView: View {
             await MainActor.run { aspmRepos = parsed }
         } catch {
             // Non-fatal dashboard enhancement
+        }
+    }
+
+    private func openDrilldown(tier: String?, title: String) {
+        drilldownFilter = DashboardDrilldownFilter(tier: tier, title: title)
+        loadingDrilldown = true
+        drilldownItems = []
+        Task {
+            defer { Task { @MainActor in loadingDrilldown = false } }
+            guard let state = try? await requestJSON("/api/state"),
+                  let diagrams = state["diagrams"] as? [[String: Any]] else { return }
+            var collected: [DrilldownFindingItem] = []
+            for d in diagrams {
+                if (d["is_root"] as? Bool) == true { continue }
+                let did = (d["id"] as? String) ?? ""
+                let repoName = (d["repo"] as? String) ?? (d["github_url"] as? String) ?? "Repository"
+                let cr = d["coderabbit"] as? [String: Any]
+                let actions = cr?["action_items"] as? [[String: Any]] ?? []
+                var seen = Set<String>()
+                for it in actions {
+                    if (it["suppressed"] as? Bool) == true { continue }
+                    let t = ((it["priority_tier"] as? String) ?? "P2").uppercased()
+                    if let filterTier = tier {
+                        if filterTier == "HIGH_CRIT" {
+                            if t != "P0" && t != "P1" { continue }
+                        } else if t != filterTier {
+                            continue
+                        }
+                    }
+                    let titleStr = (it["title"] as? String) ?? ""
+                    let fileStr = ((it["file"] as? String) ?? "").components(separatedBy: " (Target:").first ?? ""
+                    let key = "\(did)|\(titleStr)|\(fileStr)"
+                    if seen.contains(key) { continue }
+                    seen.insert(key)
+                    collected.append(DrilldownFindingItem(
+                        id: key,
+                        diagramId: did,
+                        repoName: repoName,
+                        tier: t,
+                        title: titleStr,
+                        file: fileStr,
+                        reason: (it["priority_reason"] as? String) ?? ""
+                    ))
+                }
+            }
+            let rank: (String) -> Int = { t in
+                switch t {
+                case "P0": return 0
+                case "P1": return 1
+                case "P2": return 2
+                default: return 3
+                }
+            }
+            collected.sort { rank($0.tier) < rank($1.tier) }
+            await MainActor.run { drilldownItems = collected }
+        }
+    }
+}
+
+private struct DashboardDrilldownFilter: Identifiable {
+    let id = UUID()
+    let tier: String?
+    let title: String
+}
+
+private struct DrilldownFindingItem: Identifiable {
+    let id: String
+    let diagramId: String
+    let repoName: String
+    let tier: String
+    let title: String
+    let file: String
+    let reason: String
+
+    var tierColor: Color {
+        switch tier {
+        case "P0": return SemanticColors.role("dangerText")
+        case "P1": return SemanticColors.role("warningText")
+        case "P2": return SemanticColors.role("actionText")
+        default: return SemanticColors.role("infoText")
         }
     }
 }
