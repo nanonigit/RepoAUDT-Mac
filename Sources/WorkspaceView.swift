@@ -468,6 +468,16 @@ struct MainContentView: View {
             }
             .navigationTitle(page.title(english: english))
             .toolbar {
+                if page != .dashboard {
+                    ToolbarItem(placement: .navigation) {
+                        Button {
+                            showPage(.dashboard)
+                        } label: {
+                            Label(english ? "Dashboard" : "ダッシュボードへ戻る", systemImage: "chevron.left")
+                        }
+                        .help(english ? "Back to Dashboard" : "ダッシュボードへ戻る")
+                    }
+                }
                 ToolbarItemGroup(placement: .primaryAction) {
                     if page == .audit && hasSelectedRepository {
                         Button {
