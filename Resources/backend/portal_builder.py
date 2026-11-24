@@ -7276,12 +7276,12 @@ def build_portal_html(data, is_shareable=False):
               ];
             } else if (lowerPath.includes('queue') || lowerTitle.includes('queue') || lowerTitle.includes('worker')) {
               dynCategory = "Asynchronous Job Queue & Workers";
-              dynTech = "BullMQ / Redis 7.2 ElastiCache";
-              dynResp = "長時間のAI推論処理や音声文字起こし、PDF職務経歴書解析タスクをバックグラウンドワーカーへ非同期オフロードし、APIのミリ秒単位の即時応答性を担保します。";
+              dynTech = "Background Queue / Worker（詳細未検出）";
+              dynResp = "非同期タスクやバックグラウンド処理をワーカーへオフロードし、リクエスト処理との分離を担当します。";
               dynSteps = [
-                "ジョブペイロード（セッションUUID、S3音声キー、評価パラメータ等）のJSONシリアライズ",
-                "Redis 7.2上のBullMQキュー（ai-scoring-queue, cv-parser-queue等）へのジョブ登録",
-                "バックグラウンドワーカーによる非同期処理実行と完了時DB書き込み"
+                "タスクペイロードのシリアライズとジョブ登録",
+                "バックグラウンドワーカーによる非同期処理の実行",
+                "処理完了ステータスの記録および後続処理への通知"
               ];
             }
 
@@ -7964,37 +7964,48 @@ def build_portal_html(data, is_shareable=False):
       } else if (currentInspTab === 'deploy') {
         const isEn = currentLang === 'en';
         const dep = spec.deploy || {};
+        const notDetected = isEn ? 'Not detected (N/A)' : '未検出（N/A）';
+        const detectedDbs = Array.isArray(repoItem?.deps?.databases) ? repoItem.deps.databases : [];
+        const detectedPkgs = Array.isArray(repoItem?.deps?.packages) ? repoItem.deps.packages : [];
+        const cacheDb = detectedDbs.find(d => /redis|memcached|valkey/i.test(String(d?.name || '')));
+        const cachePkg = detectedPkgs.find(p => /^(?:redis|ioredis|bullmq|bull|memcached|celery|rq)$/i.test(String(p?.name || '')));
+        const detectedCache = dep.cache
+          || (cacheDb ? `${cacheDb.name} ${cacheDb.version || ''}`.trim() : '')
+          || (cachePkg ? `${cachePkg.name} ${cachePkg.version || ''}`.trim() : '')
+          || notDetected;
+        const wfStatus = String(repoItem?.deps?.workflow_scan?.status || '').toLowerCase();
+        const detectedCi = dep.ci_cd || (wfStatus && wfStatus !== 'no_workflows' ? 'GitHub Actions' : notDetected);
         tabBody = `
           ${repoContextHtml}
           <div class="section-title">${isEn ? '🚀 Deployment & Infrastructure' : '🚀 デプロイ & インフラ構成'}</div>
           <div class="spec-card">
             <div class="deploy-row">
               <span class="deploy-label">${isEn ? 'Runtime Platform' : '実行プラットフォーム'}</span>
-              <span class="deploy-val">${dep.platform || 'AWS ECS / Vercel'}</span>
+              <span class="deploy-val">${escapeHtml(dep.platform || notDetected)}</span>
             </div>
             <div class="deploy-row">
               <span class="deploy-label">${isEn ? 'Database Version' : 'データベース バージョン'}</span>
-              <span class="deploy-val" style="color: #34d399;">${escapeHtml(dep.db_version || ((repoItem?.deps?.databases?.[0]) ? `${repoItem.deps.databases[0].name} ${repoItem.deps.databases[0].version || ''}`.trim() : (isEn ? 'Not detected' : '未検出（N/A）')))}</span>
+              <span class="deploy-val" style="color: ${detectedDbs.length || dep.db_version ? '#34d399' : '#94a3b8'};">${escapeHtml(dep.db_version || (detectedDbs[0] ? `${detectedDbs[0].name} ${detectedDbs[0].version || ''}`.trim() : notDetected))}</span>
             </div>
             <div class="deploy-row">
               <span class="deploy-label">${isEn ? 'Cache / Message Queue' : 'キャッシュ / キュー'}</span>
-              <span class="deploy-val" style="color: #f87171;">Redis 7.2 (ElastiCache)</span>
+              <span class="deploy-val" style="color: ${detectedCache === notDetected ? '#94a3b8' : '#38bdf8'};">${escapeHtml(detectedCache)}</span>
             </div>
             <div class="deploy-row">
               <span class="deploy-label">${isEn ? 'Container / Build Format' : 'コンテナ / ビルド形式'}</span>
-              <span class="deploy-val">${dep.dockerfile || 'Node.js 20-alpine'}</span>
+              <span class="deploy-val">${escapeHtml(dep.dockerfile || notDetected)}</span>
             </div>
             <div class="deploy-row">
               <span class="deploy-label">${isEn ? 'Listen Port' : 'リッスンポート'}</span>
-              <span class="deploy-val">${dep.port || '3000'}</span>
+              <span class="deploy-val">${escapeHtml(dep.port || notDetected)}</span>
             </div>
             <div class="deploy-row">
               <span class="deploy-label">${isEn ? 'Healthcheck Path' : 'ヘルスチェック'}</span>
-              <span class="deploy-val">${dep.healthcheck || '/health'}</span>
+              <span class="deploy-val">${escapeHtml(dep.healthcheck || notDetected)}</span>
             </div>
             <div class="deploy-row">
               <span class="deploy-label">${isEn ? 'CI/CD Pipeline' : 'CI/CD パイプライン'}</span>
-              <span class="deploy-val">${dep.ci_cd || 'GitHub Actions'}</span>
+              <span class="deploy-val">${escapeHtml(detectedCi)}</span>
             </div>
           </div>
         `;
@@ -8565,9 +8576,17 @@ def build_portal_html(data, is_shareable=False):
        ========================================================================== */
     function getWorkspaceIssues(repo) {
       const actions = getRepoActionItems(repo);
-      const findings = (repo.coderabbit?.findings || []).filter(finding =>
-        !actions.some(action => action.title === finding.title && action.file === (finding.file || finding.path)));
-      return [...actions, ...findings];
+      const findings = Array.isArray(repo?.coderabbit?.findings) ? repo.coderabbit.findings : [];
+      const seen = new Set();
+      const active = [];
+      for (const item of [...actions, ...findings]) {
+        if (!item || typeof item !== 'object' || item.suppressed) continue;
+        const key = String(item.fingerprint || `${item.title || ''}|${item.file || item.path || ''}|${item.cve || ''}`);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        active.push(item);
+      }
+      return active;
     }
 
     function workspaceSeverity(severity) {
@@ -12113,12 +12132,12 @@ def build_portal_html(data, is_shareable=False):
             ];
           } else if (lowerPath.includes('queue') || lowerPath.includes('redis') || lowerName.includes('bullmq')) {
             dynCategory = "Background Task Queue";
-            dynTech = "Redis 7.2 (ElastiCache) / BullMQ";
-            dynResp = "重い処理（AI音声認識・LLM採点・PDF生成・メール送信）を非同期ジョブとしてRedisキューに投入し、バックグラウンドワーカーへ分散オフロードします。";
+            dynTech = "Queue / Cache Layer（詳細未検出）";
+            dynResp = "非同期ジョブのキュー投入およびバックグラウンドワーカーでの実行・キャッシュ制御を担当します。";
             dynSteps = [
-              "ペイロードのシリアライズとBullMQジョブのRedis Streamへのプッシュ",
-              "指数バックオフによる自動リトライポリシー（最大3回）の設定",
-              "ジョブ完了イベントのPub/Sub通知と結果DB永続化"
+              "ジョブペイロードのシリアライズとキューへの投入",
+              "リトライ制御を含むバックグラウンドワーカーでの処理実行",
+              "完了イベントの通知および結果の永続化"
             ];
           } else if (lowerPath.includes('gemini') || lowerPath.includes('openai') || lowerName.includes('ai') || lowerName.includes('llm')) {
             dynCategory = "External AI Model API";

@@ -1084,16 +1084,18 @@ struct MainContentView: View {
                     liveSyncProgressCard(progress)
                 }
 
-                let totalFindings = allRepos.reduce(0) { $0 + $1.findings }
+                let p0Total = aspmRepos.reduce(0) { $0 + $1.p0 }
+                let p1Total = aspmRepos.reduce(0) { $0 + $1.p1 }
+                let p2Total = aspmRepos.reduce(0) { $0 + $1.p2 }
+                let p3Total = aspmRepos.reduce(0) { $0 + $1.p3 }
+                let totalFindings = aspmRepos.isEmpty
+                    ? allRepos.reduce(0) { $0 + $1.findings }
+                    : (p0Total + p1Total + p2Total + p3Total)
                 let highRiskRepos = allRepos.filter { severityRank($0.severity) >= 4 }
                 let highRiskFindings = highRiskRepos.reduce(0) { $0 + $1.findings }
                 let repoLatestAnalyzed = allRepos.compactMap { formattedAnalysisDate($0.analyzedAt) }
                 let syncLatestAnalyzed = formattedAnalysisDate(lastCompletedSyncAt)
                 let latestAnalyzed = (repoLatestAnalyzed + (syncLatestAnalyzed.map { [$0] } ?? [])).max()
-                let p0Total = aspmRepos.reduce(0) { $0 + $1.p0 }
-                let p1Total = aspmRepos.reduce(0) { $0 + $1.p1 }
-                let p2Total = aspmRepos.reduce(0) { $0 + $1.p2 }
-                let p3Total = aspmRepos.reduce(0) { $0 + $1.p3 }
                 let topRisk = Array(sortDashboardRepositories(highRiskRepos, by: .severityDesc).prefix(5))
 
                 ForEach(orderedDashboardSections, id: \.self) { sectionId in
@@ -1214,8 +1216,8 @@ struct MainContentView: View {
                         }
 
                     case "risk_trend":
-                        if aspmHistory.count >= 2 {
-                            dashboardSectionWrapper(id: "risk_trend", title: english ? "Risk Score Trend (Recent Scans)" : "リスクスコア推移（全体トレンド）") {
+                        if aspmHistory.filter({ $0.orgRiskScore != nil }).count >= 2 || !aspmRepos.isEmpty {
+                            dashboardSectionWrapper(id: "risk_trend", title: english ? "Risk Score Trend (Org Average)" : "リスクスコア推移（全体平均トレンド）") {
                                 EmptyView()
                             } content: {
                                 riskTrendChartCard()
@@ -1600,13 +1602,15 @@ struct MainContentView: View {
 
     @ViewBuilder
     private func riskTrendChartCard() -> some View {
-        let pts = Array(aspmHistory.suffix(20))
+        let orgHistory = aspmHistory.filter { $0.orgRiskScore != nil }
+        let pts = Array(orgHistory.suffix(20))
+        let liveOrgAvg = aspmRepos.isEmpty ? 0 : Int((Double(aspmRepos.reduce(0) { $0 + $1.riskScore }) / Double(aspmRepos.count)).rounded())
         let latest = pts.last
         let prev = pts.count >= 2 ? pts[pts.count - 2] : nil
-        let latestScore = latest?.riskScore ?? 0
+        let latestScore = latest?.orgRiskScore ?? liveOrgAvg
         let latestColor = riskScoreColor(latestScore)
-        let scoreDelta = prev.map { latestScore - $0.riskScore } ?? 0
-        let avgScore = pts.isEmpty ? 0 : pts.reduce(0) { $0 + $1.riskScore } / pts.count
+        let scoreDelta = prev.flatMap { p in latest?.orgRiskScore.map { $0 - (p.orgRiskScore ?? p.riskScore) } } ?? 0
+        let avgScore = pts.isEmpty ? liveOrgAvg : pts.reduce(0) { $0 + ($1.orgRiskScore ?? $1.riskScore) } / pts.count
         let totalNew = pts.reduce(0) { $0 + $1.newCount }
         let totalResolved = pts.reduce(0) { $0 + $1.resolvedCount }
         let p0Total = aspmRepos.reduce(0) { $0 + $1.p0 }
@@ -1633,46 +1637,52 @@ struct MainContentView: View {
                                 .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                             }
 
-                            // Area fill
-                            Path { path in
-                                for (idx, pt) in pts.enumerated() {
-                                    let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
-                                    let norm = min(1.0, max(0.0, Double(pt.riskScore) / 100.0))
-                                    let y = pad + usableH * CGFloat(1.0 - norm)
-                                    if idx == 0 {
-                                        path.move(to: CGPoint(x: x, y: h - pad))
-                                        path.addLine(to: CGPoint(x: x, y: y))
-                                    } else {
-                                        path.addLine(to: CGPoint(x: x, y: y))
+                            if pts.count < 2 {
+                                Text(english ? "Collecting org-wide trend snapshots (chart appears after next scan)" : "全体平均トレンドを蓄積中（次回の解析から推移グラフが表示されます）")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 12)
+                            } else {
+                                // Area fill
+                                Path { path in
+                                    for (idx, pt) in pts.enumerated() {
+                                        let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
+                                        let norm = min(1.0, max(0.0, Double(pt.orgRiskScore ?? pt.riskScore) / 100.0))
+                                        let y = pad + usableH * CGFloat(1.0 - norm)
+                                        if idx == 0 {
+                                            path.move(to: CGPoint(x: x, y: h - pad))
+                                            path.addLine(to: CGPoint(x: x, y: y))
+                                        } else {
+                                            path.addLine(to: CGPoint(x: x, y: y))
+                                        }
                                     }
-                                }
-                                if pts.count >= 2 {
                                     path.addLine(to: CGPoint(x: w - pad, y: h - pad))
                                     path.closeSubpath()
                                 }
-                            }
-                            .fill(
-                                LinearGradient(
-                                    colors: [latestColor.opacity(0.28), latestColor.opacity(0.02)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
+                                .fill(
+                                    LinearGradient(
+                                        colors: [latestColor.opacity(0.28), latestColor.opacity(0.02)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
                                 )
-                            )
 
-                            // Line stroke
-                            Path { path in
-                                for (idx, pt) in pts.enumerated() {
-                                    let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
-                                    let norm = min(1.0, max(0.0, Double(pt.riskScore) / 100.0))
-                                    let y = pad + usableH * CGFloat(1.0 - norm)
-                                    if idx == 0 {
-                                        path.move(to: CGPoint(x: x, y: y))
-                                    } else {
-                                        path.addLine(to: CGPoint(x: x, y: y))
+                                // Line stroke
+                                Path { path in
+                                    for (idx, pt) in pts.enumerated() {
+                                        let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
+                                        let norm = min(1.0, max(0.0, Double(pt.orgRiskScore ?? pt.riskScore) / 100.0))
+                                        let y = pad + usableH * CGFloat(1.0 - norm)
+                                        if idx == 0 {
+                                            path.move(to: CGPoint(x: x, y: y))
+                                        } else {
+                                            path.addLine(to: CGPoint(x: x, y: y))
+                                        }
                                     }
                                 }
+                                .stroke(latestColor, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
                             }
-                            .stroke(latestColor, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
                         }
                     }
                     .frame(height: 84)

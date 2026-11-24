@@ -161,7 +161,9 @@ class TestTriageAndValidation(unittest.TestCase):
     def test_fingerprint_suppression_and_is_new_tracking(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             state_file = Path(tmp) / "saved_analyses.json"
+            history_file = Path(tmp) / "scan_history.json"
             with mock.patch.object(analyzer, "STATE_FILE", state_file), \
+                 mock.patch.object(analyzer, "HISTORY_FILE", history_file), \
                  mock.patch.object(analyzer, "ensure_dirs"):
                 item1 = {"title": "Existing issue", "file": "a.ts:1", "severity": "medium"}
                 item1["fingerprint"] = triage_engine.compute_finding_fingerprint("org/repo", item1)
@@ -209,7 +211,9 @@ class TestTriageAndValidation(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             state_file = Path(tmp) / "saved_analyses.json"
+            history_file = Path(tmp) / "scan_history.json"
             with mock.patch.object(analyzer, "STATE_FILE", state_file), \
+                 mock.patch.object(analyzer, "HISTORY_FILE", history_file), \
                  mock.patch.object(analyzer, "ensure_dirs"):
                 item = {"title": "Temp snooze issue", "file": "a.ts:1", "severity": "high"}
                 fp = triage_engine.compute_finding_fingerprint("org/repo", item)

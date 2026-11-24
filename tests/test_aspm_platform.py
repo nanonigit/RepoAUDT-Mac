@@ -49,6 +49,50 @@ class TestAspmPlatform(unittest.TestCase):
         for domain in ("secrets", "sca", "sast", "cicd", "iac", "posture"):
             self.assertEqual(unscanned[domain]["status"], "unscanned")
 
+        # Disabled / errored scanners must not report false-clean
+        failed_sast = aspm_engine.compute_coverage_matrix({
+            "id": "d-fail",
+            "repo": "acme/fail",
+            "deps": {"source_scan": {"semgrep": "disabled", "gitleaks": "timeout"}},
+            "coderabbit": {"action_items": []},
+        })
+        self.assertEqual(failed_sast["sast"]["status"], "not_applicable")
+        self.assertEqual(failed_sast["secrets"]["status"], "unscanned")
+
+    def test_org_risk_score_uses_saved_diagrams_and_isolates_history_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state_file = root / "analyzed_repos.json"
+            with mock.patch.object(analyzer, "STATE_FILE", state_file), \
+                 mock.patch.object(analyzer, "ensure_dirs"):
+                d_high = {
+                    "id": "r-high",
+                    "repo": "acme/high",
+                    "github_url": "https://github.com/acme/high",
+                    "coderabbit": {
+                        "action_items": [
+                            {"title": "Secret 1", "priority_tier": "P0", "category": "secrets", "file": ".env:1"},
+                            {"title": "Secret 2", "priority_tier": "P0", "category": "secrets", "file": ".env:2"},
+                        ],
+                        "findings": [],
+                    },
+                }
+                d_low = {
+                    "id": "r-low",
+                    "repo": "acme/low",
+                    "github_url": "https://github.com/acme/low",
+                    "coderabbit": {"action_items": [], "findings": []},
+                }
+                analyzer.save_analysis_result({"diagram": d_high})
+                analyzer.save_analysis_result({"diagram": d_low})
+
+                hist = analyzer.load_scan_history()
+                self.assertEqual(len(hist), 2)
+                # Second snapshot saved d_low (score 0), while org average of (60, 0) must be 30
+                self.assertEqual(hist[-1]["risk_score"], 0)
+                self.assertEqual(hist[-1]["org_risk_score"], 30)
+                self.assertTrue((root / "scan_history.json").exists())
+
     def test_criticality_weighting_and_portfolio_sort(self) -> None:
         base_items = [{"title": "SSRF", "priority_tier": "P1", "severity": "high", "file": "api.py:10"}]
         d_tier1 = {"id": "d1", "repo": "acme/prod", "criticality": "tier1_prod", "coderabbit": {"action_items": base_items}}

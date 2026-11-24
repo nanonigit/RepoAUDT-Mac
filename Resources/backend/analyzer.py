@@ -1930,6 +1930,26 @@ def _ensure_all_action_items_triaged(diagram: Dict[str, Any]) -> bool:
                 if not item.get("priority_reason"):
                     item["priority_reason"] = r
                     changed = True
+    if not diagram.get("is_root"):
+        from aspm_engine import _collect_active_findings
+
+        active = _collect_active_findings(diagram)
+        crit_cnt = 0
+        warn_cnt = 0
+        info_cnt = 0
+        for item in active:
+            sev = str(item.get("severity") or "").lower()
+            tier = str(item.get("priority_tier") or "").upper()
+            if tier in ("P0", "P1") or sev in ("critical", "high"):
+                crit_cnt += 1
+            elif tier == "P2" or sev in ("medium", "warning"):
+                warn_cnt += 1
+            else:
+                info_cnt += 1
+        synced_stats = {"critical": crit_cnt, "warning": warn_cnt, "info": info_cnt}
+        if cr.get("stats") != synced_stats:
+            cr["stats"] = synced_stats
+            changed = True
     return changed
 
 
@@ -2356,14 +2376,28 @@ def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) 
                 }
                 resolved_cnt = len(prev_fps - cur_fps) if prev_fps else 0
                 new_cnt = len(cur_fps - prev_fps) if prev_fps else len(cur_fps)
-                append_scan_history_snapshot(d, resolved_since_prev=resolved_cnt, new_since_prev=new_cnt)
-            except Exception:
-                pass
+                append_scan_history_snapshot(
+                    d,
+                    resolved_since_prev=resolved_cnt,
+                    new_since_prev=new_cnt,
+                    all_diagrams=state.get("diagrams"),
+                )
+            except Exception as exc:
+                print(f"Warning: failed to append scan history snapshot: {exc}", file=sys.stderr)
     return state
 
 
+def _resolve_history_file(history_file: Optional[Path] = None) -> Path:
+    if history_file is not None:
+        return history_file
+    default_history = APP_SUPPORT_DIR / "scan_history.json"
+    if HISTORY_FILE == default_history and STATE_FILE.parent != APP_SUPPORT_DIR:
+        return STATE_FILE.parent / "scan_history.json"
+    return HISTORY_FILE
+
+
 def load_scan_history(history_file: Optional[Path] = None) -> List[Dict[str, Any]]:
-    target = history_file or HISTORY_FILE
+    target = _resolve_history_file(history_file)
     if not target.exists():
         return []
     try:
@@ -2379,11 +2413,12 @@ def append_scan_history_snapshot(
     resolved_since_prev: int = 0,
     new_since_prev: int = 0,
     history_file: Optional[Path] = None,
+    all_diagrams: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """Append a scan snapshot and rotate history to MAX_SCAN_HISTORY (90) entries."""
     from aspm_engine import compute_risk_score
 
-    target = history_file or HISTORY_FILE
+    target = _resolve_history_file(history_file)
     risk = compute_risk_score(diagram)
     counts = risk["counts"]
     repo_score = int(risk.get("risk_score", 0))
@@ -2391,15 +2426,18 @@ def append_scan_history_snapshot(
     repo_name = str(diagram.get("repo") or diagram.get("github_url") or "")
 
     org_risk_score = repo_score
-    if history_file is None:
+    diagrams_for_org = all_diagrams
+    if diagrams_for_org is None and history_file is None:
         try:
-            st = load_state()
-            non_root = [d for d in (st.get("diagrams") or []) if isinstance(d, dict) and not d.get("is_root")]
-            if non_root:
-                scores = [int(compute_risk_score(d).get("risk_score", 0)) for d in non_root]
-                org_risk_score = round(sum(scores) / len(scores))
-        except Exception:
-            pass
+            st = load_saved_analyses()
+            diagrams_for_org = st.get("diagrams") if isinstance(st, dict) else None
+        except Exception as exc:
+            print(f"Warning: failed to load diagrams for org_risk_score: {exc}", file=sys.stderr)
+    if diagrams_for_org:
+        non_root = [d for d in diagrams_for_org if isinstance(d, dict) and not d.get("is_root")]
+        if non_root:
+            scores = [int(compute_risk_score(d).get("risk_score", 0)) for d in non_root]
+            org_risk_score = round(sum(scores) / len(scores))
 
     with _STATE_LOCK:
         history = load_scan_history(target)

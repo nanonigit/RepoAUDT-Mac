@@ -104,9 +104,12 @@ def compute_coverage_matrix(diagram: Dict[str, Any]) -> Dict[str, Dict[str, Any]
         return {"status": status, "count": count}
 
     # 1. Secrets
+    gitleaks_status = str(src_scan.get("gitleaks") or "").lower()
     if cat_counts["secrets"] > 0:
         secrets_cell = _cell("issues", cat_counts["secrets"])
-    elif has_any_scan:
+    elif gitleaks_status in ("error", "timeout", "unavailable", "missing"):
+        secrets_cell = _cell("unscanned", 0)
+    elif gitleaks_status in ("complete", "partial") or has_any_scan:
         secrets_cell = _cell("clean", 0)
     else:
         secrets_cell = _cell("unscanned", 0)
@@ -124,12 +127,17 @@ def compute_coverage_matrix(diagram: Dict[str, Any]) -> Dict[str, Dict[str, Any]
 
     # 3. SAST
     semgrep_status = str(src_scan.get("semgrep") or "").lower()
+    ruff_status = str(src_scan.get("ruff") or "").lower()
     if cat_counts["sast"] > 0:
         sast_cell = _cell("issues", cat_counts["sast"])
-    elif semgrep_status in ("complete", "partial") or has_any_scan:
-        sast_cell = _cell("clean", 0)
-    elif semgrep_status in ("disabled", "no_files"):
+    elif semgrep_status in ("disabled", "no_files") and ruff_status in ("", "disabled", "no_files"):
         sast_cell = _cell("not_applicable", 0)
+    elif semgrep_status in ("error", "timeout", "unavailable", "missing") and ruff_status not in ("complete", "partial"):
+        sast_cell = _cell("unscanned", 0)
+    elif semgrep_status in ("complete", "partial") or ruff_status in ("complete", "partial"):
+        sast_cell = _cell("clean", 0)
+    elif has_any_scan and not src_scan:
+        sast_cell = _cell("clean", 0)
     else:
         sast_cell = _cell("unscanned", 0)
 
@@ -163,7 +171,12 @@ def compute_coverage_matrix(diagram: Dict[str, Any]) -> Dict[str, Dict[str, Any]
             posture_issues += 1
         if vis == "PUBLIC" and cat_counts["secrets"] > 0:
             posture_issues += 1
-        posture_cell = _cell("issues", posture_issues) if posture_issues > 0 else _cell("clean", 0)
+        if posture_issues > 0:
+            posture_cell = _cell("issues", posture_issues)
+        elif posture.get("default_branch_protected") is None and posture.get("error"):
+            posture_cell = _cell("unscanned", 0)
+        else:
+            posture_cell = _cell("clean", 0)
     else:
         posture_cell = _cell("unscanned", 0)
 
