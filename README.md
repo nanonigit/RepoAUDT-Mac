@@ -8,11 +8,12 @@ Enter a GitHub repository URL or `owner/repo`, analyze the code, and inspect fin
 
 ## Features
 
-- **Repository workspace:** saved-repository dashboard, search, audit results, architecture diagrams, and execution flows.
-- **Code audits:** static-analysis findings, dependency vulnerability checks, evidence, affected components, and remediation suggestions where available. Copy fix prompts and save reports for review.
+- **Repository workspace:** saved-repository dashboard with customizable sections, search, active-repository sidebar highlight across views (audit, architecture, execution flow, chat), and repository sorting including **Highest risk score**.
+- **Code audits:** static-analysis findings, dependency vulnerability checks, Web/supply-chain config checks (`dangerouslyAllowSVG`, CORS wildcard + credentials, suspicious npm lifecycle hooks, committed keystores/sourcemaps), evidence, affected components, and remediation suggestions. Copy English-first / Japanese-second batch fix requests and save reports for review.
+- **Live threat intelligence correlation:** fetches **CISA KEV** (Known Exploited Vulnerabilities) and **GitHub Security Advisories (Critical)** feeds and correlates them against saved repositories' detected stacks, files (`Dockerfile`, `nginx.conf`, `composer.json`, `package.json`, `*.tf`, Kubernetes Ingress), and known CVEs.
+- **Remediation request tracker:** tracks Slack and GitHub Issue remediation requests per finding with elapsed days, `All` / `Unrequested` / `Requested` filters, automatic resolution on re-scan, and one-click GitHub Issue creation via `gh issue create`.
 - **Runtime inventory and security updates:** list repository-declared images, runtime pins and compatibility settings. Upstream lookups cover PHP, nginx, Node.js, Go and PostgreSQL. Findings link to the official advisory or security release and show the documented fixed version when available.
-- **Python quality and secret candidates:** Ruff checks selected Python rules for issues such as undefined names and unused imports. Gitleaks scans tracked files for potential credentials. Secret findings are redacted in source previews and reports.
-- **GitHub Actions audit:** optionally add [zizmor](https://docs.zizmor.sh/audits/). The app scans workflow copies offline and merges findings with its built-in checks. Open a finding for the file, line, and rule documentation.
+- **Multi-scanner integration:** combines **Gitleaks** (working tree and Git commit history), **TruffleHog** (offline `--no-verification`), **Trivy** (SCA & IaC), **Semgrep**, **Hadolint** (Dockerfile), **Ruff**, and **zizmor**. Secret findings are redacted in source previews and reports, with CLI status shown in **Runtime & Updates**.
 - **Authorization evidence:** for supported GitHub-pinned Python HTTP handlers, findings trace the request entry, authorization boundary, input and privileged operation. The finding includes redacted recorded snippets, exact source links and a statically checked defensive patch. Recorded evidence remains available independently of live GitHub comparison.
 - **Current source and history:** open a finding to see its audited and current source lines with commit links, the default branch's latest commit, the repository's last push, and the file's last change. Live evidence uses authenticated GitHub CLI access.
 - **Audit chat:** start in the sidebar or from a finding. Each question checks GitHub again and sends the question, recent messages, and comparison metadata to the configured AI provider. Source lines stay in the workspace.
@@ -48,12 +49,12 @@ To build a bundle in the repository without installing it:
 ## Optional local scanners
 
 ```bash
-brew install zizmor ruff gitleaks
+brew install zizmor ruff gitleaks trufflehog trivy semgrep hadolint
 ```
 
-Run **Re-scan** to add zizmor results to a saved audit. The app checks up to 25 local workflow files. zizmor receives no GitHub token or repository configuration. The app retains built-in checks when zizmor is missing, times out or cannot parse an input. The MCP audit report includes scan status.
+Run **Re-scan** to include installed CLI scanner results in a saved audit. You can verify installation status for all seven scanners in **Runtime & Updates**. zizmor checks up to 25 local workflow files offline without receiving any GitHub token. When any optional CLI is missing, times out, or fails to parse an input, built-in checks continue to run and scan status is recorded in the audit and MCP reports.
 
-Ruff and Gitleaks run on temporary copies of tracked working-tree files. The combined source scan is limited to 3,000 files, 256 KiB per file and 32 MiB in total. Gitleaks checks the current snapshot. The MCP audit report includes coverage status for both tools.
+Gitleaks scans both tracked working-tree snapshots and Git commit history, and TruffleHog runs in offline mode (`--no-verification`) with deduplication against HEAD findings. Hadolint audits `Dockerfile` definitions, Trivy covers SCA & IaC, and Semgrep & Ruff analyze source code.
 
 ## Getting started
 

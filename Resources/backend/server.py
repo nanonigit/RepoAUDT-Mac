@@ -699,6 +699,18 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
             )
             self._send_json(200, {"ok": True, **portfolio})
             return
+        if self.path.startswith("/api/threat-feed"):
+            import threat_feed
+            parsed_url = urllib.parse.urlparse(self.path)
+            qs = urllib.parse.parse_qs(parsed_url.query)
+            force_fetch = (qs.get("force") or ["0"])[0].strip() == "1"
+            state = analyzer.load_saved_analyses()
+            result = threat_feed.fetch_and_correlate_threat_feed(
+                state.get("diagrams", []),
+                force=force_fetch,
+            )
+            self._send_json(200, result)
+            return
         if self.path.startswith("/api/remediation/requests"):
             self._send_json(200, analyzer.get_remediation_summary())
             return

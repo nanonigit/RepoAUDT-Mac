@@ -155,9 +155,17 @@ struct MainContentView: View {
     @State private var remediationOverdue3dCount = 0
     @State private var creatingIssueGroupID: String?
     @State private var showRemediationTrackerSheet = false
+    @State private var threatFeedItems: [ThreatFeedItem] = []
+    @State private var threatFeedMatchedCount = 0
+    @State private var threatFeedUnaffectedCount = 0
+    @State private var threatFeedScannedRepos = 0
+    @State private var threatFeedFetchedAt = ""
+    @State private var threatFeedStackSummary = ""
+    @State private var loadingThreatFeed = false
+    @State private var threatFeedShowAll = false
     @State private var showRiskTrendReasons = false
     @State private var showAspmLegend = false
-    @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "commit_monitor,monitor_updates,kpi,risk_trend,priority_repos,aspm,audit_scope"
+    @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "commit_monitor,monitor_updates,kpi,threat_feed,risk_trend,priority_repos,aspm,audit_scope"
     @AppStorage("dashboardCollapsedSections") private var dashboardCollapsedSectionsRaw = ""
     @State private var monitorChecking = false
     @State private var monitorLastCheckTime = ""
@@ -1186,6 +1194,7 @@ struct MainContentView: View {
                     guard backend.isReady else { return }
                     await refreshAspmPortfolio()
                     await refreshRemediationRequests()
+                    await refreshThreatFeed(force: false)
                     while !Task.isCancelled {
                         await fetchMonitorStatus()
                         await refreshAspmPortfolio()
@@ -1378,6 +1387,31 @@ struct MainContentView: View {
                                     }
                                 }
                             }
+                        }
+
+                    case "threat_feed":
+                        dashboardSectionWrapper(id: "threat_feed", title: english ? "Live Threat Feed Correlation (CISA KEV / GHSA Critical)" : "最新重大脅威フィード照合（CISA KEV / GHSA Critical）") {
+                            HStack(spacing: 8) {
+                                if !threatFeedFetchedAt.isEmpty {
+                                    Text(threatFeedFetchedAt)
+                                        .font(.caption2.monospaced())
+                                        .foregroundStyle(.tertiary)
+                                }
+                                Button {
+                                    Task { await refreshThreatFeed(force: true) }
+                                } label: {
+                                    if loadingThreatFeed {
+                                        ProgressView().controlSize(.small)
+                                    } else {
+                                        Label(english ? "Fetch Live" : "最新を取得", systemImage: "arrow.clockwise")
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .disabled(loadingThreatFeed || !backend.isReady)
+                            }
+                        } content: {
+                            threatFeedCard()
                         }
 
                     case "risk_trend":
@@ -1625,7 +1659,7 @@ struct MainContentView: View {
     }
 
     private var orderedDashboardSections: [String] {
-        let defaults = ["commit_monitor", "monitor_updates", "kpi", "risk_trend", "priority_repos", "aspm", "audit_scope"]
+        let defaults = ["commit_monitor", "monitor_updates", "kpi", "threat_feed", "risk_trend", "priority_repos", "aspm", "audit_scope"]
         let parsed = dashboardSectionOrderRaw.split(separator: ",").map(String.init).filter { defaults.contains($0) }
         let missing = defaults.filter { !parsed.contains($0) }
         return parsed + missing
@@ -3637,6 +3671,178 @@ struct MainContentView: View {
             : ["下記の対象箇所を確認して修正を適用し、テストで動作に影響がないことを確認してください。"]
     }
 
+    private func refreshThreatFeed(force: Bool) async {
+        guard backend.isReady, !loadingThreatFeed else { return }
+        await MainActor.run { loadingThreatFeed = true }
+        defer { Task { @MainActor in loadingThreatFeed = false } }
+        do {
+            let path = force ? "/api/threat-feed?force=1" : "/api/threat-feed"
+            let json = try await requestJSON(path)
+            let rawItems = json["items"] as? [[String: Any]] ?? []
+            let parsed: [ThreatFeedItem] = rawItems.enumerated().map { idx, d in
+                let rawRepos = d["matched_repos"] as? [[String: Any]] ?? []
+                let repos: [ThreatFeedRepoMatch] = rawRepos.map { mr in
+                    ThreatFeedRepoMatch(
+                        repo: (mr["repo"] as? String) ?? "",
+                        confirmedCve: (mr["confirmed_cve"] as? Bool) ?? false,
+                        evidence: (mr["evidence"] as? String) ?? ""
+                    )
+                }
+                return ThreatFeedItem(
+                    id: "\(idx)-\((d["cve"] as? String) ?? "")",
+                    cve: (d["cve"] as? String) ?? "",
+                    source: (d["source"] as? String) ?? "Feed",
+                    product: (d["product"] as? String) ?? "",
+                    title: (d["title"] as? String) ?? "",
+                    published: (d["published"] as? String) ?? "",
+                    url: (d["url"] as? String) ?? "",
+                    matchStatus: (d["match_status"] as? String) ?? "not_affected",
+                    matchedRepos: repos
+                )
+            }
+            let stackDict = json["stack_inventory"] as? [String: Int] ?? [:]
+            let stackStr = stackDict.sorted { $0.value > $1.value }.prefix(6).map { "\($0.key)(\($0.value))" }.joined(separator: " · ")
+            await MainActor.run {
+                threatFeedItems = parsed
+                threatFeedMatchedCount = (json["matched_count"] as? Int) ?? 0
+                threatFeedUnaffectedCount = (json["unaffected_count"] as? Int) ?? 0
+                threatFeedScannedRepos = (json["scanned_repos"] as? Int) ?? 0
+                threatFeedFetchedAt = (json["fetched_at"] as? String) ?? ""
+                threatFeedStackSummary = stackStr
+            }
+        } catch {
+            // Non-fatal dashboard enhancement
+        }
+    }
+
+    @ViewBuilder
+    private func threatFeedCard() -> some View {
+        let matchedItems = threatFeedItems.filter { $0.matchStatus != "not_affected" }
+        let visibleItems = threatFeedShowAll ? Array(threatFeedItems.prefix(12)) : Array(matchedItems.prefix(8))
+
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Text(english ? "Matched: \(threatFeedMatchedCount)" : "自社該当: \(threatFeedMatchedCount)件")
+                        .font(.caption.bold().monospacedDigit())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            (threatFeedMatchedCount > 0 ? SemanticColors.role("dangerText") : SemanticColors.role("successText")).opacity(0.16),
+                            in: Capsule()
+                        )
+                        .foregroundStyle(threatFeedMatchedCount > 0 ? SemanticColors.role("dangerText") : SemanticColors.role("successText"))
+
+                    Text(english ? "Not Affected: \(threatFeedUnaffectedCount)" : "影響なし確認済: \(threatFeedUnaffectedCount)件")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+
+                    if !threatFeedStackSummary.isEmpty {
+                        Text(english ? "Detected Stacks: \(threatFeedStackSummary)" : "自社構成: \(threatFeedStackSummary)")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Picker("", selection: $threatFeedShowAll) {
+                        Text(english ? "Matched (\(matchedItems.count))" : "自社該当 (\(matchedItems.count))").tag(false)
+                        Text(english ? "All Feed (\(threatFeedItems.count))" : "全フィード (\(threatFeedItems.count))").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 230)
+                }
+
+                if loadingThreatFeed && threatFeedItems.isEmpty {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(english ? "Fetching CISA KEV & GHSA Critical feeds..." : "CISA KEV / GHSA Critical 公式フィードを取得・照合中…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 6)
+                } else if visibleItems.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.shield.fill")
+                            .foregroundStyle(SemanticColors.role("successText"))
+                        Text(english
+                             ? "None of the recent \(threatFeedItems.count) CISA KEV / GHSA Critical threats matched your \(threatFeedScannedRepos) repositories."
+                             : "直近の CISA KEV / GHSA 緊急脅威 \(threatFeedItems.count) 件と自社 \(threatFeedScannedRepos) リポジトリの実コード・Dockerfile を照合した結果、該当はありません。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 6)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(visibleItems) { item in
+                            HStack(alignment: .top, spacing: 10) {
+                                let isConfirmed = item.matchStatus == "confirmed"
+                                let isStack = item.matchStatus == "stack_match"
+                                let badgeColor: Color = isConfirmed
+                                    ? SemanticColors.role("dangerText")
+                                    : (isStack ? SemanticColors.role("warningText") : SemanticColors.role("successText"))
+                                let badgeLabel: String = isConfirmed
+                                    ? (english ? "CONFIRMED" : "脆弱性該当")
+                                    : (isStack ? (english ? "STACK MATCH" : "利用技術該当") : (english ? "SAFE" : "該当なし"))
+                                Text(badgeLabel)
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(badgeColor.opacity(0.16), in: Capsule())
+                                    .foregroundStyle(badgeColor)
+                                    .frame(width: 78, alignment: .center)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(item.source)
+                                            .font(.caption2.bold())
+                                            .foregroundStyle(item.source == "CISA KEV" ? SemanticColors.role("dangerText") : SemanticColors.role("infoText"))
+                                        if !item.cve.isEmpty {
+                                            Text(item.cve)
+                                                .font(.caption2.monospaced().weight(.semibold))
+                                        }
+                                        if !item.published.isEmpty {
+                                            Text(item.published)
+                                                .font(.caption2.monospaced())
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                    }
+                                    Text(item.title)
+                                        .font(.caption.weight(.medium))
+                                        .lineLimit(2)
+                                    if !item.matchedRepos.isEmpty {
+                                        let repoSummary = item.matchedRepos.prefix(3).map {
+                                            $0.evidence.isEmpty ? $0.repo : "\($0.repo) (\($0.evidence))"
+                                        }.joined(separator: " / ")
+                                        Text(repoSummary)
+                                            .font(.caption2.monospaced())
+                                            .foregroundStyle(badgeColor)
+                                            .lineLimit(2)
+                                    }
+                                }
+                                Spacer(minLength: 4)
+                                if let url = URL(string: item.url), !item.url.isEmpty {
+                                    Button {
+                                        NSWorkspace.shared.open(url)
+                                    } label: {
+                                        Image(systemName: "arrow.up.right.square")
+                                            .font(.caption)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help(item.url)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                            if item.id != visibleItems.last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(12)
+        }
+    }
+
     private func filteredDrilldownItems(_ items: [DrilldownFindingItem]) -> [DrilldownFindingItem] {
         switch drilldownRequestFilter {
         case "unrequested":
@@ -3990,6 +4196,24 @@ struct MainContentView: View {
             }
         }
     }
+}
+
+private struct ThreatFeedRepoMatch {
+    let repo: String
+    let confirmedCve: Bool
+    let evidence: String
+}
+
+private struct ThreatFeedItem: Identifiable {
+    let id: String
+    let cve: String
+    let source: String
+    let product: String
+    let title: String
+    let published: String
+    let url: String
+    let matchStatus: String
+    let matchedRepos: [ThreatFeedRepoMatch]
 }
 
 private struct RemediationRequestRecord: Identifiable {
