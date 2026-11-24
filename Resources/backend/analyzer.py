@@ -2367,6 +2367,7 @@ def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) 
         state.setdefault("techSpecs", {}).update(result.get("techSpecs", {}))
         state.setdefault("tableSchemas", {}).update(result.get("tableSchemas", {}))
         _cleanup_orphaned_state(state, prune_empty_org_roots=False)
+        reconcile_remediation_requests(state)
         _write_json_atomic(STATE_FILE, state)
 
     for d in new_diagrams:
@@ -2570,6 +2571,153 @@ def delete_saved_diagram(diagram_id: Optional[str] = None, category: Optional[st
         _cleanup_orphaned_state(state)
         _write_json_atomic(STATE_FILE, state)
         return state
+
+
+def reconcile_remediation_requests(state: Dict[str, Any]) -> bool:
+    """Reconcile requested remediations against current active findings to auto-detect fixes."""
+    raw_reqs = state.get("remediation_requests")
+    if not isinstance(raw_reqs, dict) or not raw_reqs:
+        return False
+
+    from aspm_engine import _collect_active_findings
+
+    active_fps: set[str] = set()
+    repo_commits: Dict[str, str] = {}
+    for d in state.get("diagrams", []):
+        if not isinstance(d, dict) or d.get("is_root"):
+            continue
+        repo_name = str(d.get("repo") or "").strip()
+        if repo_name:
+            rev = d.get("source_revision") if isinstance(d.get("source_revision"), dict) else {}
+            sha = str(rev.get("commit_sha") or d.get("commit_hash") or "").strip()[:8]
+            repo_commits[repo_name] = sha
+        for it in _collect_active_findings(d):
+            fp = str(it.get("fingerprint") or "").strip()
+            if fp:
+                active_fps.add(fp)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    changed = False
+    for fp, rec in list(raw_reqs.items()):
+        if not isinstance(rec, dict):
+            continue
+        repo_name = str(rec.get("repo") or "").strip()
+        status = str(rec.get("status") or "requested").lower()
+        if fp in active_fps:
+            if status == "resolved":
+                rec["status"] = "requested"
+                rec["resolved_at"] = None
+                rec["resolved_commit"] = None
+                changed = True
+        else:
+            # Only mark resolved if the repository still exists in saved analyses
+            if status == "requested" and (not repo_name or repo_name in repo_commits):
+                rec["status"] = "resolved"
+                rec["resolved_at"] = now_iso
+                rec["resolved_commit"] = repo_commits.get(repo_name, "")
+                changed = True
+    return changed
+
+
+def get_remediation_summary(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Return all remediation tracking records with elapsed days and counts."""
+    st = state if isinstance(state, dict) else load_saved_analyses()
+    raw_reqs = st.get("remediation_requests") if isinstance(st.get("remediation_requests"), dict) else {}
+    now_dt = datetime.now(timezone.utc)
+    enriched: Dict[str, Dict[str, Any]] = {}
+    requested_count = 0
+    resolved_count = 0
+    overdue_3d = 0
+    overdue_7d = 0
+
+    for fp, rec in raw_reqs.items():
+        if not isinstance(rec, dict):
+            continue
+        entry = dict(rec)
+        entry.setdefault("fingerprint", fp)
+        status = str(entry.get("status") or "requested").lower()
+        elapsed_days = 0
+        req_at = str(entry.get("requested_at") or "").strip()
+        if req_at:
+            try:
+                dt = datetime.fromisoformat(req_at.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                elapsed_days = max(0, int((now_dt - dt).total_seconds() // 86400))
+            except Exception:
+                elapsed_days = 0
+        entry["elapsed_days"] = elapsed_days
+        if status == "resolved":
+            resolved_count += 1
+        else:
+            requested_count += 1
+            if elapsed_days >= 3:
+                overdue_3d += 1
+            if elapsed_days >= 7:
+                overdue_7d += 1
+        enriched[fp] = entry
+
+    return {
+        "ok": True,
+        "requests": enriched,
+        "requested_count": requested_count,
+        "resolved_count": resolved_count,
+        "overdue_3d_count": overdue_3d,
+        "overdue_7d_count": overdue_7d,
+    }
+
+
+def mark_remediation_requests(
+    items: List[Dict[str, Any]],
+    *,
+    requested: bool = True,
+    note: str = "",
+    channel: str = "slack",
+    issue_url: str = "",
+) -> Dict[str, Any]:
+    """Mark or unmark findings as remediation-requested (Slack / GitHub Issue) and persist."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    safe_note = str(note or "").strip()[:300]
+    safe_channel = str(channel or "slack").strip().lower()
+    if safe_channel not in ("slack", "github_issue", "manual"):
+        safe_channel = "slack"
+    safe_issue = str(issue_url or "").strip()[:300]
+
+    with _STATE_LOCK:
+        state = _load_saved_analyses_unlocked()
+        reqs = state.setdefault("remediation_requests", {})
+        if not isinstance(reqs, dict):
+            reqs = {}
+            state["remediation_requests"] = reqs
+
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            fp = str(it.get("fingerprint") or "").strip()
+            if not fp:
+                continue
+            if not requested:
+                reqs.pop(fp, None)
+                continue
+            existing = reqs.get(fp) if isinstance(reqs.get(fp), dict) else {}
+            reqs[fp] = {
+                "fingerprint": fp,
+                "repo": str(it.get("repo") or existing.get("repo") or "").strip(),
+                "title": str(it.get("title") or existing.get("title") or "").strip(),
+                "file": str(it.get("file") or existing.get("file") or "").strip(),
+                "tier": str(it.get("tier") or it.get("priority_tier") or existing.get("tier") or "P1").upper(),
+                "status": "requested",
+                "requested_at": str(existing.get("requested_at") or now_iso),
+                "resolved_at": None,
+                "resolved_commit": None,
+                "channel": safe_channel if safe_issue or not existing.get("channel") else str(existing.get("channel")),
+                "note": safe_note if safe_note else str(existing.get("note") or ""),
+                "issue_url": safe_issue if safe_issue else str(existing.get("issue_url") or ""),
+            }
+
+        reconcile_remediation_requests(state)
+        _write_json_atomic(STATE_FILE, state)
+        return get_remediation_summary(state)
 
 
 if __name__ == "__main__":

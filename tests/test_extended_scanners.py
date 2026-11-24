@@ -135,6 +135,65 @@ class TestExtendedScanners(unittest.TestCase):
             self.assertIn(expected, scanners)
             self.assertTrue(scanners[expected]["installed"], f"{expected} should be installed")
 
+    def test_remediation_request_lifecycle_and_auto_resolve(self) -> None:
+        from unittest import mock
+        import analyzer
+
+        with tempfile.TemporaryDirectory() as tmp:
+            state_file = Path(tmp) / "analyzed_repos.json"
+            with mock.patch.object(analyzer, "STATE_FILE", state_file), \
+                 mock.patch.object(analyzer, "ensure_dirs"):
+                finding = {
+                    "title": "AWS Access Key leaked",
+                    "file": "src/cred.json:4",
+                    "severity": "critical",
+                    "priority_tier": "P0",
+                    "category": "secrets",
+                }
+                fp = triage_engine.compute_finding_fingerprint("acme/api", finding)
+                finding["fingerprint"] = fp
+
+                analyzer.save_analysis_result({
+                    "diagram": {
+                        "id": "repo-api",
+                        "repo": "acme/api",
+                        "github_url": "https://github.com/acme/api",
+                        "commit_hash": "1111aaaa",
+                        "coderabbit": {"action_items": [finding], "findings": []},
+                    }
+                })
+
+                # 1. Mark as requested
+                summary = analyzer.mark_remediation_requests(
+                    [{"fingerprint": fp, "repo": "acme/api", "title": finding["title"], "file": finding["file"], "tier": "P0"}],
+                    requested=True,
+                    channel="slack",
+                )
+                self.assertEqual(summary["requested_count"], 1)
+                self.assertEqual(summary["resolved_count"], 0)
+                self.assertEqual(summary["requests"][fp]["status"], "requested")
+
+                # 2. Rescan after fix removes the finding -> auto-resolved!
+                analyzer.save_analysis_result({
+                    "diagram": {
+                        "id": "repo-api",
+                        "repo": "acme/api",
+                        "github_url": "https://github.com/acme/api",
+                        "commit_hash": "2222bbbb",
+                        "coderabbit": {"action_items": [], "findings": []},
+                    }
+                })
+                after_fix = analyzer.get_remediation_summary()
+                self.assertEqual(after_fix["requested_count"], 0)
+                self.assertEqual(after_fix["resolved_count"], 1)
+                self.assertEqual(after_fix["requests"][fp]["status"], "resolved")
+                self.assertEqual(after_fix["requests"][fp]["resolved_commit"], "2222bbbb")
+
+                # 3. Unmark/clear removes record
+                cleared = analyzer.mark_remediation_requests([{"fingerprint": fp}], requested=False)
+                self.assertEqual(cleared["resolved_count"], 0)
+                self.assertNotIn(fp, cleared["requests"])
+
 
 if __name__ == "__main__":
     unittest.main()

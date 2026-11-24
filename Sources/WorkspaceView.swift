@@ -144,8 +144,15 @@ struct MainContentView: View {
     @State private var drilldownItems: [DrilldownFindingItem] = []
     @State private var loadingDrilldown = false
     @State private var drilldownGrouped = true
+    @State private var drilldownRequestFilter = "all"
     @State private var expandedDrilldownGroups: Set<String> = []
     @State private var drilldownCopyNotice: String?
+    @State private var remediationRequests: [String: RemediationRequestRecord] = [:]
+    @State private var remediationRequestedCount = 0
+    @State private var remediationResolvedCount = 0
+    @State private var remediationOverdue3dCount = 0
+    @State private var creatingIssueGroupID: String?
+    @State private var showRemediationTrackerSheet = false
     @State private var showRiskTrendReasons = false
     @State private var showAspmLegend = false
     @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "commit_monitor,monitor_updates,kpi,risk_trend,priority_repos,aspm,audit_scope"
@@ -608,19 +615,28 @@ struct MainContentView: View {
             Task { await refreshAspmPortfolio() }
         }
         .sheet(item: $drilldownFilter) { filter in
-            let groups = groupedDrilldownItems(drilldownItems)
+            let filteredItems = filteredDrilldownItems(drilldownItems)
+            let groups = groupedDrilldownItems(filteredItems)
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     Text(filter.title)
                         .font(.title3.bold())
                     Spacer()
                     if !drilldownItems.isEmpty {
+                        Picker("", selection: $drilldownRequestFilter) {
+                            Text(english ? "All" : "すべて").tag("all")
+                            Text(english ? "Unrequested" : "未依頼").tag("unrequested")
+                            Text(english ? "Requested" : "依頼済").tag("requested")
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 210)
+
                         Picker("", selection: $drilldownGrouped) {
                             Text(english ? "Grouped (\(groups.count))" : "グループ (\(groups.count))").tag(true)
                             Text(english ? "List" : "一覧").tag(false)
                         }
                         .pickerStyle(.segmented)
-                        .frame(width: 210)
+                        .frame(width: 190)
 
                         Button {
                             copyDrilldownFixPrompt(for: groups)
@@ -632,8 +648,9 @@ struct MainContentView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .disabled(groups.isEmpty)
                     }
-                    Text(english ? "\(drilldownItems.count) items" : "\(drilldownItems.count) 件")
+                    Text(english ? "\(filteredItems.count) / \(drilldownItems.count)" : "\(filteredItems.count) / \(drilldownItems.count) 件")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                     Button(english ? "Close" : "閉じる") {
@@ -656,7 +673,7 @@ struct MainContentView: View {
                 if loadingDrilldown {
                     ProgressView(english ? "Loading findings..." : "指摘を読み込み中…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if drilldownItems.isEmpty {
+                } else if filteredItems.isEmpty {
                     ContentUnavailableView(
                         english ? "No matching findings" : "該当する指摘はありません",
                         systemImage: "checkmark.shield"
@@ -666,8 +683,12 @@ struct MainContentView: View {
                         LazyVStack(alignment: .leading, spacing: 10) {
                             ForEach(groups) { group in
                                 let isExpanded = expandedDrilldownGroups.contains(group.id)
+                                let reqMatches = group.items.compactMap { remediationRequests[$0.fingerprint] }.filter { $0.status == "requested" }
+                                let allRequested = !group.items.isEmpty && reqMatches.count == group.items.count
+                                let maxElapsed = reqMatches.map(\.elapsedDays).max() ?? 0
+                                let singleRepo = group.repoCount == 1 ? group.items.first?.repoName : nil
                                 VStack(alignment: .leading, spacing: 0) {
-                                    HStack(spacing: 10) {
+                                    HStack(spacing: 8) {
                                         Button {
                                             if isExpanded {
                                                 expandedDrilldownGroups.remove(group.id)
@@ -694,6 +715,23 @@ struct MainContentView: View {
                                         }
                                         .buttonStyle(.plain)
                                         Spacer()
+                                        if !reqMatches.isEmpty {
+                                            let badgeColor: Color = maxElapsed >= 3 ? SemanticColors.role("warningText") : SemanticColors.role("infoText")
+                                            let badgeText: String = {
+                                                if allRequested {
+                                                    return maxElapsed >= 1
+                                                        ? (english ? "Requested (\(maxElapsed)d)" : "依頼済 (\(maxElapsed)日)")
+                                                        : (english ? "Requested" : "依頼済")
+                                                }
+                                                return english ? "\(reqMatches.count)/\(group.items.count) req" : "\(reqMatches.count)/\(group.items.count) 依頼済"
+                                            }()
+                                            Text(badgeText)
+                                                .font(.caption2.bold())
+                                                .padding(.horizontal, 7)
+                                                .padding(.vertical, 2)
+                                                .background(badgeColor.opacity(0.18), in: Capsule())
+                                                .foregroundStyle(badgeColor)
+                                        }
                                         Text(
                                             english
                                                 ? "\(group.items.count) items · \(group.repoCount) repos"
@@ -701,6 +739,33 @@ struct MainContentView: View {
                                         )
                                         .font(.caption.monospacedDigit())
                                         .foregroundStyle(.secondary)
+                                        Button {
+                                            Task { await toggleRemediationRequest(items: group.items, requested: !allRequested) }
+                                        } label: {
+                                            Label(
+                                                allRequested
+                                                    ? (english ? "Unmark" : "依頼解除")
+                                                    : (english ? "Mark Requested" : "依頼済みにする"),
+                                                systemImage: allRequested ? "checkmark.circle.fill" : "paperplane"
+                                            )
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                        if let targetRepo = singleRepo, targetRepo.contains("/") {
+                                            Button {
+                                                Task { await createGitHubIssue(for: group, repo: targetRepo) }
+                                            } label: {
+                                                if creatingIssueGroupID == group.id {
+                                                    ProgressView().controlSize(.small)
+                                                } else {
+                                                    Label(english ? "Issue" : "Issue起票", systemImage: "exclamationmark.circle")
+                                                }
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .controlSize(.small)
+                                            .disabled(creatingIssueGroupID != nil)
+                                            .help(english ? "Create a GitHub Issue via gh CLI and mark as requested" : "gh CLI で GitHub Issue を起票して依頼済みに記録")
+                                        }
                                         Button {
                                             copyDrilldownFixPrompt(for: [group])
                                         } label: {
@@ -720,10 +785,35 @@ struct MainContentView: View {
                                         Divider()
                                         VStack(alignment: .leading, spacing: 0) {
                                             ForEach(group.items) { item in
+                                                let rec = remediationRequests[item.fingerprint]
+                                                let isReq = rec?.status == "requested"
                                                 HStack(alignment: .top, spacing: 10) {
                                                     VStack(alignment: .leading, spacing: 3) {
-                                                        Text(item.repoName)
-                                                            .font(.caption.weight(.semibold))
+                                                        HStack(spacing: 6) {
+                                                            Text(item.repoName)
+                                                                .font(.caption.weight(.semibold))
+                                                            if let rec, isReq {
+                                                                let col: Color = rec.elapsedDays >= 3 ? SemanticColors.role("warningText") : SemanticColors.role("infoText")
+                                                                Text(rec.elapsedDays >= 1
+                                                                    ? (english ? "Requested \(rec.elapsedDays)d ago" : "依頼済 \(rec.elapsedDays)日経過")
+                                                                    : (english ? "Requested" : "依頼済"))
+                                                                    .font(.caption2.bold())
+                                                                    .padding(.horizontal, 6)
+                                                                    .padding(.vertical, 1)
+                                                                    .background(col.opacity(0.16), in: Capsule())
+                                                                    .foregroundStyle(col)
+                                                            }
+                                                            if let issueStr = rec?.issueUrl, !issueStr.isEmpty, let url = URL(string: issueStr) {
+                                                                Button {
+                                                                    NSWorkspace.shared.open(url)
+                                                                } label: {
+                                                                    Text("Issue ↗")
+                                                                        .font(.caption2.weight(.semibold))
+                                                                        .foregroundStyle(SemanticColors.role("actionText"))
+                                                                }
+                                                                .buttonStyle(.plain)
+                                                            }
+                                                        }
                                                         Text(item.file.isEmpty ? item.title : item.file)
                                                             .font(.caption.monospaced())
                                                             .foregroundStyle(.secondary)
@@ -736,6 +826,15 @@ struct MainContentView: View {
                                                         }
                                                     }
                                                     Spacer()
+                                                    Button {
+                                                        Task { await toggleRemediationRequest(items: [item], requested: !isReq) }
+                                                    } label: {
+                                                        Image(systemName: isReq ? "checkmark.circle.fill" : "paperplane")
+                                                            .foregroundStyle(isReq ? SemanticColors.role("infoText") : .secondary)
+                                                    }
+                                                    .buttonStyle(.bordered)
+                                                    .controlSize(.small)
+                                                    .help(isReq ? (english ? "Unmark requested" : "依頼済みを解除") : (english ? "Mark as requested on Slack" : "Slack 依頼済みにする"))
                                                     Button(english ? "Open" : "開く") {
                                                         openDrilldownFinding(item)
                                                     }
@@ -759,7 +858,9 @@ struct MainContentView: View {
                         .padding(.vertical, 2)
                     }
                 } else {
-                    List(drilldownItems) { item in
+                    List(filteredItems) { item in
+                        let rec = remediationRequests[item.fingerprint]
+                        let isReq = rec?.status == "requested"
                         HStack(alignment: .top, spacing: 10) {
                             Text(item.tier)
                                 .font(.caption2.bold())
@@ -768,9 +869,19 @@ struct MainContentView: View {
                                 .background(item.tierColor.opacity(0.18), in: Capsule())
                                 .foregroundStyle(item.tierColor)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(item.title)
-                                    .font(.subheadline.weight(.semibold))
-                                    .lineLimit(2)
+                                HStack(spacing: 6) {
+                                    Text(item.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .lineLimit(2)
+                                    if let rec, isReq {
+                                        Text(rec.elapsedDays >= 1 ? (english ? "Requested \(rec.elapsedDays)d" : "依頼済 \(rec.elapsedDays)日") : (english ? "Requested" : "依頼済"))
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 1)
+                                            .background(SemanticColors.role("infoText").opacity(0.16), in: Capsule())
+                                            .foregroundStyle(SemanticColors.role("infoText"))
+                                    }
+                                }
                                 Text("\(item.repoName) · \(item.file)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -783,6 +894,14 @@ struct MainContentView: View {
                                 }
                             }
                             Spacer()
+                            Button {
+                                Task { await toggleRemediationRequest(items: [item], requested: !isReq) }
+                            } label: {
+                                Image(systemName: isReq ? "checkmark.circle.fill" : "paperplane")
+                                    .foregroundStyle(isReq ? SemanticColors.role("infoText") : .secondary)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                             Button(english ? "Open" : "開く") {
                                 openDrilldownFinding(item)
                             }
@@ -794,7 +913,10 @@ struct MainContentView: View {
                 }
             }
             .padding(20)
-            .frame(minWidth: 740, minHeight: 500)
+            .frame(minWidth: 820, minHeight: 520)
+        }
+        .sheet(isPresented: $showRemediationTrackerSheet) {
+            remediationTrackerSheet()
         }
         .confirmationDialog(
             reposPendingDeletion.count > 1
@@ -1025,9 +1147,11 @@ struct MainContentView: View {
                 .task(id: backend.isReady) {
                     guard backend.isReady else { return }
                     await refreshAspmPortfolio()
+                    await refreshRemediationRequests()
                     while !Task.isCancelled {
                         await fetchMonitorStatus()
                         await refreshAspmPortfolio()
+                        await refreshRemediationRequests()
                         try? await Task.sleep(for: .seconds(15))
                     }
                 }
@@ -1082,6 +1206,9 @@ struct MainContentView: View {
                 }
                 if let progress = syncProgress {
                     liveSyncProgressCard(progress)
+                }
+                if remediationRequestedCount > 0 || remediationResolvedCount > 0 {
+                    remediationTrackerSummaryBar()
                 }
 
                 let p0Total = aspmRepos.reduce(0) { $0 + $1.p0 }
@@ -3472,6 +3599,301 @@ struct MainContentView: View {
             : ["下記の対象箇所を確認して修正を適用し、テストで動作に影響がないことを確認してください。"]
     }
 
+    private func filteredDrilldownItems(_ items: [DrilldownFindingItem]) -> [DrilldownFindingItem] {
+        switch drilldownRequestFilter {
+        case "unrequested":
+            return items.filter { remediationRequests[$0.fingerprint]?.status != "requested" }
+        case "requested":
+            return items.filter { remediationRequests[$0.fingerprint]?.status == "requested" }
+        default:
+            return items
+        }
+    }
+
+    private func applyRemediationSummary(_ json: [String: Any]) async {
+        let rawMap = json["requests"] as? [String: [String: Any]] ?? [:]
+        var parsed: [String: RemediationRequestRecord] = [:]
+        for (fp, d) in rawMap {
+            parsed[fp] = RemediationRequestRecord(
+                fingerprint: fp,
+                repo: (d["repo"] as? String) ?? "",
+                title: (d["title"] as? String) ?? "",
+                file: (d["file"] as? String) ?? "",
+                tier: (d["tier"] as? String) ?? "P1",
+                status: (d["status"] as? String) ?? "requested",
+                requestedAt: (d["requested_at"] as? String) ?? "",
+                resolvedAt: d["resolved_at"] as? String,
+                resolvedCommit: d["resolved_commit"] as? String,
+                channel: (d["channel"] as? String) ?? "slack",
+                note: (d["note"] as? String) ?? "",
+                issueUrl: (d["issue_url"] as? String) ?? "",
+                elapsedDays: (d["elapsed_days"] as? Int) ?? 0
+            )
+        }
+        let reqCnt = (json["requested_count"] as? Int) ?? parsed.values.filter { $0.status == "requested" }.count
+        let resCnt = (json["resolved_count"] as? Int) ?? parsed.values.filter { $0.status == "resolved" }.count
+        let over3 = (json["overdue_3d_count"] as? Int) ?? 0
+        await MainActor.run {
+            remediationRequests = parsed
+            remediationRequestedCount = reqCnt
+            remediationResolvedCount = resCnt
+            remediationOverdue3dCount = over3
+        }
+    }
+
+    private func refreshRemediationRequests() async {
+        guard backend.isReady else { return }
+        do {
+            let json = try await requestJSON("/api/remediation/requests")
+            await applyRemediationSummary(json)
+        } catch {
+            // Non-fatal dashboard enhancement
+        }
+    }
+
+    private func toggleRemediationRequest(items: [DrilldownFindingItem], requested: Bool) async {
+        let payloadItems: [[String: Any]] = items.compactMap { it in
+            let fp = it.fingerprint.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !fp.isEmpty else { return nil }
+            return [
+                "fingerprint": fp,
+                "repo": it.repoName,
+                "title": it.title,
+                "file": it.file,
+                "tier": it.tier
+            ]
+        }
+        guard !payloadItems.isEmpty else { return }
+        do {
+            let json = try await requestJSON("/api/remediation/requests", body: [
+                "items": payloadItems,
+                "requested": requested,
+                "channel": "slack"
+            ])
+            await applyRemediationSummary(json)
+            await MainActor.run {
+                let notice = requested
+                    ? (english ? "Marked \(payloadItems.count) item(s) as requested" : "\(payloadItems.count)件を依頼済みに記録しました")
+                    : (english ? "Unmarked \(payloadItems.count) item(s)" : "\(payloadItems.count)件の依頼済みを解除しました")
+                drilldownCopyNotice = notice
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    if drilldownCopyNotice == notice { drilldownCopyNotice = nil }
+                }
+            }
+        } catch {
+            await MainActor.run {
+                drilldownCopyNotice = error.localizedDescription
+            }
+        }
+    }
+
+    private func clearRemediationRecord(_ record: RemediationRequestRecord) async {
+        do {
+            let json = try await requestJSON("/api/remediation/requests", body: [
+                "items": [["fingerprint": record.fingerprint]],
+                "requested": false
+            ])
+            await applyRemediationSummary(json)
+        } catch {
+            // Ignore non-fatal clear error
+        }
+    }
+
+    private func createGitHubIssue(for group: DrilldownFindingGroup, repo: String) async {
+        guard creatingIssueGroupID == nil else { return }
+        await MainActor.run { creatingIssueGroupID = group.id }
+        defer { Task { @MainActor in creatingIssueGroupID = nil } }
+
+        var bodyLines: [String] = [
+            "## Security Remediation Request ([\(group.tier)])",
+            "",
+            "**Finding**: \(group.title)",
+            "",
+            "### Target Locations"
+        ]
+        for item in group.items {
+            let loc = item.file.isEmpty ? item.title : item.file
+            bodyLines.append("- `\(loc)`")
+        }
+        let checklist = remediationChecklist(for: group, isEnglish: true)
+        if !checklist.isEmpty {
+            bodyLines.append("")
+            bodyLines.append("### Action Checklist")
+            for (idx, step) in checklist.enumerated() {
+                bodyLines.append("\(idx + 1). \(step)")
+            }
+        }
+        let payloadItems: [[String: Any]] = group.items.compactMap { it in
+            guard !it.fingerprint.isEmpty else { return nil }
+            return ["fingerprint": it.fingerprint, "repo": it.repoName, "title": it.title, "file": it.file, "tier": it.tier]
+        }
+        do {
+            let json = try await requestJSON("/api/remediation/github-issue", body: [
+                "repo": repo,
+                "title": "[\(group.tier)] Security: \(group.title)".prefix(160).description,
+                "body": bodyLines.joined(separator: "\n"),
+                "items": payloadItems
+            ])
+            await applyRemediationSummary(json)
+            let urlStr = (json["issue_url"] as? String) ?? ""
+            await MainActor.run {
+                if let url = URL(string: urlStr), !urlStr.isEmpty {
+                    NSWorkspace.shared.open(url)
+                }
+                let notice = english
+                    ? "Created GitHub Issue & marked requested"
+                    : "GitHub Issue を起票し依頼済みに記録しました"
+                drilldownCopyNotice = notice
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    if drilldownCopyNotice == notice { drilldownCopyNotice = nil }
+                }
+            }
+        } catch {
+            await MainActor.run {
+                drilldownCopyNotice = error.localizedDescription
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func remediationTrackerSummaryBar() -> some View {
+        GroupBox {
+            HStack(spacing: 14) {
+                Image(systemName: "paperplane.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(SemanticColors.role("infoText"))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(english ? "Remediation Request Tracker" : "修正依頼トラッカー（Slack / GitHub Issue）")
+                        .font(.subheadline.weight(.semibold))
+                    HStack(spacing: 10) {
+                        Text(english ? "Pending: \(remediationRequestedCount)" : "対応待ち: \(remediationRequestedCount)件")
+                            .font(.caption.monospacedDigit().weight(.medium))
+                            .foregroundStyle(SemanticColors.role("infoText"))
+                        if remediationOverdue3dCount > 0 {
+                            Text(english ? "Overdue (3d+): \(remediationOverdue3dCount)" : "⏰ 3日以上経過: \(remediationOverdue3dCount)件")
+                                .font(.caption.monospacedDigit().weight(.semibold))
+                                .foregroundStyle(SemanticColors.role("warningText"))
+                        }
+                        if remediationResolvedCount > 0 {
+                            Text(english ? "Resolved: \(remediationResolvedCount)" : "✅ 修正確認済み: \(remediationResolvedCount)件")
+                                .font(.caption.monospacedDigit().weight(.semibold))
+                                .foregroundStyle(SemanticColors.role("successText"))
+                        }
+                    }
+                }
+                Spacer()
+                Button(english ? "View Status" : "進捗を確認") {
+                    showRemediationTrackerSheet = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+    }
+
+    @ViewBuilder
+    private func remediationTrackerSheet() -> some View {
+        let allRecords = remediationRequests.values.sorted { lhs, rhs in
+            if lhs.status != rhs.status { return lhs.status == "requested" }
+            return lhs.elapsedDays > rhs.elapsedDays
+        }
+        let pending = allRecords.filter { $0.status == "requested" }
+        let resolved = allRecords.filter { $0.status == "resolved" }
+
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(english ? "Remediation Request Tracker" : "修正依頼トラッカー（対応待ち・修正確認済み）")
+                    .font(.title3.bold())
+                Spacer()
+                Text(english ? "Pending \(pending.count) · Resolved \(resolved.count)" : "対応待ち \(pending.count)件 · 解消済 \(resolved.count)件")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Button(english ? "Close" : "閉じる") {
+                    showRemediationTrackerSheet = false
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+            Divider()
+            if allRecords.isEmpty {
+                ContentUnavailableView(
+                    english ? "No tracked requests yet" : "記録された修正依頼はまだありません",
+                    systemImage: "paperplane"
+                )
+            } else {
+                List {
+                    if !pending.isEmpty {
+                        Section(english ? "Pending Remediation (\(pending.count))" : "対応待ち（\(pending.count)件）") {
+                            ForEach(pending) { rec in
+                                HStack(alignment: .top, spacing: 10) {
+                                    Text(rec.tier)
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(SemanticColors.role(rec.tier == "P0" ? "dangerText" : "warningText").opacity(0.18), in: Capsule())
+                                        .foregroundStyle(SemanticColors.role(rec.tier == "P0" ? "dangerText" : "warningText"))
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(rec.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                                        Text("\(rec.repo) · \(rec.file)").font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                                        HStack(spacing: 8) {
+                                            let col: Color = rec.elapsedDays >= 3 ? SemanticColors.role("warningText") : SemanticColors.role("infoText")
+                                            Text(rec.elapsedDays >= 1
+                                                ? (english ? "\(rec.elapsedDays)d elapsed" : "依頼から \(rec.elapsedDays)日経過")
+                                                : (english ? "Requested today" : "本日依頼済み"))
+                                                .font(.caption2.weight(.semibold))
+                                                .foregroundStyle(col)
+                                            if !rec.issueUrl.isEmpty, let url = URL(string: rec.issueUrl) {
+                                                Button("GitHub Issue ↗") { NSWorkspace.shared.open(url) }
+                                                    .buttonStyle(.link)
+                                                    .font(.caption2)
+                                            }
+                                        }
+                                    }
+                                    Spacer()
+                                    Button(english ? "Unmark" : "解除") {
+                                        Task { await clearRemediationRecord(rec) }
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                    }
+                    if !resolved.isEmpty {
+                        Section(english ? "Verified Resolved on Rescan (\(resolved.count))" : "再スキャンで修正確認済み（\(resolved.count)件）") {
+                            ForEach(resolved) { rec in
+                                HStack(alignment: .top, spacing: 10) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(SemanticColors.role("successText"))
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(rec.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                                        Text("\(rec.repo) · \(rec.file)").font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                                        if let sha = rec.resolvedCommit, !sha.isEmpty {
+                                            Text(english ? "Verified fixed at commit \(sha)" : "コミット \(sha) で解消を確認")
+                                                .font(.caption2)
+                                                .foregroundStyle(SemanticColors.role("successText"))
+                                        }
+                                    }
+                                    Spacer()
+                                    Button(english ? "Dismiss" : "クリア") {
+                                        Task { await clearRemediationRecord(rec) }
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 740, minHeight: 460)
+    }
+
     private func copyDrilldownFixPrompt(for groups: [DrilldownFindingGroup]) {
         guard !groups.isEmpty else { return }
         let totalCount = groups.reduce(0) { $0 + $1.items.count }
@@ -3530,6 +3952,23 @@ struct MainContentView: View {
             }
         }
     }
+}
+
+private struct RemediationRequestRecord: Identifiable {
+    var id: String { fingerprint }
+    let fingerprint: String
+    let repo: String
+    let title: String
+    let file: String
+    let tier: String
+    let status: String
+    let requestedAt: String
+    let resolvedAt: String?
+    let resolvedCommit: String?
+    let channel: String
+    let note: String
+    let issueUrl: String
+    let elapsedDays: Int
 }
 
 private struct DashboardDrilldownFilter: Identifiable {

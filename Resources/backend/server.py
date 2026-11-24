@@ -699,6 +699,9 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
             )
             self._send_json(200, {"ok": True, **portfolio})
             return
+        if self.path.startswith("/api/remediation/requests"):
+            self._send_json(200, analyzer.get_remediation_summary())
+            return
         if self.path.startswith("/api/health"):
             self._send_json(200, check_live_health(self.server_port))
             return
@@ -968,6 +971,72 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(200, {"ok": True, **updated})
             except LookupError as exc:
                 self._send_json(404, {"error": str(exc)})
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path == "/api/remediation/requests":
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                items = body.get("items") if isinstance(body.get("items"), list) else []
+                requested = bool(body.get("requested", True))
+                note = str(body.get("note") or "")
+                channel = str(body.get("channel") or "slack")
+                issue_url = str(body.get("issue_url") or "")
+                summary = analyzer.mark_remediation_requests(
+                    items,
+                    requested=requested,
+                    note=note,
+                    channel=channel,
+                    issue_url=issue_url,
+                )
+                self._send_json(200, summary)
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+
+        if self.path == "/api/remediation/github-issue":
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                repo = str(body.get("repo") or "").strip()
+                title = str(body.get("title") or "").strip()[:180]
+                issue_body = str(body.get("body") or "").strip()
+                items = body.get("items") if isinstance(body.get("items"), list) else []
+                if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+                    self._send_json(400, {"error": "Invalid repository slug (expected owner/repo)"})
+                    return
+                if not title or not issue_body:
+                    self._send_json(400, {"error": "title and body are required"})
+                    return
+                gh_bin = shutil.which("gh") or next((p for p in ("/opt/homebrew/bin/gh", "/usr/local/bin/gh") if Path(p).exists()), "")
+                if not gh_bin:
+                    self._send_json(503, {"error": "GitHub CLI (gh) is not installed"})
+                    return
+                # Redact any accidental raw secret tokens before posting to GitHub
+                safe_body = re.sub(r"AKIA[0-9A-Z]{16}", "[REDACTED_AWS_KEY]", issue_body)
+                safe_body = re.sub(r"sk-[A-Za-z0-9_-]{16,}", "[REDACTED_API_KEY]", safe_body)
+                safe_body = re.sub(r"ghp_[A-Za-z0-9]{20,}", "[REDACTED_GH_TOKEN]", safe_body)
+                proc = subprocess.run(
+                    [gh_bin, "issue", "create", "--repo", repo, "--title", title, "--body", safe_body],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if proc.returncode != 0:
+                    err_msg = (proc.stderr or proc.stdout or "gh issue create failed").strip()
+                    self._send_json(502, {"error": err_msg[:400]})
+                    return
+                created_url = (proc.stdout or "").strip().splitlines()[-1].strip() if (proc.stdout or "").strip() else ""
+                summary = analyzer.mark_remediation_requests(
+                    items,
+                    requested=True,
+                    note=f"GitHub Issue: {created_url}" if created_url else "",
+                    channel="github_issue",
+                    issue_url=created_url,
+                )
+                self._send_json(200, {"ok": True, "issue_url": created_url, **summary})
+            except subprocess.TimeoutExpired:
+                self._send_json(504, {"error": "gh issue create timed out"})
             except Exception as exc:
                 self._send_json(400, {"error": str(exc)})
             return
