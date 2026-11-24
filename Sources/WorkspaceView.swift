@@ -1929,14 +1929,6 @@ struct MainContentView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(SemanticColors.role("successText"))
                     Spacer()
-                    Button {
-                        monitorUpdates = []
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help(english ? "Dismiss" : "閉じる")
                 }
 
                 ForEach(Array(monitorUpdates.prefix(5))) { upd in

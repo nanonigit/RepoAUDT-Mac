@@ -8811,6 +8811,9 @@ def build_portal_html(data, is_shareable=False):
           </details>
 
           ${enrichedIssues.length > 0 ? `
+          <details id="triage-controls-panel" ${(ts.controlsOpen !== false && (typeof safeStorageGet !== 'function' || safeStorageGet('repoaudt_triage_controls_open') !== '0')) ? 'open' : ''} style="margin-bottom: 12px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); padding: 8px 12px;">
+            <summary style="cursor: pointer; font-weight: 700; font-size: 0.86rem;">🛡️ ${en ? `AutoTriage, KPI & Filters (P0: ${p0Cnt} · P1: ${p1Cnt} · P2: ${p2Cnt} · P3: ${p3Cnt})` : `AutoTriage・KPI・絞り込み（P0: ${p0Cnt} · P1: ${p1Cnt} · P2: ${p2Cnt} · P3: ${p3Cnt}）`}</summary>
+            <div style="margin-top: 10px;">
           <div style="padding: 10px 14px; border-radius: 10px; border: 1px solid var(--workspace-border); background: rgba(56, 189, 248, 0.08); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
             <div style="font-size: 0.88rem;">
               <strong>🛡️ AutoTriage:</strong>
@@ -8887,6 +8890,8 @@ def build_portal_html(data, is_shareable=False):
               ` : ''}
             </div>
           </details>` : ''}
+            </div>
+          </details>
           ` : ''}
           <div class="audit-list">
             ${issues.length ? issues.map(issue => {
@@ -9067,6 +9072,13 @@ def build_portal_html(data, is_shareable=False):
         aspmPanelEl.addEventListener('toggle', () => {
           ts.aspmOpen = aspmPanelEl.open;
           if (typeof safeStorageSet === 'function') safeStorageSet('repoaudt_aspm_open', aspmPanelEl.open ? '1' : '0');
+        });
+      }
+      const triageCtrlPanel = view.querySelector('#triage-controls-panel');
+      if (triageCtrlPanel) {
+        triageCtrlPanel.addEventListener('toggle', () => {
+          ts.controlsOpen = triageCtrlPanel.open;
+          if (typeof safeStorageSet === 'function') safeStorageSet('repoaudt_triage_controls_open', triageCtrlPanel.open ? '1' : '0');
         });
       }
       if (sortSelect) {
