@@ -314,6 +314,68 @@ def extract_repo_inventory(diagram: Dict[str, Any]) -> Tuple[Dict[str, List[str]
     return stacks, known_cves
 
 
+_CVE_RE = re.compile(r"CVE-\d{4}-\d{4,7}", re.IGNORECASE)
+
+
+def _build_global_finding_index(non_root: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Compute per-tier index codes (P0-01, P1-01, ...) matching WorkspaceView.openDrilldown."""
+    tier_rank = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+    conf_rank = {"high": 0, "medium": 1, "low": 2}
+    sev_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    collected: List[Tuple[Any, Dict[str, Any]]] = []
+
+    for d in non_root:
+        did = str(d.get("id") or "").strip()
+        repo_name = str(d.get("repo") or d.get("github_url") or "Repository").strip()
+        cr = d.get("coderabbit") if isinstance(d.get("coderabbit"), dict) else {}
+        seen: Set[str] = set()
+        for it in (cr.get("action_items") or []):
+            if not isinstance(it, dict) or it.get("suppressed"):
+                continue
+            tier = str(it.get("priority_tier") or "P2").upper()
+            title = str(it.get("title") or "")
+            file_str = str(it.get("file") or "").split(" (Target:", 1)[0]
+            key = f"{did}|{title}|{file_str}"
+            if key in seen:
+                continue
+            seen.add(key)
+            k_rank = 0 if it.get("in_cisa_kev") else 1
+            c_rank = conf_rank.get(str(it.get("confidence") or "medium").lower(), 2)
+            s_rank = sev_rank.get(str(it.get("severity") or "medium").lower(), 3)
+            try:
+                epss_val = float(it.get("epss_score") or 0.0)
+            except (TypeError, ValueError):
+                epss_val = 0.0
+            sort_key = (
+                tier_rank.get(tier, 3),
+                k_rank,
+                c_rank,
+                s_rank,
+                -epss_val,
+                f"{repo_name}|{file_str}|{title}",
+            )
+            blob = " ".join([title, str(it.get("desc") or ""), str(it.get("cve") or ""), file_str]).upper()
+            collected.append((sort_key, {
+                "diagram_id": did,
+                "repo": repo_name,
+                "tier": tier,
+                "title": title,
+                "file": file_str,
+                "fingerprint": str(it.get("fingerprint") or ""),
+                "cves": set(_CVE_RE.findall(blob)),
+            }))
+
+    collected.sort(key=lambda x: x[0])
+    counters: Dict[str, int] = {}
+    by_repo: Dict[str, List[Dict[str, Any]]] = {}
+    for _, entry in collected:
+        t = entry["tier"]
+        counters[t] = counters.get(t, 0) + 1
+        entry["index_code"] = f"{t}-{counters[t]:02d}"
+        by_repo.setdefault(entry["repo"], []).append(entry)
+    return by_repo
+
+
 def fetch_and_correlate_threat_feed(
     diagrams: List[Dict[str, Any]],
     *,
@@ -384,14 +446,16 @@ def fetch_and_correlate_threat_feed(
             except OSError:
                 pass
 
-    # Build repository inventories
+    # Build repository inventories & global P0/P1/P2/P3 finding index
     non_root = [d for d in diagrams if isinstance(d, dict) and not d.get("is_root")]
-    repo_inventories: List[Tuple[str, Dict[str, List[str]], Set[str]]] = []
+    findings_by_repo = _build_global_finding_index(non_root)
+    repo_inventories: List[Tuple[str, str, Dict[str, List[str]], Set[str]]] = []
     stack_repo_counts: Dict[str, int] = {}
     for d in non_root:
+        did = str(d.get("id") or "").strip()
         rname = str(d.get("repo") or d.get("github_url") or "Repository").strip()
         st_map, cve_set = extract_repo_inventory(d)
-        repo_inventories.append((rname, st_map, cve_set))
+        repo_inventories.append((did, rname, st_map, cve_set))
         for sk in st_map:
             stack_repo_counts[sk] = stack_repo_counts.get(sk, 0) + 1
 
@@ -404,7 +468,7 @@ def fetch_and_correlate_threat_feed(
         matched_repos: List[Dict[str, Any]] = []
         has_confirmed = False
 
-        for rname, st_map, cve_set in repo_inventories:
+        for did, rname, st_map, cve_set in repo_inventories:
             confirmed = bool(cve and cve in cve_set)
             evidences: List[str] = []
             for sk in sorted(threat_stacks):
@@ -413,10 +477,23 @@ def fetch_and_correlate_threat_feed(
             if confirmed or evidences:
                 if confirmed:
                     has_confirmed = True
+                finding_refs: List[Dict[str, str]] = []
+                if confirmed and cve:
+                    for f_entry in findings_by_repo.get(rname, []):
+                        if cve in f_entry.get("cves", set()):
+                            finding_refs.append({
+                                "index_code": f_entry["index_code"],
+                                "tier": f_entry["tier"],
+                                "fingerprint": f_entry["fingerprint"],
+                                "title": f_entry["title"],
+                                "file": f_entry["file"],
+                            })
                 matched_repos.append({
+                    "diagram_id": did,
                     "repo": rname,
                     "confirmed_cve": confirmed,
                     "evidence": " · ".join(evidences[:2]) if evidences else ("Detected in repo advisories" if confirmed else ""),
+                    "finding_refs": finding_refs[:5],
                 })
 
         if has_confirmed:

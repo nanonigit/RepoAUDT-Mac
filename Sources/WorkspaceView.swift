@@ -3723,6 +3723,19 @@ struct MainContentView: View {
         }
     }
 
+    private func jumpToThreatFinding(diagramId: String, ref: ThreatFeedFindingRef) {
+        guard !diagramId.isEmpty else { return }
+        let payloadStr = (try? JSONSerialization.data(withJSONObject: [
+            "fingerprint": ref.fingerprint,
+            "title": ref.title,
+            "file": ref.file
+        ])).flatMap { String(data: $0, encoding: .utf8) } ?? ref.fingerprint
+        selection = ["repo:\(diagramId)"]
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            coordinator.send("focus-finding", value: payloadStr)
+        }
+    }
+
     private func openDrilldownFinding(_ item: DrilldownFindingItem) {
         let targetId = item.diagramId
         let payloadStr = (try? JSONSerialization.data(withJSONObject: [
@@ -3871,10 +3884,22 @@ struct MainContentView: View {
             let parsed: [ThreatFeedItem] = rawItems.enumerated().map { idx, d in
                 let rawRepos = d["matched_repos"] as? [[String: Any]] ?? []
                 let repos: [ThreatFeedRepoMatch] = rawRepos.map { mr in
-                    ThreatFeedRepoMatch(
+                    let rawRefs = mr["finding_refs"] as? [[String: Any]] ?? []
+                    let refs: [ThreatFeedFindingRef] = rawRefs.map { rf in
+                        ThreatFeedFindingRef(
+                            indexCode: (rf["index_code"] as? String) ?? "",
+                            tier: (rf["tier"] as? String) ?? "P1",
+                            fingerprint: (rf["fingerprint"] as? String) ?? "",
+                            title: (rf["title"] as? String) ?? "",
+                            file: (rf["file"] as? String) ?? ""
+                        )
+                    }
+                    return ThreatFeedRepoMatch(
+                        diagramId: (mr["diagram_id"] as? String) ?? "",
                         repo: (mr["repo"] as? String) ?? "",
                         confirmedCve: (mr["confirmed_cve"] as? Bool) ?? false,
-                        evidence: (mr["evidence"] as? String) ?? ""
+                        evidence: (mr["evidence"] as? String) ?? "",
+                        findingRefs: refs
                     )
                 }
                 return ThreatFeedItem(
@@ -3999,13 +4024,53 @@ struct MainContentView: View {
                                         .font(.caption.weight(.medium))
                                         .lineLimit(2)
                                     if !item.matchedRepos.isEmpty {
-                                        let repoSummary = item.matchedRepos.prefix(3).map {
-                                            $0.evidence.isEmpty ? $0.repo : "\($0.repo) (\($0.evidence))"
-                                        }.joined(separator: " / ")
-                                        Text(repoSummary)
-                                            .font(.caption2.monospaced())
-                                            .foregroundStyle(badgeColor)
-                                            .lineLimit(2)
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            ForEach(Array(item.matchedRepos.prefix(4).enumerated()), id: \.offset) { _, mr in
+                                                HStack(spacing: 6) {
+                                                    if !mr.findingRefs.isEmpty {
+                                                        ForEach(Array(mr.findingRefs.prefix(3).enumerated()), id: \.offset) { _, rf in
+                                                            let pillColor: Color = rf.tier == "P0"
+                                                                ? Color(red: 0.92, green: 0.24, blue: 0.28)
+                                                                : (rf.tier == "P1" ? .orange : (rf.tier == "P2" ? .yellow : SemanticColors.role("infoText")))
+                                                            Button {
+                                                                jumpToThreatFinding(diagramId: mr.diagramId, ref: rf)
+                                                            } label: {
+                                                                Text("\(rf.indexCode) ↗")
+                                                                    .font(.caption2.monospaced().bold())
+                                                                    .padding(.horizontal, 6)
+                                                                    .padding(.vertical, 1)
+                                                                    .background(pillColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+                                                                    .foregroundStyle(pillColor)
+                                                            }
+                                                            .buttonStyle(.plain)
+                                                            .help(english ? "Jump to \(rf.indexCode) in \(mr.repo)" : "\(mr.repo) の \(rf.indexCode) へ移動")
+                                                        }
+                                                    } else {
+                                                        Text(english ? "No P0–P3 finding" : "監査指摘なし")
+                                                            .font(.caption2)
+                                                            .padding(.horizontal, 5)
+                                                            .padding(.vertical, 1)
+                                                            .background(Color.secondary.opacity(0.16), in: RoundedRectangle(cornerRadius: 4))
+                                                            .foregroundStyle(.secondary)
+                                                    }
+                                                    Button {
+                                                        if let firstRef = mr.findingRefs.first {
+                                                            jumpToThreatFinding(diagramId: mr.diagramId, ref: firstRef)
+                                                        } else if !mr.diagramId.isEmpty {
+                                                            selection = ["repo:\(mr.diagramId)"]
+                                                        }
+                                                    } label: {
+                                                        Text(mr.evidence.isEmpty ? "\(mr.repo) ↗" : "\(mr.repo) (\(mr.evidence)) ↗")
+                                                            .font(.caption2.monospaced())
+                                                            .foregroundStyle(badgeColor)
+                                                            .lineLimit(1)
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                    .help(english ? "Open \(mr.repo) audit view" : "\(mr.repo) の監査画面を開く")
+                                                }
+                                            }
+                                        }
+                                        .padding(.top, 2)
                                     }
                                 }
                                 Spacer(minLength: 4)
@@ -4388,10 +4453,20 @@ struct MainContentView: View {
     }
 }
 
+private struct ThreatFeedFindingRef {
+    let indexCode: String
+    let tier: String
+    let fingerprint: String
+    let title: String
+    let file: String
+}
+
 private struct ThreatFeedRepoMatch {
+    let diagramId: String
     let repo: String
     let confirmedCve: Bool
     let evidence: String
+    let findingRefs: [ThreatFeedFindingRef]
 }
 
 private struct ThreatFeedItem: Identifiable {
