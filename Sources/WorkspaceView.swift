@@ -393,16 +393,24 @@ struct MainContentView: View {
                                           (aspm.p0 + aspm.p1 + aspm.p2 + aspm.p3) > 0 {
                                     HStack(spacing: 3) {
                                         if aspm.p0 > 0 {
-                                            sidebarTierPill(count: aspm.p0, color: Color(red: 0.88, green: 0.16, blue: 0.22), solid: true)
+                                            sidebarTierPill(count: aspm.p0, color: Color(red: 0.88, green: 0.16, blue: 0.22), solid: true) {
+                                                openDrilldown(tier: "P0", diagramId: repo.id, title: "\(repo.name) — P0")
+                                            }
                                         }
                                         if aspm.p1 > 0 {
-                                            sidebarTierPill(count: aspm.p1, color: .orange)
+                                            sidebarTierPill(count: aspm.p1, color: .orange) {
+                                                openDrilldown(tier: "P1", diagramId: repo.id, title: "\(repo.name) — P1")
+                                            }
                                         }
                                         if aspm.p2 > 0 {
-                                            sidebarTierPill(count: aspm.p2, color: .yellow)
+                                            sidebarTierPill(count: aspm.p2, color: .yellow) {
+                                                openDrilldown(tier: "P2", diagramId: repo.id, title: "\(repo.name) — P2")
+                                            }
                                         }
                                         if aspm.p3 > 0 {
-                                            sidebarTierPill(count: aspm.p3, color: SemanticColors.role("infoText"))
+                                            sidebarTierPill(count: aspm.p3, color: SemanticColors.role("infoText")) {
+                                                openDrilldown(tier: "P3", diagramId: repo.id, title: "\(repo.name) — P3")
+                                            }
                                         }
                                     }
                                 } else if repo.findings > 0 {
@@ -1430,13 +1438,16 @@ struct MainContentView: View {
         }
     }
 
-    private func sidebarTierPill(count: Int, color: Color, solid: Bool = false) -> some View {
-        Text("\(count)")
-            .font(.caption2.monospacedDigit().weight(solid ? .bold : .semibold))
-            .foregroundStyle(solid ? .white : color)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(solid ? color : color.opacity(0.18), in: Capsule())
+    private func sidebarTierPill(count: Int, color: Color, solid: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text("\(count)")
+                .font(.caption2.monospacedDigit().weight(solid ? .bold : .semibold))
+                .foregroundStyle(solid ? .white : color)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(solid ? color : color.opacity(0.18), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func summaryMetricCard(
@@ -2785,7 +2796,7 @@ struct MainContentView: View {
         }
     }
 
-    private func openDrilldown(tier: String?, title: String) {
+    private func openDrilldown(tier: String?, diagramId: String? = nil, title: String) {
         drilldownFilter = DashboardDrilldownFilter(tier: tier, title: title)
         loadingDrilldown = true
         drilldownItems = []
@@ -2797,6 +2808,7 @@ struct MainContentView: View {
             for d in diagrams {
                 if (d["is_root"] as? Bool) == true { continue }
                 let did = (d["id"] as? String) ?? ""
+                if let targetDiagramId = diagramId, did != targetDiagramId { continue }
                 let repoName = (d["repo"] as? String) ?? (d["github_url"] as? String) ?? "Repository"
                 let cr = d["coderabbit"] as? [String: Any]
                 let actions = cr?["action_items"] as? [[String: Any]] ?? []
