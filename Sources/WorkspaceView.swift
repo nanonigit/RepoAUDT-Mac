@@ -2534,6 +2534,37 @@ struct MainContentView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     }
+                    if let latestRepo = repositories.filter({ !($0.updatedAt ?? "").isEmpty }).max(by: { ($0.updatedAt ?? "") < ($1.updatedAt ?? "") }),
+                       let latestTime = formattedAnalysisDate(latestRepo.updatedAt) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            Text(
+                                english
+                                    ? "Latest commit: \(latestRepo.name) (\(latestTime))"
+                                    : "最終コミット: \(latestRepo.name) (\(latestTime))"
+                            )
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        }
+                    } else if let latestUpd = monitorUpdates.first, !latestUpd.detectedAt.isEmpty {
+                        let updTime = formattedAnalysisDate(latestUpd.detectedAt) ?? latestUpd.detectedAt
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            Text(
+                                english
+                                    ? "Latest commit: \(latestUpd.repo) (\(updTime))"
+                                    : "最終コミット: \(latestUpd.repo) (\(updTime))"
+                            )
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        }
+                    }
                 }
                 Spacer(minLength: 0)
                 Picker("", selection: Binding(
@@ -2620,6 +2651,12 @@ struct MainContentView: View {
                     Text("\(upd.oldCommit) → \(upd.newCommit)")
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
+                }
+                if !upd.detectedAt.isEmpty {
+                    let timeLabel = formattedAnalysisDate(upd.detectedAt) ?? upd.detectedAt
+                    Text("· \(timeLabel)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
                 }
                 Spacer()
                 if upd.resolvedCount > 0 {
