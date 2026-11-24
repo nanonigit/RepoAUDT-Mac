@@ -20,7 +20,7 @@ import urllib.request
 from connection_utils import validate_endpoint, open_endpoint
 import copilot_bridge
 from workflow_audit import MAX_FILES, find_template_injections_in_workflow, read_small_file, run_actionlint, run_zizmor, workflow_files
-from source_scanners import scan_semgrep_and_trivy, scan_source
+from source_scanners import scan_extended_security, scan_semgrep_and_trivy, scan_source
 from runtime_patches import scan_runtime_patches
 from eol_checker import evaluate_runtime_eol, extract_repo_runtime_and_framework_versions
 import uuid
@@ -1213,6 +1213,11 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         include_sast=skills_cfg.get("owasp_sast_skill", True),
         include_vuln=skills_cfg.get("osv_mcp", True),
     )
+    extended_findings, extended_scan = scan_extended_security(
+        Path(repo_dir),
+        match_comp,
+        include_sast=skills_cfg.get("owasp_sast_skill", True),
+    )
     if trivy_advisories:
         existing_cves = {
             (str(a.get("cve") or "").upper(), str(a.get("pkg") or "").lower())
@@ -1229,7 +1234,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         runtime_findings, runtime_patch_scan = scan_runtime_patches(Path(repo_dir), match_comp)
     secret_findings = scan_secrets_and_credentials(repo_dir, match_comp)
 
-    combined_sast = secret_findings + runtime_findings + source_findings + ext_sast_findings + sast_findings
+    combined_sast = secret_findings + runtime_findings + source_findings + ext_sast_findings + extended_findings + sast_findings
     deduped_sast: List[Dict[str, Any]] = []
     seen_sast_locs = set()
     for item in combined_sast:
@@ -1240,7 +1245,7 @@ def scan_php_and_nodejs_and_polyglot_vulnerabilities(
         seen_sast_locs.add(key)
         deduped_sast.append(item)
     sast_findings = merge_secret_and_gitleaks_findings(deduped_sast)
-    source_scan = {**source_scan, **ext_scan}
+    source_scan = {**source_scan, **ext_scan, **extended_scan}
     security_advisories = enrich_advisories_with_epss(security_advisories)
 
     extracted_versions = extract_repo_runtime_and_framework_versions(Path(repo_dir))

@@ -80,6 +80,45 @@ def check_for_updates() -> Dict[str, Any]:
     }
 
 
+def _probe_cli_scanners() -> list[Dict[str, Any]]:
+    """Probe installed CLI security scanners for the Runtime Diagnostics screen."""
+    specs = [
+        ("gitleaks", "Gitleaks (Secrets + Git History)", ["version"], "brew install gitleaks"),
+        ("trufflehog", "TruffleHog (800+ Secret Detectors)", ["--version"], "brew install trufflehog"),
+        ("trivy", "Trivy (SCA / IaC / License / SBOM)", ["--version"], "brew install trivy"),
+        ("semgrep", "Semgrep (SAST)", ["--version"], "brew install semgrep"),
+        ("ruff", "Ruff (Python Lint / SAST)", ["--version"], "brew install ruff"),
+        ("zizmor", "zizmor (GitHub Actions Audit)", ["--version"], "brew install zizmor"),
+        ("hadolint", "Hadolint (Dockerfile Audit)", ["--version"], "brew install hadolint"),
+    ]
+    tool_dirs = ("/opt/homebrew/bin", "/usr/local/bin")
+    results: list[Dict[str, Any]] = []
+    for name, label, ver_args, hint in specs:
+        found = next((f"{d}/{name}" for d in tool_dirs if Path(f"{d}/{name}").exists()), "") or (shutil.which(name) or "")
+        version = ""
+        if found:
+            try:
+                proc = subprocess.run(
+                    [found, *ver_args],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                first_line = ((proc.stdout or proc.stderr or "").strip().splitlines() or [""])[0].strip()
+                version = first_line[:60]
+            except Exception:
+                version = "installed"
+        results.append({
+            "name": name,
+            "label": label,
+            "installed": bool(found),
+            "path": found,
+            "version": version,
+            "install_hint": hint,
+        })
+    return results
+
+
 def get_runtime_diagnostics() -> Dict[str, Any]:
     """Return runtime environment diagnostics for the System / Update view."""
     copilot_status = copilot_bridge.get_copilot_runtime_status()
@@ -105,6 +144,7 @@ def get_runtime_diagnostics() -> Dict[str, Any]:
         "copilot_sdk_installed": copilot_status.get("sdk_installed", False),
         "copilot_sdk_version": copilot_status.get("sdk_version", ""),
         "repo": repo_info,
+        "scanners": _probe_cli_scanners(),
     }
 
 

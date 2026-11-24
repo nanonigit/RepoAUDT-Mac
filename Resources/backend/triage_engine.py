@@ -316,6 +316,14 @@ def classify_priority_ssvc(item: Dict[str, Any], kev_set: Optional[Set[str]] = N
         evidence.extend(["Gitleaks generic-api-key", "Manual Verification Recommended"])
         return _finish("P0", "汎用APIキー候補（プロバイダ固有形式ではないため要目視確認）", "medium")
 
+    if scanner == "gitleaks-git":
+        evidence.append("Git History Secret")
+        return _finish("P0", "Git コミット履歴内のシークレット残存（無効化・履歴削除が必要）", "medium" if "generic-api-key" in rule_id else "high")
+
+    if scanner == "trufflehog":
+        evidence.append("TruffleHog 800+ Detector")
+        return _finish("P0", "シークレット漏洩候補（TruffleHog検出・即時確認と無効化が必要）", "high")
+
     if (
         str(item.get("category") or "").lower() == "secrets"
         or "シークレット設定ファイル漏洩" in title
@@ -327,6 +335,13 @@ def classify_priority_ssvc(item: Dict[str, Any], kev_set: Optional[Set[str]] = N
         return _finish("P0", "実シークレット漏洩 / 認証ファイル露出（即時無効化が必要）", "high")
 
     # (B) P1: KEV, high EPSS, official dangerous CWE, critical dependency, run: shell injection
+    if rule_id.startswith("npm-suspicious-"):
+        evidence.append("Supply-Chain Install Script")
+        return _finish("P1", "package.json の不審なインストール時自動実行コマンド（サプライチェーン攻撃リスク）", "high")
+
+    if rule_id in ("nextjs-dangerously-allow-svg", "cors-wildcard-credentials"):
+        evidence.append("Web Security Misconfiguration")
+        return _finish("P1", "Webセキュリティ設定ミス（XSS/CSRF/認証情報窃取の直接リスク）", "high")
     if in_kev:
         return _finish("P1", "CISA KEV 登録済み（実環境での悪用確認済みCVE）", "high")
 
@@ -415,7 +430,7 @@ def classify_priority_ssvc(item: Dict[str, Any], kev_set: Optional[Set[str]] = N
     )
     if (not is_pkg_vuln) and (
         "trivy" in low_title
-        or scanner == "trivy"
+        or scanner in ("trivy", "hadolint")
         or any(k in low_blob for k in (".tf", "terraform", "cloudformation", "dockerfile"))
     ):
         evidence.append("IaC / Container")

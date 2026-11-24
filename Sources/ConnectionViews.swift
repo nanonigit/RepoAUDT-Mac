@@ -398,6 +398,15 @@ struct MCPConnectionView: View {
     }
 }
 
+struct ScannerDiagnostic: Identifiable {
+    let id: String
+    let label: String
+    let installed: Bool
+    let path: String
+    let version: String
+    let installHint: String
+}
+
 struct SystemUpdateView: View {
     @StateObject private var store = ConnectionStore()
     @State private var pythonPath = ""
@@ -407,6 +416,7 @@ struct SystemUpdateView: View {
     @State private var repoDir = ""
     @State private var localCommit = ""
     @State private var dirtyRepo = false
+    @State private var scanners: [ScannerDiagnostic] = []
     @State private var logText = ""
     @State private var updateAvailable = false
     @State private var remoteCommit = ""
@@ -474,6 +484,29 @@ struct SystemUpdateView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
+                }
+
+                if !scanners.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(english ? "Security Scanners (CLI Engines)" : "セキュリティスキャナ（CLI エンジン）")
+                            .font(.headline)
+                        GroupBox {
+                            VStack(spacing: 0) {
+                                ForEach(Array(scanners.enumerated()), id: \.element.id) { idx, sc in
+                                    if idx > 0 { Divider() }
+                                    diagnosticRow(
+                                        ok: sc.installed,
+                                        title: sc.label,
+                                        detail: sc.installed
+                                            ? (sc.version.isEmpty ? sc.path : "\(sc.version) · \(sc.path)")
+                                            : (english ? "Not installed (\(sc.installHint))" : "未導入（\(sc.installHint)）")
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                        }
+                    }
                 }
 
                 HStack(spacing: 12) {
@@ -588,6 +621,17 @@ struct SystemUpdateView: View {
             repoDir = repo["repo_dir"] as? String ?? ""
             localCommit = repo["local_commit"] as? String ?? ""
             dirtyRepo = repo["dirty"] as? Bool ?? false
+            let rawScanners = diag["scanners"] as? [[String: Any]] ?? []
+            scanners = rawScanners.map { sc in
+                ScannerDiagnostic(
+                    id: sc["name"] as? String ?? UUID().uuidString,
+                    label: sc["label"] as? String ?? (sc["name"] as? String ?? "Scanner"),
+                    installed: sc["installed"] as? Bool ?? false,
+                    path: sc["path"] as? String ?? "",
+                    version: sc["version"] as? String ?? "",
+                    installHint: sc["install_hint"] as? String ?? ""
+                )
+            }
 
             if autoUpdate {
                 appendLog("Updating RepoAUDT Mac from \(repoDir.isEmpty ? "~/Git/RepoAUDT-Mac" : repoDir)...")

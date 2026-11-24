@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+from typing import Any, Dict, List, Tuple
 
 from workflow_audit import MAX_REPORT_BYTES, read_small_file
 
@@ -847,3 +848,383 @@ def scan_semgrep_and_trivy(repo, match_component, *, include_sast=True, include_
                 statuses["trivy"] = "tool_error"
 
         return sast_findings, advisories, statuses
+
+
+_HADOLINT_SEVERITY = {"error": "high", "warning": "medium", "info": "low", "style": "low"}
+_TEST_OR_DOC_SEGMENTS = ("test", "tests", "__tests__", "spec", "fixture", "fixtures", "mock", "mocks", "docs", "doc", "example", "examples")
+_SENSITIVE_KEY_EXTS = (".p12", ".pfx", ".jks", ".keystore")
+_SUSPICIOUS_INSTALL_RE = re.compile(
+    r"(?:curl\s+|wget\s+|\|\s*(?:sh|bash|zsh)\b|base64\s+-d|\beval\s+|\bnode\s+-e\b|\bpython3?\s+-c\b)",
+    re.IGNORECASE,
+)
+
+
+def _is_test_or_doc_relpath(rel_path: str) -> bool:
+    parts = [p.lower() for p in Path(rel_path).parts]
+    name = Path(rel_path).name.lower()
+    if any(seg in parts for seg in _TEST_OR_DOC_SEGMENTS):
+        return True
+    return name.startswith("test_") or name.endswith((".test.ts", ".test.js", ".spec.ts", ".spec.js", ".md"))
+
+
+def parse_gitleaks_git(raw: str, match_component) -> List[Dict[str, Any]]:
+    data = json.loads(raw or "[]")
+    if not isinstance(data, list):
+        return []
+    findings: List[Dict[str, Any]] = []
+    seen = set()
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        rel = str(item.get("File") or "").lstrip("./")
+        if not rel or _is_test_or_doc_relpath(rel):
+            continue
+        rule = str(item.get("RuleID") or "secret")
+        commit = str(item.get("Commit") or "")[:8]
+        line = int(item.get("StartLine") or 1)
+        dedup_key = (rel, rule, line, commit)
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
+        is_generic = rule == "generic-api-key"
+        findings.append({
+            "severity": "high" if is_generic else "critical",
+            "category": "secrets",
+            "rule_id": f"gitleaks-git:{rule}",
+            "title": f"[gitleaks-history] Git 履歴にシークレット候補 ({rule}) が残存 ({Path(rel).name}:{line} @ {commit or 'history'})",
+            "file": f"{rel}:{line} (Target: {match_component(rel)})",
+            "desc": (
+                f"Git コミット履歴 (`{commit or 'past commit'}`) 内の `{rel}` (L{line}) で `{rule}` が検出されました。"
+                "HEAD から削除済みでも履歴から復元可能なため、該当シークレットを無効化（Revoke/Rotate）し、必要に応じ Git 履歴からも削除してください。"
+            ),
+            "official_source": "https://github.com/gitleaks/gitleaks",
+            "scanner": "gitleaks-git",
+            "confidence": "medium" if is_generic else "high",
+            "commit_sha": commit,
+        })
+    return findings
+
+
+def scan_git_history_secrets(repo: Path, match_component, *, max_commits: int = 100) -> Tuple[List[Dict[str, Any]], str]:
+    """Scan recent Git commit history with `gitleaks git` (--redact=100, read-only)."""
+    gitleaks_bin = executable("gitleaks")
+    if not gitleaks_bin:
+        return [], "unavailable"
+    repo_path = Path(repo)
+    if not (repo_path / ".git").exists():
+        return [], "no_files"
+    cmd = [
+        gitleaks_bin,
+        "git",
+        f"--log-opts=-n {max(1, int(max_commits))}",
+        "--no-banner",
+        "--log-level=error",
+        "--redact=100",
+        "--max-decode-depth=0",
+        "--report-format=json",
+        "--report-path=-",
+        "--exit-code=10",
+        ".",
+    ]
+    base_env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", "")}
+    try:
+        raw = run_read_only(cmd, repo_path, base_env, allowed=(0, 10), timeout=35)
+        return parse_gitleaks_git(raw, match_component), "complete"
+    except subprocess.TimeoutExpired:
+        return [], "timeout"
+    except (OSError, ValueError, KeyError, TypeError):
+        return [], "tool_error"
+
+
+def parse_hadolint(raw: str, repo_root: Path, match_component) -> List[Dict[str, Any]]:
+    data = json.loads(raw or "[]")
+    if not isinstance(data, list):
+        return []
+    findings: List[Dict[str, Any]] = []
+    seen = set()
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "DL0000")
+        level = str(item.get("level") or "warning").lower()
+        sev = _HADOLINT_SEVERITY.get(level, "medium")
+        if sev == "low":
+            # Keep actionable error/warning Dockerfile issues; skip minor style nitpicks
+            continue
+        line = int(item.get("line") or 1)
+        message = str(item.get("message") or "").strip()
+        raw_file = str(item.get("file") or "Dockerfile")
+        try:
+            rel = str(Path(raw_file).resolve().relative_to(repo_root.resolve()))
+        except Exception:
+            rel = raw_file.lstrip("./")
+        key = (rel, code, line)
+        if key in seen:
+            continue
+        seen.add(key)
+        findings.append({
+            "severity": sev,
+            "category": "iac",
+            "rule_id": f"hadolint:{code}",
+            "title": f"[hadolint] {code}: {message} ({Path(rel).name}:{line})",
+            "file": f"{rel}:{line} (Target: {match_component(rel)})",
+            "desc": f"Dockerfile 静的監査 (Hadolint `{code}`): {message}",
+            "official_source": f"https://github.com/hadolint/hadolint/wiki/{code}",
+            "scanner": "hadolint",
+            "confidence": "high",
+        })
+    return findings
+
+
+def scan_hadolint(repo: Path, match_component) -> Tuple[List[Dict[str, Any]], str]:
+    """Scan all Dockerfiles in the repository with Hadolint."""
+    hadolint_bin = executable("hadolint")
+    if not hadolint_bin:
+        return [], "unavailable"
+    repo_path = Path(repo)
+    dockerfiles: List[str] = []
+    ignore_dirs = {".git", "node_modules", "vendor", "dist", "build", "__pycache__", ".next", ".venv", "venv"}
+    for root, dirs, filenames in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in ignore_dirs]
+        for fn in filenames:
+            low = fn.lower()
+            if low == "dockerfile" or low.startswith("dockerfile.") or low.endswith(".dockerfile"):
+                rel = str(Path(root, fn).relative_to(repo_path))
+                dockerfiles.append(rel)
+    if not dockerfiles:
+        return [], "no_files"
+    cmd = [hadolint_bin, "--format", "json", *sorted(dockerfiles)[:20]]
+    base_env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", "")}
+    try:
+        raw = run_read_only(cmd, repo_path, base_env, allowed=(0, 1), timeout=20)
+        return parse_hadolint(raw, repo_path, match_component), "complete"
+    except subprocess.TimeoutExpired:
+        return [], "timeout"
+    except (OSError, ValueError, KeyError, TypeError):
+        return [], "tool_error"
+
+
+def parse_trufflehog(raw: str, match_component) -> List[Dict[str, Any]]:
+    """Parse TruffleHog NDJSON output without ever exposing raw secret values."""
+    findings: List[Dict[str, Any]] = []
+    seen = set()
+    for line_str in (raw or "").splitlines():
+        line_str = line_str.strip()
+        if not line_str or not line_str.startswith("{"):
+            continue
+        try:
+            item = json.loads(line_str)
+        except ValueError:
+            continue
+        if not isinstance(item, dict):
+            continue
+        detector = str(item.get("DetectorName") or item.get("DetectorType") or "Secret").strip()
+        fs_meta = (
+            (item.get("SourceMetadata") or {}).get("Data") or {}
+        ).get("Filesystem") or {}
+        rel = str(fs_meta.get("file") or "").lstrip("./")
+        line_no = int(fs_meta.get("line") or 1)
+        if not rel or _is_test_or_doc_relpath(rel):
+            continue
+        key = (rel, line_no, detector.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        findings.append({
+            "severity": "critical",
+            "category": "secrets",
+            "rule_id": f"trufflehog:{detector.lower()}",
+            "title": f"[trufflehog] {detector} シークレット候補を検出 ({Path(rel).name}:{line_no})",
+            "file": f"{rel}:{line_no} (Target: {match_component(rel)})",
+            "desc": (
+                f"TruffleHog (`{detector}` 検出器) が `{rel}` (L{line_no}) で認証情報パターンを検出しました（生シークレットはマスク済み）。"
+                "実在する認証情報であれば即時無効化（Revoke/Rotate）し、環境変数またはシークレットマネージャーへ移行してください。"
+            ),
+            "official_source": "https://github.com/trufflesecurity/trufflehog",
+            "scanner": "trufflehog",
+            "confidence": "high",
+        })
+    return findings
+
+
+def scan_trufflehog(repo: Path, match_component) -> Tuple[List[Dict[str, Any]], str]:
+    """Run TruffleHog filesystem scan with --no-verification (strictly offline/local)."""
+    th_bin = executable("trufflehog")
+    if not th_bin:
+        return [], "unavailable"
+    repo_path = Path(repo)
+    with tempfile.TemporaryDirectory(prefix="repoaudt-th-") as tmp:
+        exclude_file = Path(tmp) / "exclude.txt"
+        exclude_file.write_text(
+            r"""(^|/)(\.git|node_modules|vendor|dist|build|\.next|__pycache__|\.venv|venv)(/|$)
+\.lock$
+package-lock\.json$
+yarn\.lock$
+pnpm-lock\.yaml$
+""",
+            encoding="utf-8",
+        )
+        cmd = [
+            th_bin,
+            "filesystem",
+            "--json",
+            "--no-verification",
+            "--no-update",
+            "--exclude-paths",
+            str(exclude_file),
+            ".",
+        ]
+        base_env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", "")}
+        try:
+            raw = run_read_only(cmd, repo_path, base_env, allowed=(0, 183), timeout=35)
+            return parse_trufflehog(raw, match_component), "complete"
+        except subprocess.TimeoutExpired:
+            return [], "timeout"
+        except (OSError, ValueError, KeyError, TypeError):
+            return [], "tool_error"
+
+
+def scan_web_and_supply_chain_config(repo: Path, match_component) -> Tuple[List[Dict[str, Any]], str]:
+    """Fast built-in audit for Next.js risky config, CORS wildcard+credentials, suspicious npm install scripts, and committed keystores/sourcemaps."""
+    repo_path = Path(repo)
+    findings: List[Dict[str, Any]] = []
+    ignore_dirs = {".git", "node_modules", "vendor", "dist", "build", "__pycache__", ".next", ".venv", "venv"}
+
+    for root, dirs, filenames in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in ignore_dirs]
+        for fn in filenames:
+            full = Path(root, fn)
+            rel = str(full.relative_to(repo_path))
+            low_name = fn.lower()
+
+            # 1. Committed keystore / PKCS12 archives
+            if low_name.endswith(_SENSITIVE_KEY_EXTS) and not _is_test_or_doc_relpath(rel):
+                findings.append({
+                    "severity": "critical",
+                    "category": "secrets",
+                    "rule_id": "committed-keystore-file",
+                    "title": f"🚨 [認証ファイル露出] 秘密鍵アーカイブ `{fn}` がコミットされています",
+                    "file": f"{rel}:1 (Target: {match_component(rel)})",
+                    "desc": f"`{rel}` は秘密鍵・証明書を含むキーストアファイルです。直ちに証明書を失効させ、`git rm --cached {rel}` で除外してください。",
+                    "fix_cmd": f"git rm --cached {rel} && echo '{rel}' >> .gitignore",
+                    "scanner": "web-config-audit",
+                    "confidence": "high",
+                })
+                continue
+
+            # 2. Committed JS source maps (.js.map / .mjs.map)
+            if low_name.endswith((".js.map", ".mjs.map")) and not _is_test_or_doc_relpath(rel):
+                findings.append({
+                    "severity": "medium",
+                    "category": "sast",
+                    "rule_id": "committed-sourcemap",
+                    "title": f"[設定監査] ビルド成果物のソースマップ `{fn}` がコミットされています",
+                    "file": f"{rel}:1 (Target: {match_component(rel)})",
+                    "desc": f"`{rel}` がリポジトリに含まれています。本番配信された場合、元のソースコード構造が外部から閲覧可能になる恐れがあります。",
+                    "fix_cmd": f"git rm --cached {rel} && echo '*.map' >> .gitignore",
+                    "scanner": "web-config-audit",
+                    "confidence": "high",
+                })
+                continue
+
+            # 3. Next.js dangerouslyAllowSVG: true
+            if low_name.startswith("next.config.") and low_name.endswith((".js", ".mjs", ".cjs", ".ts")):
+                try:
+                    text = full.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    continue
+                for idx, ln in enumerate(text.splitlines(), 1):
+                    if re.search(r"\bdangerouslyAllowSVG\s*:\s*true\b", ln):
+                        findings.append({
+                            "severity": "high",
+                            "category": "sast",
+                            "rule_id": "nextjs-dangerously-allow-svg",
+                            "title": f"[Web設定監査] Next.js で dangerouslyAllowSVG: true が有効化されています ({fn}:{idx})",
+                            "file": f"{rel}:{idx} (Target: {match_component(rel)})",
+                            "desc": (
+                                f"`{rel}` (L{idx}) で `dangerouslyAllowSVG: true` が設定されています。"
+                                "Next.js Image Optimization API の SVG 経由 XSS/RCE リスクが高まるため、`contentSecurityPolicy` の厳格化または無効化を推奨します。"
+                            ),
+                            "official_source": "https://nextjs.org/docs/app/api-reference/components/image#dangerouslyallowsvg",
+                            "scanner": "web-config-audit",
+                            "confidence": "high",
+                        })
+
+            # 4. package.json suspicious preinstall/postinstall scripts
+            if low_name == "package.json":
+                try:
+                    pkg_data = json.loads(full.read_text(encoding="utf-8", errors="ignore"))
+                except (OSError, ValueError):
+                    continue
+                scripts = pkg_data.get("scripts") if isinstance(pkg_data, dict) else None
+                if isinstance(scripts, dict):
+                    for hook in ("preinstall", "install", "postinstall", "prepare"):
+                        cmd_val = str(scripts.get(hook) or "").strip()
+                        if cmd_val and _SUSPICIOUS_INSTALL_RE.search(cmd_val):
+                            findings.append({
+                                "severity": "critical",
+                                "category": "sast",
+                                "rule_id": f"npm-suspicious-{hook}",
+                                "title": f"🚨 [サプライチェーン監査] package.json の `{hook}` に外部取得/シェル実行コマンドが含まれます",
+                                "file": f"{rel}:1 (Target: {match_component(rel)})",
+                                "desc": f"`{rel}` の `scripts.{hook}` に不審なコマンド（`{cmd_val[:120]}`）が含まれています。`npm install` 時に自動実行されるため、サプライチェーン攻撃リスクとして内容を確認してください。",
+                                "scanner": "web-config-audit",
+                                "confidence": "high",
+                            })
+
+            # 5. Dangerous CORS wildcard + credentials: true in TS/JS backend files
+            if low_name.endswith((".ts", ".js", ".mjs", ".cjs")) and not _is_test_or_doc_relpath(rel):
+                try:
+                    if full.stat().st_size > 200_000:
+                        continue
+                    text = full.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    continue
+                if "cors" in text.lower() and "credentials" in text:
+                    m_cors = re.search(
+                        r"(?:cors|enableCors)\s*\(\s*\{[^}]{0,300}(?:origin\s*:\s*(?:['\"]\*['\"]|true)[^}]{0,200}credentials\s*:\s*true|credentials\s*:\s*true[^}]{0,200}origin\s*:\s*(?:['\"]\*['\"]|true))",
+                        text,
+                        re.IGNORECASE | re.DOTALL,
+                    )
+                    if m_cors:
+                        line_no = text[: m_cors.start()].count("\n") + 1
+                        findings.append({
+                            "severity": "high",
+                            "category": "sast",
+                            "rule_id": "cors-wildcard-credentials",
+                            "title": f"[Web設定監査] CORS で origin 全許可と credentials: true が併用されています ({fn}:{line_no})",
+                            "file": f"{rel}:{line_no} (Target: {match_component(rel)})",
+                            "desc": f"`{rel}` (L{line_no}) で `origin: '*'` または `origin: true` と `credentials: true` が同時指定されています。任意オリジンからの認証済みリクエスト（CSRF/情報窃取）を許すため、許可オリジンを明示的なホワイトリストに制限してください。",
+                            "scanner": "web-config-audit",
+                            "confidence": "high",
+                        })
+
+    return findings, "complete"
+
+
+def scan_extended_security(repo: Path, match_component, *, include_sast: bool = True) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Run extended scanners: gitleaks git history, hadolint, trufflehog (--no-verification), and web/supply-chain config checks."""
+    all_findings: List[Dict[str, Any]] = []
+    statuses: Dict[str, Any] = {}
+
+    git_hist_findings, git_hist_status = scan_git_history_secrets(repo, match_component)
+    all_findings.extend(git_hist_findings)
+    statuses["gitleaks_git"] = git_hist_status
+
+    th_findings, th_status = scan_trufflehog(repo, match_component)
+    all_findings.extend(th_findings)
+    statuses["trufflehog"] = th_status
+
+    if include_sast:
+        hado_findings, hado_status = scan_hadolint(repo, match_component)
+        all_findings.extend(hado_findings)
+        statuses["hadolint"] = hado_status
+
+        web_findings, web_status = scan_web_and_supply_chain_config(repo, match_component)
+        all_findings.extend(web_findings)
+        statuses["web_config"] = web_status
+    else:
+        statuses["hadolint"] = "disabled"
+        statuses["web_config"] = "disabled"
+
+    return all_findings, statuses
