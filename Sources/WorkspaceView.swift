@@ -715,6 +715,21 @@ struct MainContentView: View {
                     .padding(.vertical, 5)
                     .background(SemanticColors.role("successText").opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
                 }
+                if !drilldownItems.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "paperplane")
+                            .font(.caption2)
+                            .foregroundStyle(SemanticColors.role("infoText"))
+                        Text(
+                            english
+                                ? "Mark as Requested (paperplane) tracks findings in the Dashboard's Remediation Request Tracker with elapsed days and automatic resolution on re-scan."
+                                : "紙飛行機ボタン（依頼済みにする）でチェックした指摘はダッシュボードの「修正依頼トラッカー」に記録され、経過日数と再スキャン時の自動解消を追跡します。"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    }
+                }
                 Divider()
                 if loadingDrilldown {
                     ProgressView(english ? "Loading findings..." : "指摘を読み込み中…")
@@ -797,6 +812,11 @@ struct MainContentView: View {
                                         }
                                         .buttonStyle(.bordered)
                                         .controlSize(.small)
+                                        .help(
+                                            allRequested
+                                                ? (english ? "Remove this group from Remediation Request Tracker" : "このグループの依頼済み記録を解除")
+                                                : (english ? "Track this group in Remediation Request Tracker (elapsed days & auto-resolve on re-scan)" : "このグループを「修正依頼トラッカー」に記録（経過日数・再スキャン時の自動解消を追跡）")
+                                        )
                                         if let targetRepo = singleRepo, targetRepo.contains("/") {
                                             Button {
                                                 Task { await createGitHubIssue(for: group, repo: targetRepo) }
