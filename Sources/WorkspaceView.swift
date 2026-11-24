@@ -143,6 +143,8 @@ struct MainContentView: View {
     @State private var drilldownItems: [DrilldownFindingItem] = []
     @State private var loadingDrilldown = false
     @State private var showAspmLegend = false
+    @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "kpi,priority_repos,aspm,audit_scope"
+    @AppStorage("dashboardCollapsedSections") private var dashboardCollapsedSectionsRaw = ""
     @State private var monitorChecking = false
     @State private var monitorLastCheckTime = ""
     @State private var monitorSummary = ""
@@ -387,6 +389,22 @@ struct MainContentView: View {
                                 if busyRepoIDs.contains(repo.id) {
                                     ProgressView()
                                         .controlSize(.small)
+                                } else if let aspm = aspmRepos.first(where: { $0.id == repo.id || $0.repo == repo.name }),
+                                          (aspm.p0 + aspm.p1 + aspm.p2 + aspm.p3) > 0 {
+                                    HStack(spacing: 3) {
+                                        if aspm.p0 > 0 {
+                                            sidebarTierPill(count: aspm.p0, color: SemanticColors.role("dangerText"))
+                                        }
+                                        if aspm.p1 > 0 {
+                                            sidebarTierPill(count: aspm.p1, color: .orange)
+                                        }
+                                        if aspm.p2 > 0 {
+                                            sidebarTierPill(count: aspm.p2, color: .yellow)
+                                        }
+                                        if aspm.p3 > 0 {
+                                            sidebarTierPill(count: aspm.p3, color: SemanticColors.role("infoText"))
+                                        }
+                                    }
                                 } else if repo.findings > 0 {
                                     let sevColor = SemanticColors.severityColor(repo.severity)
                                     Text("\(repo.findings)")
@@ -397,9 +415,15 @@ struct MainContentView: View {
                                         .background(sevColor.opacity(0.18), in: Capsule())
                                 }
                             }
-                            .help(repo.findings > 0
-                                  ? (english ? "\(repo.name) — \(repo.findings) findings (\(repo.severity))" : "\(repo.name) — 指摘 \(repo.findings)件（\(repo.severity)）")
-                                  : repo.name)
+                            .help({
+                                if let aspm = aspmRepos.first(where: { $0.id == repo.id || $0.repo == repo.name }),
+                                   (aspm.p0 + aspm.p1 + aspm.p2 + aspm.p3) > 0 {
+                                    return "\(repo.name) — P0: \(aspm.p0) / P1: \(aspm.p1) / P2: \(aspm.p2) / P3: \(aspm.p3)"
+                                }
+                                return repo.findings > 0
+                                    ? (english ? "\(repo.name) — \(repo.findings) findings (\(repo.severity))" : "\(repo.name) — 指摘 \(repo.findings)件（\(repo.severity)）")
+                                    : repo.name
+                            }())
                             .tag("repo:" + repo.id)
                             .contextMenu {
                                 repositoryContextMenu(for: repo)
@@ -969,317 +993,432 @@ struct MainContentView: View {
                 let repoLatestAnalyzed = allRepos.compactMap { formattedAnalysisDate($0.analyzedAt) }
                 let syncLatestAnalyzed = formattedAnalysisDate(lastCompletedSyncAt)
                 let latestAnalyzed = (repoLatestAnalyzed + (syncLatestAnalyzed.map { [$0] } ?? [])).max()
-
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-                    summaryMetricCard(
-                        title: english ? "Repositories" : "対象リポジトリ",
-                        value: "\(allRepos.count)",
-                        subtitle: english ? "Saved analyses" : "保存済み解析",
-                        symbol: "folder.fill",
-                        tint: SemanticColors.role("actionText")
-                    ) {
-                        showPage(.audit)
-                    }
-                    summaryMetricCard(
-                        title: english ? "Total Findings" : "総指摘件数",
-                        value: "\(totalFindings)",
-                        subtitle: english ? "Across all repos" : "全リポジトリ合計",
-                        symbol: "exclamationmark.bubble.fill",
-                        tint: SemanticColors.role("warningText")
-                    ) {
-                        openDrilldown(tier: nil, title: english ? "All Findings" : "全リポジトリの指摘一覧")
-                    }
-                    summaryMetricCard(
-                        title: english ? "Critical / High" : "重大・高リスク",
-                        value: english ? "\(highRiskRepos.count) repos" : "\(highRiskRepos.count) リポジトリ",
-                        subtitle: english
-                            ? "Out of \(allRepos.count) total · \(highRiskFindings) findings"
-                            : "全\(allRepos.count)件中 · 該当指摘 \(highRiskFindings)件",
-                        symbol: "shield.lefthalf.filled.badge.checkmark",
-                        tint: SemanticColors.role("dangerText")
-                    ) {
-                        openDrilldown(tier: "HIGH_CRIT", title: english ? "Critical / High Findings (P0 / P1)" : "重大・高リスク指摘（P0 / P1）")
-                    }
-                    summaryMetricCard(
-                        title: english ? "Latest Analysis" : "最新解析",
-                        value: latestAnalyzed ?? (english ? "Not yet" : "未記録"),
-                        subtitle: english ? "Click to refresh" : "クリックで最新化",
-                        symbol: "clock.fill",
-                        tint: SemanticColors.role("infoText")
-                    ) {
-                        Task { await reloadAndAnalyzeRepositories() }
-                    }
-                }
-
                 let p0Total = aspmRepos.reduce(0) { $0 + $1.p0 }
                 let p1Total = aspmRepos.reduce(0) { $0 + $1.p1 }
                 let p2Total = aspmRepos.reduce(0) { $0 + $1.p2 }
                 let p3Total = aspmRepos.reduce(0) { $0 + $1.p3 }
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-                    summaryMetricCard(
-                        title: english ? "P0 Critical (Immediate)" : "P0 緊急対応",
-                        value: "\(p0Total)",
-                        subtitle: english ? "Secrets / Malware" : "シークレット漏洩 / マルウェア",
-                        symbol: "flame.fill",
-                        tint: p0Total > 0 ? SemanticColors.role("dangerText") : .secondary,
-                        highlightTint: p0Total > 0 ? SemanticColors.role("dangerText") : nil
-                    ) {
-                        openDrilldown(tier: "P0", title: english ? "P0 Critical Findings" : "P0 緊急対応一覧（シークレット・マルウェア）")
-                    }
-                    summaryMetricCard(
-                        title: english ? "P1 High (This Week)" : "P1 最優先",
-                        value: "\(p1Total)",
-                        subtitle: english ? "KEV / RCE / Auth Bypass" : "KEV / RCE / 認証バイパス",
-                        symbol: "exclamationmark.triangle.fill",
-                        tint: p1Total > 0 ? .orange : .secondary,
-                        highlightTint: p1Total > 0 ? .orange : nil
-                    ) {
-                        openDrilldown(tier: "P1", title: english ? "P1 High Findings" : "P1 最優先対応一覧（KEV / RCE 等）")
-                    }
-                    summaryMetricCard(
-                        title: english ? "P2 Planned" : "P2 計画対応",
-                        value: "\(p2Total)",
-                        subtitle: english ? "CI/CD / IaC / License" : "CI/CD / IaC / ライセンス",
-                        symbol: "wrench.and.screwdriver.fill",
-                        tint: p2Total > 0 ? .yellow : .secondary,
-                        highlightTint: p2Total > 0 ? .yellow : nil
-                    ) {
-                        openDrilldown(tier: "P2", title: english ? "P2 Planned Findings" : "P2 計画対応一覧")
-                    }
-                    summaryMetricCard(
-                        title: english ? "P3 Backlog" : "P3 低優先",
-                        value: "\(p3Total)",
-                        subtitle: english ? "Dev tools / Revoked" : "開発ツール / 失効済み等",
-                        symbol: "tray.full.fill",
-                        tint: p3Total > 0 ? SemanticColors.role("infoText") : .secondary,
-                        highlightTint: p3Total > 0 ? SemanticColors.role("infoText") : nil
-                    ) {
-                        openDrilldown(tier: "P3", title: english ? "P3 Backlog Findings" : "P3 低優先バックログ一覧")
-                    }
-                }
+                let topRisk = Array(sortDashboardRepositories(highRiskRepos, by: .severityDesc).prefix(5))
 
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        Text(english ? "Top Priority Repositories" : "優先対応リポジトリ（危険度順）")
-                            .font(.headline)
-                        Spacer()
-                        if let copyStatus = highRiskCopyStatus {
-                            Text(copyStatus)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(SemanticColors.role("successText"))
-                        }
-                        if !highRiskRepos.isEmpty {
-                            Button {
-                                Task { await copyHighRiskReport() }
-                            } label: {
-                                if copyingHighRiskReport {
-                                    HStack(spacing: 6) {
-                                        ProgressView().controlSize(.small)
-                                        Text(english ? "Preparing…" : "作成中…")
+                ForEach(orderedDashboardSections, id: \.self) { sectionId in
+                    switch sectionId {
+                    case "kpi":
+                        dashboardSectionWrapper(id: "kpi", title: english ? "Security KPI & Priority Summary" : "セキュリティKPI・優先度サマリー") {
+                            EmptyView()
+                        } content: {
+                            VStack(alignment: .leading, spacing: 12) {
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                                    summaryMetricCard(
+                                        title: english ? "Repositories" : "対象リポジトリ",
+                                        value: "\(allRepos.count)",
+                                        subtitle: english ? "Saved analyses" : "保存済み解析",
+                                        symbol: "folder.fill",
+                                        tint: SemanticColors.role("actionText")
+                                    ) {
+                                        showPage(.audit)
                                     }
-                                } else {
-                                    Label(
-                                        english ? "Copy High-Risk Report" : "重大・高リスクを一括コピー",
-                                        systemImage: "doc.on.doc"
-                                    )
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(copyingHighRiskReport || !backend.isReady)
-
-                            Button {
-                                Task { await copySlackDigestReport() }
-                            } label: {
-                                Label(
-                                    english ? "Slack Digest" : "Slack共有サマリー",
-                                    systemImage: "text.bubble"
-                                )
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(copyingHighRiskReport || !backend.isReady)
-
-                            Button {
-                                Task { await exportAuditPdfReport() }
-                            } label: {
-                                Label(
-                                    english ? "Export PDF" : "PDF報告書",
-                                    systemImage: "doc.richtext"
-                                )
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(copyingHighRiskReport || !backend.isReady)
-                        }
-                        Button {
-                            showPage(.audit)
-                        } label: {
-                            Label(english ? "Open Audit List" : "監査結果一覧を見る", systemImage: "arrow.right.circle")
-                        }
-                    }
-                    let topRisk = Array(sortDashboardRepositories(highRiskRepos, by: .severityDesc).prefix(5))
-                    if allRepos.isEmpty {
-                        ContentUnavailableView(
-                            english ? "No saved analyses" : "保存済みの解析はありません",
-                            systemImage: "folder.badge.plus",
-                            description: Text(english ? "Add a GitHub URL to begin." : "GitHub URL を追加して始めましょう。")
-                        )
-                    } else if topRisk.isEmpty {
-                        HStack(spacing: 12) {
-                            Image(systemName: "checkmark.shield.fill")
-                                .font(.title3)
-                                .foregroundStyle(SemanticColors.role("successText"))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(english ? "No Critical or High risk repositories" : "重大・高リスクのリポジトリはありません")
-                                    .font(.subheadline.weight(.semibold))
-                                Text(
-                                    english
-                                        ? "All \(allRepos.count) analyzed repositories are medium/low risk or clean. Open the Audit List for details."
-                                        : "全 \(allRepos.count) 件の解析済みリポジトリは中・低リスク以下またはクリーンです。詳細は「監査結果一覧を見る」から確認できます。"
-                                )
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.5)))
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(topRisk) { repo in
-                                repositoryRow(repo)
-                                if repo.id != topRisk.last?.id { Divider().padding(.leading, 48) }
-                            }
-                        }
-                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.5)))
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    if !aspmRepos.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(spacing: 10) {
-                                Text(english ? "ASPM Portfolio & Coverage Matrix" : "ASPM 組織ポートフォリオ & 資産カバレッジ")
-                                    .font(.headline)
-                                Spacer()
-                                Button {
-                                    showAspmLegend.toggle()
-                                } label: {
-                                    Label(english ? "Legend" : "見方", systemImage: "questionmark.circle")
-                                }
-                                .buttonStyle(.borderless)
-                                .font(.caption)
-                                .popover(isPresented: $showAspmLegend, arrowEdge: .top) {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text(english ? "ASPM Portfolio Guide" : "ASPM ポートフォリオの見方")
-                                            .font(.headline)
-                                        Text(english
-                                            ? "• Gate: 🔴 BLOCK (unresolved P0 / Tier1 KEV) · 🟡 WARN (P1) · 🟢 PASS (clean)\n• Tier: Business criticality weight (Tier 1 Prod 1.5x / Tier 2 Internal 1.0x / Tier 3 Demo 0.5x)\n• Risk 0–100: Higher = riskier (P0–P3 × Tier × Public visibility)\n• Domains: Sec (Secrets) · SCA (Deps) · SAST (Code) · CI (Actions) · IaC (Infra) · GH (Repo Posture)\n• Status: ✅ Clean · ⚠️ Issues · ⬜ Unscanned (Blind Spot) · ➖ N/A"
-                                            : "• ゲート: 🔴 BLOCK (P0/本番KEV残存) · 🟡 WARN (P1残存) · 🟢 PASS (安全)\n• Tier: 業務重要度重み (Tier 1 本番 1.5x / Tier 2 社内 1.0x / Tier 3 デモ 0.5x)\n• Risk 0–100: 高いほど危険 (P0〜P3 × Tier × 公開設定)\n• 6領域: Sec=鍵 · SCA=依存 · SAST=静的解析 · CI=Actions · IaC=構成 · GH=GitHub設定\n• 状態: ✅問題なし · ⚠️指摘あり · ⬜未検査 (Blind Spot) · ➖対象外")
-                                            .font(.caption)
-                                            .fixedSize(horizontal: false, vertical: true)
+                                    summaryMetricCard(
+                                        title: english ? "Total Findings" : "総指摘件数",
+                                        value: "\(totalFindings)",
+                                        subtitle: english ? "Across all repos" : "全リポジトリ合計",
+                                        symbol: "exclamationmark.bubble.fill",
+                                        tint: SemanticColors.role("warningText")
+                                    ) {
+                                        openDrilldown(tier: nil, title: english ? "All Findings" : "全リポジトリの指摘一覧")
                                     }
-                                    .padding(14)
-                                    .frame(width: 440)
+                                    summaryMetricCard(
+                                        title: english ? "Critical / High" : "重大・高リスク",
+                                        value: english ? "\(highRiskRepos.count) repos" : "\(highRiskRepos.count) リポジトリ",
+                                        subtitle: english
+                                            ? "Out of \(allRepos.count) total · \(highRiskFindings) findings"
+                                            : "全\(allRepos.count)件中 · 該当指摘 \(highRiskFindings)件",
+                                        symbol: "shield.lefthalf.filled.badge.checkmark",
+                                        tint: SemanticColors.role("dangerText")
+                                    ) {
+                                        openDrilldown(tier: "HIGH_CRIT", title: english ? "Critical / High Findings (P0 / P1)" : "重大・高リスク指摘（P0 / P1）")
+                                    }
+                                    summaryMetricCard(
+                                        title: english ? "Latest Analysis" : "最新解析",
+                                        value: latestAnalyzed ?? (english ? "Not yet" : "未記録"),
+                                        subtitle: english ? "Click to refresh" : "クリックで最新化",
+                                        symbol: "clock.fill",
+                                        tint: SemanticColors.role("infoText")
+                                    ) {
+                                        Task { await reloadAndAnalyzeRepositories() }
+                                    }
                                 }
-                                Button {
-                                    Task { await refreshAspmPortfolio() }
-                                } label: {
-                                    Label(english ? "Refresh" : "更新", systemImage: "arrow.clockwise")
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                                    summaryMetricCard(
+                                        title: english ? "P0 Critical (Immediate)" : "P0 緊急対応",
+                                        value: "\(p0Total)",
+                                        subtitle: english ? "Secrets / Malware" : "シークレット漏洩 / マルウェア",
+                                        symbol: "flame.fill",
+                                        tint: p0Total > 0 ? SemanticColors.role("dangerText") : .secondary,
+                                        highlightTint: p0Total > 0 ? SemanticColors.role("dangerText") : nil
+                                    ) {
+                                        openDrilldown(tier: "P0", title: english ? "P0 Critical Findings" : "P0 緊急対応一覧（シークレット・マルウェア）")
+                                    }
+                                    summaryMetricCard(
+                                        title: english ? "P1 High (This Week)" : "P1 最優先",
+                                        value: "\(p1Total)",
+                                        subtitle: english ? "KEV / RCE / Auth Bypass" : "KEV / RCE / 認証バイパス",
+                                        symbol: "exclamationmark.triangle.fill",
+                                        tint: p1Total > 0 ? .orange : .secondary,
+                                        highlightTint: p1Total > 0 ? .orange : nil
+                                    ) {
+                                        openDrilldown(tier: "P1", title: english ? "P1 High Findings" : "P1 最優先対応一覧（KEV / RCE 等）")
+                                    }
+                                    summaryMetricCard(
+                                        title: english ? "P2 Planned" : "P2 計画対応",
+                                        value: "\(p2Total)",
+                                        subtitle: english ? "CI/CD / IaC / License" : "CI/CD / IaC / ライセンス",
+                                        symbol: "wrench.and.screwdriver.fill",
+                                        tint: p2Total > 0 ? .yellow : .secondary,
+                                        highlightTint: p2Total > 0 ? .yellow : nil
+                                    ) {
+                                        openDrilldown(tier: "P2", title: english ? "P2 Planned Findings" : "P2 計画対応一覧")
+                                    }
+                                    summaryMetricCard(
+                                        title: english ? "P3 Backlog" : "P3 低優先",
+                                        value: "\(p3Total)",
+                                        subtitle: english ? "Dev tools / Revoked" : "開発ツール / 失効済み等",
+                                        symbol: "tray.full.fill",
+                                        tint: p3Total > 0 ? SemanticColors.role("infoText") : .secondary,
+                                        highlightTint: p3Total > 0 ? SemanticColors.role("infoText") : nil
+                                    ) {
+                                        openDrilldown(tier: "P3", title: english ? "P3 Backlog Findings" : "P3 低優先バックログ一覧")
+                                    }
                                 }
-                                .buttonStyle(.borderless)
-                                .font(.caption)
                             }
-                            Text(
-                                english
-                                    ? "🔴 BLOCK (P0) · 🟡 WARN (P1) · 🟢 PASS  |  Sec=Secrets · SCA=Deps · SAST=Code · CI=Actions · IaC=Infra · GH=Posture  |  ✅ Clean  ⚠️ Issues  ⬜ Unscanned  ➖ N/A"
-                                    : "🔴 BLOCK (P0) · 🟡 WARN (P1) · 🟢 PASS  ｜  Sec=鍵 · SCA=依存 · SAST=静的 · CI=Actions · IaC=構成 · GH=設定  ｜  ✅安全  ⚠️指摘  ⬜未検査  ➖対象外"
-                            )
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(nsColor: .controlBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                            VStack(spacing: 6) {
-                                ForEach(aspmRepos.prefix(8)) { item in
+                        }
+
+                    case "priority_repos":
+                        dashboardSectionWrapper(id: "priority_repos", title: english ? "Top Priority Repositories" : "優先対応リポジトリ（危険度順）") {
+                            HStack(spacing: 8) {
+                                if let copyStatus = highRiskCopyStatus {
+                                    Text(copyStatus)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(SemanticColors.role("successText"))
+                                }
+                                if !highRiskRepos.isEmpty {
                                     Button {
-                                        selection = ["repo:\(item.id)"]
+                                        Task { await copyHighRiskReport() }
                                     } label: {
-                                        HStack(spacing: 10) {
-                                            Text(item.gateEmoji + " " + item.releaseGate)
-                                                .font(.caption.weight(.bold))
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(item.gateColor.opacity(0.15), in: Capsule())
-                                                .foregroundStyle(item.gateColor)
-                                            Text(item.repo)
-                                                .font(.subheadline.weight(.semibold))
-                                                .lineLimit(1)
-                                            Text(item.criticalityLabel(english: english))
-                                                .font(.caption2)
-                                                .foregroundStyle(.secondary)
-                                            Spacer()
-                                            Text("Risk \(item.riskScore)/100")
-                                                .font(.caption.monospacedDigit().weight(.semibold))
-                                            Text(item.coverageCompact)
-                                                .font(.caption2.monospaced())
-                                                .foregroundStyle(.secondary)
+                                        if copyingHighRiskReport {
+                                            HStack(spacing: 6) {
+                                                ProgressView().controlSize(.small)
+                                                Text(english ? "Preparing…" : "作成中…")
+                                            }
+                                        } else {
+                                            Label(
+                                                english ? "Copy High-Risk Report" : "重大・高リスクを一括コピー",
+                                                systemImage: "doc.on.doc"
+                                            )
                                         }
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
                                     }
-                                    .buttonStyle(.plain)
-                                    .help(item.gateReasons.joined(separator: " / "))
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
+                                    .disabled(copyingHighRiskReport || !backend.isReady)
+
+                                    Button {
+                                        Task { await copySlackDigestReport() }
+                                    } label: {
+                                        Label(
+                                            english ? "Slack Digest" : "Slack共有サマリー",
+                                            systemImage: "text.bubble"
+                                        )
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                    .disabled(copyingHighRiskReport || !backend.isReady)
+
+                                    Button {
+                                        Task { await exportAuditPdfReport() }
+                                    } label: {
+                                        Label(
+                                            english ? "Export PDF" : "PDF報告書",
+                                            systemImage: "doc.richtext"
+                                        )
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                    .disabled(copyingHighRiskReport || !backend.isReady)
+                                }
+                                Button {
+                                    showPage(.audit)
+                                } label: {
+                                    Label(english ? "Open Audit List" : "監査結果一覧を見る", systemImage: "arrow.right.circle")
+                                }
+                                .controlSize(.small)
+                            }
+                        } content: {
+                            if allRepos.isEmpty {
+                                ContentUnavailableView(
+                                    english ? "No saved analyses" : "保存済みの解析はありません",
+                                    systemImage: "folder.badge.plus",
+                                    description: Text(english ? "Add a GitHub URL to begin." : "GitHub URL を追加して始めましょう。")
+                                )
+                            } else if topRisk.isEmpty {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "checkmark.shield.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(SemanticColors.role("successText"))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(english ? "No Critical or High risk repositories" : "重大・高リスクのリポジトリはありません")
+                                            .font(.subheadline.weight(.semibold))
+                                        Text(
+                                            english
+                                                ? "All \(allRepos.count) analyzed repositories are medium/low risk or clean. Open the Audit List for details."
+                                                : "全 \(allRepos.count) 件の解析済みリポジトリは中・低リスク以下またはクリーンです。詳細は「監査結果一覧を見る」から確認できます。"
+                                        )
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.5)))
+                            } else {
+                                VStack(spacing: 0) {
+                                    ForEach(topRisk) { repo in
+                                        repositoryRow(repo)
+                                        if repo.id != topRisk.last?.id { Divider().padding(.leading, 48) }
+                                    }
+                                }
+                                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.5)))
+                            }
+                        }
+
+                    case "aspm":
+                        if !aspmRepos.isEmpty {
+                            dashboardSectionWrapper(id: "aspm", title: english ? "ASPM Portfolio & Coverage Matrix" : "ASPM 組織ポートフォリオ & 資産カバレッジ") {
+                                HStack(spacing: 10) {
+                                    Button {
+                                        showAspmLegend.toggle()
+                                    } label: {
+                                        Label(english ? "Legend" : "見方", systemImage: "questionmark.circle")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .font(.caption)
+                                    .popover(isPresented: $showAspmLegend, arrowEdge: .top) {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text(english ? "ASPM Portfolio Guide" : "ASPM ポートフォリオの見方")
+                                                .font(.headline)
+                                            Text(english
+                                                ? "• Gate: 🔴 BLOCK (unresolved P0 / Tier1 KEV) · 🟡 WARN (P1) · 🟢 PASS (clean)\n• Tier: Business criticality weight (Tier 1 Prod 1.5x / Tier 2 Internal 1.0x / Tier 3 Demo 0.5x)\n• Risk 0–100: Higher = riskier (P0–P3 × Tier × Public visibility)\n• Domains: Sec (Secrets) · SCA (Deps) · SAST (Code) · CI (Actions) · IaC (Infra) · GH (Repo Posture)\n• Status: ✅ Clean · ⚠️ Issues · ⬜ Unscanned (Blind Spot) · ➖ N/A"
+                                                : "• ゲート: 🔴 BLOCK (P0/本番KEV残存) · 🟡 WARN (P1残存) · 🟢 PASS (安全)\n• Tier: 業務重要度重み (Tier 1 本番 1.5x / Tier 2 社内 1.0x / Tier 3 デモ 0.5x)\n• Risk 0–100: 高いほど危険 (P0〜P3 × Tier × 公開設定)\n• 6領域: Sec=鍵 · SCA=依存 · SAST=静的解析 · CI=Actions · IaC=構成 · GH=GitHub設定\n• 状態: ✅問題なし · ⚠️指摘あり · ⬜未検査 (Blind Spot) · ➖対象外")
+                                                .font(.caption)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                        .padding(14)
+                                        .frame(width: 440)
+                                    }
+                                    Button {
+                                        Task { await refreshAspmPortfolio() }
+                                    } label: {
+                                        Label(english ? "Refresh" : "更新", systemImage: "arrow.clockwise")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .font(.caption)
+                                }
+                            } content: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(
+                                        english
+                                            ? "🔴 BLOCK (P0) · 🟡 WARN (P1) · 🟢 PASS  |  Sec=Secrets · SCA=Deps · SAST=Code · CI=Actions · IaC=Infra · GH=Posture  |  ✅ Clean  ⚠️ Issues  ⬜ Unscanned  ➖ N/A"
+                                            : "🔴 BLOCK (P0) · 🟡 WARN (P1) · 🟢 PASS  ｜  Sec=鍵 · SCA=依存 · SAST=静的 · CI=Actions · IaC=構成 · GH=設定  ｜  ✅安全  ⚠️指摘  ⬜未検査  ➖対象外"
+                                    )
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                    VStack(spacing: 6) {
+                                        ForEach(aspmRepos.prefix(8)) { item in
+                                            Button {
+                                                selection = ["repo:\(item.id)"]
+                                            } label: {
+                                                HStack(spacing: 10) {
+                                                    Text(item.gateEmoji + " " + item.releaseGate)
+                                                        .font(.caption.weight(.bold))
+                                                        .padding(.horizontal, 6)
+                                                        .padding(.vertical, 2)
+                                                        .background(item.gateColor.opacity(0.15), in: Capsule())
+                                                        .foregroundStyle(item.gateColor)
+                                                    Text(item.repo)
+                                                        .font(.subheadline.weight(.semibold))
+                                                        .lineLimit(1)
+                                                    Text(item.criticalityLabel(english: english))
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.secondary)
+                                                    Spacer()
+                                                    Text("Risk \(item.riskScore)/100")
+                                                        .font(.caption.monospacedDigit().weight(.semibold))
+                                                    Text(item.coverageCompact)
+                                                        .font(.caption2.monospaced())
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
+                                            }
+                                            .buttonStyle(.plain)
+                                            .help(item.gateReasons.joined(separator: " / "))
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    Text(english ? "What RepoAUDT Audits" : "実施する監査内容")
-                        .font(.headline)
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        auditScopeItem(
-                            title: english ? "Dependencies, Malware & OSS Licenses (OSV + Trivy)" : "依存関係・マルウェア・OSSライセンス（OSV + Trivy）",
-                            summary: english
-                                ? "Detects CVEs (KEV/EPSS), MAL-* malicious packages, EOL runtimes, AGPL/GPL licenses, and exports CycloneDX SBOMs."
-                                : "既知 CVE（KEV/EPSS）、MAL-* マルウェア、ランタイム EOL、AGPL/GPL ライセンスを検出し、CycloneDX SBOM を出力します。",
-                            symbol: "shippingbox.fill",
-                            tint: SemanticColors.role("dangerText")
-                        )
-                        auditScopeItem(
-                            title: english ? "Source SAST & IaC (Semgrep + Ruff + Trivy)" : "ソースコード・IaC 静的解析（Semgrep + Ruff + Trivy）",
-                            summary: english
-                                ? "Data-flow analysis for SQLi/XSS, Terraform/Dockerfile misconfigs, and structured Why/How/Verify AI fix proposals."
-                                : "SQLi/XSS 等のデータフロー解析、Terraform/Dockerfile 設定ミス検出、Why/How/Verify 構造化パッチ提案を行います。",
-                            symbol: "magnifyingglass.circle.fill",
-                            tint: SemanticColors.role("warningText")
-                        )
-                        auditScopeItem(
-                            title: english ? "Secrets & Opt-in Liveness Check (Gitleaks)" : "シークレット検出＆生存確認（Gitleaks + Opt-in Verify）",
-                            summary: english
-                                ? "Detects leaked API keys with masking and supports opt-in read-only Active/Revoked verification."
-                                : "API キーや認証トークンの誤コミットをマスク検出し、手動オプトインで読み取り専用の有効/失効確認が行えます。",
-                            symbol: "key.fill",
-                            tint: SemanticColors.role("actionText")
-                        )
-                        auditScopeItem(
-                            title: english ? "CI/CD, GitHub Posture & ASPM Gate (zizmor + ASPM)" : "GitHub Actions・Posture・ASPM ゲート（zizmor + ASPM）",
-                            summary: english
-                                ? "Audits workflow permissions/injections, repo visibility/branch protection, criticality Risk Score, and PASS/WARN/BLOCK gates."
-                                : "ワークフロー権限・インジェクション、リポジトリ保護設定、重要度加重 Risk Score と PASS/WARN/BLOCK ゲートを評価します。",
-                            symbol: "gearshape.2.fill",
-                            tint: SemanticColors.role("infoText")
-                        )
+                    case "audit_scope":
+                        dashboardSectionWrapper(id: "audit_scope", title: english ? "What RepoAUDT Audits" : "実施する監査内容") {
+                            EmptyView()
+                        } content: {
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                auditScopeItem(
+                                    title: english ? "Dependencies, Malware & OSS Licenses (OSV + Trivy)" : "依存関係・マルウェア・OSSライセンス（OSV + Trivy）",
+                                    summary: english
+                                        ? "Detects CVEs (KEV/EPSS), MAL-* malicious packages, EOL runtimes, AGPL/GPL licenses, and exports CycloneDX SBOMs."
+                                        : "既知 CVE（KEV/EPSS）、MAL-* マルウェア、ランタイム EOL、AGPL/GPL ライセンスを検出し、CycloneDX SBOM を出力します。",
+                                    symbol: "shippingbox.fill",
+                                    tint: SemanticColors.role("dangerText")
+                                )
+                                auditScopeItem(
+                                    title: english ? "Source SAST & IaC (Semgrep + Ruff + Trivy)" : "ソースコード・IaC 静的解析（Semgrep + Ruff + Trivy）",
+                                    summary: english
+                                        ? "Data-flow analysis for SQLi/XSS, Terraform/Dockerfile misconfigs, and structured Why/How/Verify AI fix proposals."
+                                        : "SQLi/XSS 等のデータフロー解析、Terraform/Dockerfile 設定ミス検出、Why/How/Verify 構造化パッチ提案を行います。",
+                                    symbol: "magnifyingglass.circle.fill",
+                                    tint: SemanticColors.role("warningText")
+                                )
+                                auditScopeItem(
+                                    title: english ? "Secrets & Opt-in Liveness Check (Gitleaks)" : "シークレット検出＆生存確認（Gitleaks + Opt-in Verify）",
+                                    summary: english
+                                        ? "Detects leaked API keys with masking and supports opt-in read-only Active/Revoked verification."
+                                        : "API キーや認証トークンの誤コミットをマスク検出し、手動オプトインで読み取り専用の有効/失効確認が行えます。",
+                                    symbol: "key.fill",
+                                    tint: SemanticColors.role("actionText")
+                                )
+                                auditScopeItem(
+                                    title: english ? "CI/CD, GitHub Posture & ASPM Gate (zizmor + ASPM)" : "GitHub Actions・Posture・ASPM ゲート（zizmor + ASPM）",
+                                    summary: english
+                                        ? "Audits workflow permissions/injections, repo visibility/branch protection, criticality Risk Score, and PASS/WARN/BLOCK gates."
+                                        : "ワークフロー権限・インジェクション、リポジトリ保護設定、重要度加重 Risk Score と PASS/WARN/BLOCK ゲートを評価します。",
+                                    symbol: "gearshape.2.fill",
+                                    tint: SemanticColors.role("infoText")
+                                )
+                            }
+                        }
+
+                    default:
+                        EmptyView()
                     }
                 }
             }
             .padding(32)
             .frame(maxWidth: 1100, alignment: .leading)
             .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var orderedDashboardSections: [String] {
+        let defaults = ["kpi", "priority_repos", "aspm", "audit_scope"]
+        let parsed = dashboardSectionOrderRaw.split(separator: ",").map(String.init).filter { defaults.contains($0) }
+        let missing = defaults.filter { !parsed.contains($0) }
+        return parsed + missing
+    }
+
+    private func isDashboardSectionCollapsed(_ id: String) -> Bool {
+        dashboardCollapsedSectionsRaw.split(separator: ",").map(String.init).contains(id)
+    }
+
+    private func toggleDashboardSection(_ id: String) {
+        var set = Set(dashboardCollapsedSectionsRaw.split(separator: ",").map(String.init))
+        if set.contains(id) {
+            set.remove(id)
+        } else {
+            set.insert(id)
+        }
+        dashboardCollapsedSectionsRaw = set.sorted().joined(separator: ",")
+    }
+
+    private func moveDashboardSection(_ id: String, delta: Int) {
+        var order = orderedDashboardSections
+        guard let idx = order.firstIndex(of: id) else { return }
+        let next = idx + delta
+        guard next >= 0 && next < order.count else { return }
+        order.swapAt(idx, next)
+        dashboardSectionOrderRaw = order.joined(separator: ",")
+    }
+
+    @ViewBuilder
+    private func dashboardSectionWrapper<Trailing: View, Content: View>(
+        id: String,
+        title: String,
+        @ViewBuilder headerTrailing: () -> Trailing,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let collapsed = isDashboardSectionCollapsed(id)
+        let order = orderedDashboardSections
+        let idx = order.firstIndex(of: id) ?? 0
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        toggleDashboardSection(id)
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 12)
+                        Text(title)
+                            .font(.headline)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 8)
+
+                headerTrailing()
+
+                HStack(spacing: 2) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            moveDashboardSection(id, delta: -1)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(idx == 0)
+                    .help(english ? "Move section up" : "上へ移動")
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            moveDashboardSection(id, delta: 1)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(idx >= order.count - 1)
+                    .help(english ? "Move section down" : "下へ移動")
+                }
+                .padding(.leading, 4)
+            }
+
+            if !collapsed {
+                content()
+            }
         }
     }
 
@@ -1304,6 +1443,15 @@ struct MainContentView: View {
             }
             .padding(10)
         }
+    }
+
+    private func sidebarTierPill(count: Int, color: Color) -> some View {
+        Text("\(count)")
+            .font(.caption2.monospacedDigit().weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(color.opacity(0.18), in: Capsule())
     }
 
     private func summaryMetricCard(
