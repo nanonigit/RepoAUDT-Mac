@@ -254,3 +254,25 @@ class SourceScannerTests(unittest.TestCase):
         self.assertEqual(misconfs[0]["scanner"], "trivy")
         self.assertEqual(len(vulns), 1)
         self.assertEqual(vulns[0]["cve"], "CVE-2024-99999")
+
+    def test_snake_case_identifier_key_constant_is_not_generic_api_key(self):
+        self.assertTrue(
+            source_scanners._is_snake_case_identifier_key_line(
+                "const PROVENANCE_KEY = 'cerebras_gemma4_retirement_provenance';"
+            )
+        )
+        self.assertFalse(
+            source_scanners._is_snake_case_identifier_key_line(
+                "const CLIENT_SECRET = 'cerebras_gemma4_retirement_provenance';"
+            )
+        )
+        self.assertFalse(
+            source_scanners._is_snake_case_identifier_key_line(
+                "const API_KEY = 'sk_live_abc123_def456_ghi789';"
+            )
+        )
+        self.assertFalse(
+            source_scanners._is_snake_case_identifier_key_line(
+                "const API_KEY = 'A9xK2mPq8vL4nR7tW1zY3bC6dF0hJ5kM';"
+            )
+        )

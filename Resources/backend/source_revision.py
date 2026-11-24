@@ -153,6 +153,7 @@ def checkout(revision):
                 f"https://github.com/{slug}.git",
                 sha,
             ],
+            timeout=240,
             authorize=True,
         )
         head = run_git(root, ["rev-parse", "--verify", "FETCH_HEAD^{commit}"])

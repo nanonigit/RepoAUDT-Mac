@@ -438,7 +438,7 @@ def _extract_grounded_sequences(
             seq_lines.append(f"    participant {src_id} as {sanitize_mermaid_label(src_mk)}")
         interactions.append(f"    Client->>{src_id}: {sanitize_mermaid_label(route_label)} ({sanitize_mermaid_label(Path(rel_str).name)})")
 
-        for dst_mk in dict.fromkeys(file_imports.get(rel_str, []))[:3]:
+        for dst_mk in list(dict.fromkeys(file_imports.get(rel_str, [])))[:3]:
             dst_id = id_by_mod.get(dst_mk, _make_node_id("Mod", dst_mk))
             if dst_id not in participants_added:
                 participants_added.add(dst_id)
