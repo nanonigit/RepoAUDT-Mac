@@ -2386,20 +2386,47 @@ def append_scan_history_snapshot(
     target = history_file or HISTORY_FILE
     risk = compute_risk_score(diagram)
     counts = risk["counts"]
-    snapshot = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "repo_id": str(diagram.get("id") or ""),
-        "repo": str(diagram.get("repo") or diagram.get("github_url") or ""),
-        "p0_count": int(counts.get("P0", 0)),
-        "p1_count": int(counts.get("P1", 0)),
-        "p2_count": int(counts.get("P2", 0)),
-        "p3_count": int(counts.get("P3", 0)),
-        "resolved_since_prev": int(resolved_since_prev),
-        "new_since_prev": int(new_since_prev),
-        "risk_score": int(risk.get("risk_score", 0)),
-    }
+    repo_score = int(risk.get("risk_score", 0))
+    repo_id = str(diagram.get("id") or "")
+    repo_name = str(diagram.get("repo") or diagram.get("github_url") or "")
+
+    org_risk_score = repo_score
+    if history_file is None:
+        try:
+            st = load_state()
+            non_root = [d for d in (st.get("diagrams") or []) if isinstance(d, dict) and not d.get("is_root")]
+            if non_root:
+                scores = [int(compute_risk_score(d).get("risk_score", 0)) for d in non_root]
+                org_risk_score = round(sum(scores) / len(scores))
+        except Exception:
+            pass
+
     with _STATE_LOCK:
         history = load_scan_history(target)
+        prev_repo_score: Optional[int] = None
+        for prev in reversed(history):
+            if not isinstance(prev, dict):
+                continue
+            if (repo_id and prev.get("repo_id") == repo_id) or (repo_name and prev.get("repo") == repo_name):
+                prev_repo_score = int(prev.get("risk_score", 0))
+                break
+        repo_delta = (repo_score - prev_repo_score) if prev_repo_score is not None else 0
+
+        snapshot = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "repo_id": repo_id,
+            "repo": repo_name,
+            "p0_count": int(counts.get("P0", 0)),
+            "p1_count": int(counts.get("P1", 0)),
+            "p2_count": int(counts.get("P2", 0)),
+            "p3_count": int(counts.get("P3", 0)),
+            "resolved_since_prev": int(resolved_since_prev),
+            "new_since_prev": int(new_since_prev),
+            "risk_score": repo_score,
+            "org_risk_score": org_risk_score,
+            "prev_repo_risk_score": prev_repo_score,
+            "repo_delta": repo_delta,
+        }
         history.append(snapshot)
         if len(history) > MAX_SCAN_HISTORY:
             history = history[-MAX_SCAN_HISTORY:]

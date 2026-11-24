@@ -143,6 +143,10 @@ struct MainContentView: View {
     @State private var drilldownFilter: DashboardDrilldownFilter?
     @State private var drilldownItems: [DrilldownFindingItem] = []
     @State private var loadingDrilldown = false
+    @State private var drilldownGrouped = true
+    @State private var expandedDrilldownGroups: Set<String> = []
+    @State private var drilldownCopyNotice: String?
+    @State private var showRiskTrendReasons = false
     @State private var showAspmLegend = false
     @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "commit_monitor,monitor_updates,kpi,risk_trend,priority_repos,aspm,audit_scope"
     @AppStorage("dashboardCollapsedSections") private var dashboardCollapsedSectionsRaw = ""
@@ -604,11 +608,31 @@ struct MainContentView: View {
             Task { await refreshAspmPortfolio() }
         }
         .sheet(item: $drilldownFilter) { filter in
+            let groups = groupedDrilldownItems(drilldownItems)
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
+                HStack(spacing: 10) {
                     Text(filter.title)
                         .font(.title3.bold())
                     Spacer()
+                    if !drilldownItems.isEmpty {
+                        Picker("", selection: $drilldownGrouped) {
+                            Text(english ? "Grouped (\(groups.count))" : "グループ (\(groups.count))").tag(true)
+                            Text(english ? "List" : "一覧").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 210)
+
+                        Button {
+                            copyDrilldownFixPrompt(for: groups)
+                        } label: {
+                            Label(
+                                english ? "Copy All Fix Requests" : "すべて修正依頼コピー",
+                                systemImage: "doc.on.doc"
+                            )
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
                     Text(english ? "\(drilldownItems.count) items" : "\(drilldownItems.count) 件")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -616,6 +640,17 @@ struct MainContentView: View {
                         drilldownFilter = nil
                     }
                     .keyboardShortcut(.cancelAction)
+                }
+                if let notice = drilldownCopyNotice {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text(notice)
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(SemanticColors.role("successText"))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(SemanticColors.role("successText").opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
                 }
                 Divider()
                 if loadingDrilldown {
@@ -626,6 +661,103 @@ struct MainContentView: View {
                         english ? "No matching findings" : "該当する指摘はありません",
                         systemImage: "checkmark.shield"
                     )
+                } else if drilldownGrouped {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            ForEach(groups) { group in
+                                let isExpanded = expandedDrilldownGroups.contains(group.id)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    HStack(spacing: 10) {
+                                        Button {
+                                            if isExpanded {
+                                                expandedDrilldownGroups.remove(group.id)
+                                            } else {
+                                                expandedDrilldownGroups.insert(group.id)
+                                            }
+                                        } label: {
+                                            HStack(spacing: 8) {
+                                                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                                                    .font(.caption.weight(.semibold))
+                                                    .foregroundStyle(.secondary)
+                                                    .frame(width: 12)
+                                                Text(group.tier)
+                                                    .font(.caption2.bold())
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(group.tierColor.opacity(0.18), in: Capsule())
+                                                    .foregroundStyle(group.tierColor)
+                                                Text(group.title)
+                                                    .font(.subheadline.weight(.semibold))
+                                                    .lineLimit(2)
+                                                    .multilineTextAlignment(.leading)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                        Spacer()
+                                        Text(
+                                            english
+                                                ? "\(group.items.count) items · \(group.repoCount) repos"
+                                                : "\(group.items.count)件 · \(group.repoCount)リポジトリ"
+                                        )
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                        Button {
+                                            copyDrilldownFixPrompt(for: [group])
+                                        } label: {
+                                            Label(
+                                                english ? "Copy Fix Request" : "一括修正依頼をコピー",
+                                                systemImage: "doc.on.doc"
+                                            )
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .controlSize(.small)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(Color(nsColor: .controlBackgroundColor))
+
+                                    if isExpanded {
+                                        Divider()
+                                        VStack(alignment: .leading, spacing: 0) {
+                                            ForEach(group.items) { item in
+                                                HStack(alignment: .top, spacing: 10) {
+                                                    VStack(alignment: .leading, spacing: 3) {
+                                                        Text(item.repoName)
+                                                            .font(.caption.weight(.semibold))
+                                                        Text(item.file.isEmpty ? item.title : item.file)
+                                                            .font(.caption.monospaced())
+                                                            .foregroundStyle(.secondary)
+                                                            .lineLimit(1)
+                                                        if !item.reason.isEmpty {
+                                                            Text(item.reason)
+                                                                .font(.caption2)
+                                                                .foregroundStyle(.tertiary)
+                                                                .lineLimit(1)
+                                                        }
+                                                    }
+                                                    Spacer()
+                                                    Button(english ? "Open" : "開く") {
+                                                        openDrilldownFinding(item)
+                                                    }
+                                                    .buttonStyle(.bordered)
+                                                    .controlSize(.small)
+                                                }
+                                                .padding(.horizontal, 14)
+                                                .padding(.vertical, 8)
+                                                if item.id != group.items.last?.id {
+                                                    Divider().padding(.leading, 14)
+                                                }
+                                            }
+                                        }
+                                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.45))
+                                    }
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.45)))
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
                 } else {
                     List(drilldownItems) { item in
                         HStack(alignment: .top, spacing: 10) {
@@ -652,19 +784,7 @@ struct MainContentView: View {
                             }
                             Spacer()
                             Button(english ? "Open" : "開く") {
-                                let targetId = item.diagramId
-                                let payloadStr = (try? JSONSerialization.data(withJSONObject: [
-                                    "fingerprint": item.fingerprint,
-                                    "title": item.title,
-                                    "file": item.file
-                                ])).flatMap { String(data: $0, encoding: .utf8) } ?? item.fingerprint
-                                drilldownFilter = nil
-                                if !targetId.isEmpty {
-                                    selection = ["repo:\(targetId)"]
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                                        coordinator.send("focus-finding", value: payloadStr)
-                                    }
-                                }
+                                openDrilldownFinding(item)
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -674,7 +794,7 @@ struct MainContentView: View {
                 }
             }
             .padding(20)
-            .frame(minWidth: 680, minHeight: 460)
+            .frame(minWidth: 740, minHeight: 500)
         }
         .confirmationDialog(
             reposPendingDeletion.count > 1
@@ -1482,8 +1602,10 @@ struct MainContentView: View {
     private func riskTrendChartCard() -> some View {
         let pts = Array(aspmHistory.suffix(20))
         let latest = pts.last
+        let prev = pts.count >= 2 ? pts[pts.count - 2] : nil
         let latestScore = latest?.riskScore ?? 0
         let latestColor = riskScoreColor(latestScore)
+        let scoreDelta = prev.map { latestScore - $0.riskScore } ?? 0
         let avgScore = pts.isEmpty ? 0 : pts.reduce(0) { $0 + $1.riskScore } / pts.count
         let totalNew = pts.reduce(0) { $0 + $1.newCount }
         let totalResolved = pts.reduce(0) { $0 + $1.resolvedCount }
@@ -1491,93 +1613,173 @@ struct MainContentView: View {
         let p1Total = aspmRepos.reduce(0) { $0 + $1.p1 }
 
         GroupBox {
-            HStack(alignment: .center, spacing: 20) {
-                GeometryReader { geo in
-                    let w = max(1, geo.size.width)
-                    let h = max(1, geo.size.height)
-                    let pad: CGFloat = 8
-                    let usableW = max(1, w - pad * 2)
-                    let usableH = max(1, h - pad * 2)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 20) {
+                    GeometryReader { geo in
+                        let w = max(1, geo.size.width)
+                        let h = max(1, geo.size.height)
+                        let pad: CGFloat = 8
+                        let usableW = max(1, w - pad * 2)
+                        let usableH = max(1, h - pad * 2)
 
-                    ZStack {
-                        // Subtle horizontal reference lines (0, 50, 100)
-                        ForEach([0.0, 0.5, 1.0], id: \.self) { frac in
-                            let y = pad + usableH * CGFloat(1.0 - frac)
-                            Path { p in
-                                p.move(to: CGPoint(x: pad, y: y))
-                                p.addLine(to: CGPoint(x: w - pad, y: y))
+                        ZStack {
+                            // Subtle horizontal reference lines (0, 50, 100)
+                            ForEach([0.0, 0.5, 1.0], id: \.self) { frac in
+                                let y = pad + usableH * CGFloat(1.0 - frac)
+                                Path { p in
+                                    p.move(to: CGPoint(x: pad, y: y))
+                                    p.addLine(to: CGPoint(x: w - pad, y: y))
+                                }
+                                .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                             }
-                            .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        }
 
-                        // Area fill
-                        Path { path in
-                            for (idx, pt) in pts.enumerated() {
-                                let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
-                                let norm = min(1.0, max(0.0, Double(pt.riskScore) / 100.0))
-                                let y = pad + usableH * CGFloat(1.0 - norm)
-                                if idx == 0 {
-                                    path.move(to: CGPoint(x: x, y: h - pad))
-                                    path.addLine(to: CGPoint(x: x, y: y))
-                                } else {
-                                    path.addLine(to: CGPoint(x: x, y: y))
+                            // Area fill
+                            Path { path in
+                                for (idx, pt) in pts.enumerated() {
+                                    let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
+                                    let norm = min(1.0, max(0.0, Double(pt.riskScore) / 100.0))
+                                    let y = pad + usableH * CGFloat(1.0 - norm)
+                                    if idx == 0 {
+                                        path.move(to: CGPoint(x: x, y: h - pad))
+                                        path.addLine(to: CGPoint(x: x, y: y))
+                                    } else {
+                                        path.addLine(to: CGPoint(x: x, y: y))
+                                    }
+                                }
+                                if pts.count >= 2 {
+                                    path.addLine(to: CGPoint(x: w - pad, y: h - pad))
+                                    path.closeSubpath()
                                 }
                             }
-                            if pts.count >= 2 {
-                                path.addLine(to: CGPoint(x: w - pad, y: h - pad))
-                                path.closeSubpath()
-                            }
-                        }
-                        .fill(
-                            LinearGradient(
-                                colors: [latestColor.opacity(0.28), latestColor.opacity(0.02)],
-                                startPoint: .top,
-                                endPoint: .bottom
+                            .fill(
+                                LinearGradient(
+                                    colors: [latestColor.opacity(0.28), latestColor.opacity(0.02)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
                             )
-                        )
 
-                        // Line stroke
-                        Path { path in
-                            for (idx, pt) in pts.enumerated() {
-                                let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
-                                let norm = min(1.0, max(0.0, Double(pt.riskScore) / 100.0))
-                                let y = pad + usableH * CGFloat(1.0 - norm)
-                                if idx == 0 {
-                                    path.move(to: CGPoint(x: x, y: y))
-                                } else {
-                                    path.addLine(to: CGPoint(x: x, y: y))
+                            // Line stroke
+                            Path { path in
+                                for (idx, pt) in pts.enumerated() {
+                                    let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
+                                    let norm = min(1.0, max(0.0, Double(pt.riskScore) / 100.0))
+                                    let y = pad + usableH * CGFloat(1.0 - norm)
+                                    if idx == 0 {
+                                        path.move(to: CGPoint(x: x, y: y))
+                                    } else {
+                                        path.addLine(to: CGPoint(x: x, y: y))
+                                    }
                                 }
                             }
+                            .stroke(latestColor, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
                         }
-                        .stroke(latestColor, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
                     }
-                }
-                .frame(height: 84)
-                .background(Color(nsColor: .windowBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
+                    .frame(height: 84)
+                    .background(Color(nsColor: .windowBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Text(english ? "Latest:" : "直近スコア:")
-                            .font(.caption)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Text(english ? "Latest:" : "直近スコア:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(latestScore) / 100")
+                                .font(.subheadline.bold().monospacedDigit())
+                                .foregroundStyle(latestColor)
+                            if prev != nil && scoreDelta != 0 {
+                                Text(scoreDelta > 0 ? "▲+\(scoreDelta)" : "▼\(scoreDelta)")
+                                    .font(.caption2.bold().monospacedDigit())
+                                    .foregroundStyle(scoreDelta > 0 ? SemanticColors.role("dangerText") : SemanticColors.role("successText"))
+                            }
+                            Text(english ? "(Avg \(avgScore))" : "(平均 \(avgScore))")
+                                .font(.caption2.monospacedDigit().weight(.medium))
+                                .foregroundStyle(riskScoreColor(avgScore))
+                        }
+                        Text("P0: \(p0Total) · P1: \(p1Total)")
+                            .font(.caption.monospacedDigit().weight(.semibold))
+                        Text(english ? "New: +\(totalNew) · Resolved: -\(totalResolved)" : "新規: +\(totalNew) · 解消: -\(totalResolved)")
+                            .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
-                        Text("\(latestScore) / 100")
-                            .font(.subheadline.bold().monospacedDigit())
-                            .foregroundStyle(latestColor)
-                        Text(english ? "(Avg \(avgScore))" : "(平均 \(avgScore))")
-                            .font(.caption2.monospacedDigit().weight(.medium))
-                            .foregroundStyle(riskScoreColor(avgScore))
+                        HStack(spacing: 8) {
+                            Text(english ? "Last \(pts.count) scans" : "直近 \(pts.count) スキャン")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            if !pts.isEmpty {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.16)) {
+                                        showRiskTrendReasons.toggle()
+                                    }
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Text(english ? (showRiskTrendReasons ? "Hide Reasons" : "Why it changed") : (showRiskTrendReasons ? "理由を閉じる" : "変動理由を見る"))
+                                        Image(systemName: showRiskTrendReasons ? "chevron.up" : "chevron.down")
+                                            .font(.caption2)
+                                    }
+                                    .font(.caption2.weight(.medium))
+                                }
+                                .buttonStyle(.link)
+                            }
+                        }
                     }
-                    Text("P0: \(p0Total) · P1: \(p1Total)")
-                        .font(.caption.monospacedDigit().weight(.semibold))
-                    Text(english ? "New: +\(totalNew) · Resolved: -\(totalResolved)" : "新規: +\(totalNew) · 解消: -\(totalResolved)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                    Text(english ? "Last \(pts.count) snapshots" : "直近 \(pts.count) スキャン")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    .frame(width: 230, alignment: .leading)
                 }
-                .frame(width: 195, alignment: .leading)
+
+                if showRiskTrendReasons && !pts.isEmpty {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(english ? "Recent Scan Score Changes (Newest First)" : "直近スキャンのスコア変動理由（新しい順）")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        ForEach(Array(pts.reversed().prefix(10))) { pt in
+                            HStack(spacing: 10) {
+                                Text(pt.shortTimestamp)
+                                    .font(.caption2.monospacedDigit())
+                                    .foregroundStyle(.tertiary)
+                                    .frame(width: 76, alignment: .leading)
+                                Text(pt.repo.isEmpty ? (english ? "Organization" : "全体") : pt.repo)
+                                    .font(.caption.weight(.medium))
+                                    .lineLimit(1)
+                                    .frame(maxWidth: 210, alignment: .leading)
+                                Text("Risk \(pt.repoRiskScore)")
+                                    .font(.caption.monospacedDigit().weight(.semibold))
+                                    .foregroundStyle(riskScoreColor(pt.repoRiskScore))
+                                if pt.repoDelta != 0 {
+                                    Text(pt.repoDelta > 0 ? "▲+\(pt.repoDelta)" : "▼\(pt.repoDelta)")
+                                        .font(.caption2.bold().monospacedDigit())
+                                        .foregroundStyle(pt.repoDelta > 0 ? SemanticColors.role("dangerText") : SemanticColors.role("successText"))
+                                } else {
+                                    Text(english ? "±0" : "±0")
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(.tertiary)
+                                }
+                                Spacer()
+                                HStack(spacing: 6) {
+                                    if pt.newCount > 0 {
+                                        Text(english ? "+\(pt.newCount) new" : "新規+\(pt.newCount)")
+                                            .font(.caption2.monospacedDigit())
+                                            .foregroundStyle(SemanticColors.role("dangerText"))
+                                    }
+                                    if pt.resolvedCount > 0 {
+                                        Text(english ? "-\(pt.resolvedCount) fixed" : "解消-\(pt.resolvedCount)")
+                                            .font(.caption2.monospacedDigit())
+                                            .foregroundStyle(SemanticColors.role("successText"))
+                                    }
+                                    Text("P0:\(pt.p0Count) P1:\(pt.p1Count)")
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                    if pt.orgRiskScore == nil {
+                                        Text(english ? "(single repo)" : "(単体)")
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
             }
             .padding(10)
         }
@@ -2925,9 +3127,16 @@ struct MainContentView: View {
             }
             let rawHistory = json["history"] as? [[String: Any]] ?? []
             let parsedHistory: [AspmHistoryPoint] = rawHistory.enumerated().map { idx, h in
-                AspmHistoryPoint(
+                let repoScore = (h["risk_score"] as? Int) ?? 0
+                let orgScore = h["org_risk_score"] as? Int
+                return AspmHistoryPoint(
                     id: "\(idx)-\((h["timestamp"] as? String) ?? "")",
-                    riskScore: (h["risk_score"] as? Int) ?? 0,
+                    timestamp: (h["timestamp"] as? String) ?? "",
+                    repo: (h["repo"] as? String) ?? "",
+                    riskScore: orgScore ?? repoScore,
+                    repoRiskScore: repoScore,
+                    orgRiskScore: orgScore,
+                    repoDelta: (h["repo_delta"] as? Int) ?? 0,
                     p0Count: (h["p0_count"] as? Int) ?? 0,
                     p1Count: (h["p1_count"] as? Int) ?? 0,
                     newCount: (h["new_since_prev"] as? Int) ?? 0,
@@ -2983,7 +3192,9 @@ struct MainContentView: View {
                         title: titleStr,
                         file: fileStr,
                         reason: (it["priority_reason"] as? String) ?? "",
-                        fingerprint: (it["fingerprint"] as? String) ?? ""
+                        fingerprint: (it["fingerprint"] as? String) ?? "",
+                        description: (it["description"] as? String) ?? "",
+                        fixCommand: (it["fix_command"] as? String) ?? ""
                     ))
                 }
             }
@@ -2996,7 +3207,129 @@ struct MainContentView: View {
                 }
             }
             collected.sort { rank($0.tier) < rank($1.tier) }
-            await MainActor.run { drilldownItems = collected }
+            let initialGroups = groupedDrilldownItems(collected)
+            await MainActor.run {
+                drilldownItems = collected
+                expandedDrilldownGroups = Set(initialGroups.prefix(8).map(\.id))
+                drilldownCopyNotice = nil
+            }
+        }
+    }
+
+    private func openDrilldownFinding(_ item: DrilldownFindingItem) {
+        let targetId = item.diagramId
+        let payloadStr = (try? JSONSerialization.data(withJSONObject: [
+            "fingerprint": item.fingerprint,
+            "title": item.title,
+            "file": item.file
+        ])).flatMap { String(data: $0, encoding: .utf8) } ?? item.fingerprint
+        drilldownFilter = nil
+        if !targetId.isEmpty {
+            selection = ["repo:\(targetId)"]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                coordinator.send("focus-finding", value: payloadStr)
+            }
+        }
+    }
+
+    private func normalizedFindingGroupTitle(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.contains("[シークレット設定ファイル漏洩]") {
+            return "🚨 [シークレット設定ファイル漏洩] 認証情報を含む設定ファイルのコミット"
+        }
+        // Strip trailing file:line or filename in parentheses, e.g. " (config.ts:6)" or " (waiphyo-account.csv:5)"
+        if let range = s.range(of: #"\s*\([^()]*:\d+\)$"#, options: .regularExpression) {
+            s.removeSubrange(range)
+        } else if let range = s.range(of: #"\s*\([^()]*\.(ts|tsx|js|jsx|json|csv|py|yml|yaml|env|lock|md|sh|swift|go|rb|php|java|kt|rs)\)$"#, options: [.regularExpression, .caseInsensitive]) {
+            s.removeSubrange(range)
+        }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func groupedDrilldownItems(_ items: [DrilldownFindingItem]) -> [DrilldownFindingGroup] {
+        var order: [String] = []
+        var buckets: [String: [DrilldownFindingItem]] = [:]
+        var titles: [String: String] = [:]
+        var tiers: [String: String] = [:]
+
+        for item in items {
+            let groupTitle = normalizedFindingGroupTitle(item.title)
+            let key = "\(item.tier)|\(groupTitle.lowercased())"
+            if buckets[key] == nil {
+                order.append(key)
+                buckets[key] = []
+                titles[key] = groupTitle
+                tiers[key] = item.tier
+            }
+            buckets[key]?.append(item)
+        }
+
+        let rank: (String) -> Int = { t in
+            switch t {
+            case "P0": return 0
+            case "P1": return 1
+            case "P2": return 2
+            default: return 3
+            }
+        }
+
+        return order.compactMap { key in
+            guard let groupItems = buckets[key], !groupItems.isEmpty else { return nil }
+            return DrilldownFindingGroup(
+                id: key,
+                tier: tiers[key] ?? "P2",
+                title: titles[key] ?? groupItems[0].title,
+                items: groupItems
+            )
+        }.sorted { lhs, rhs in
+            let r1 = rank(lhs.tier), r2 = rank(rhs.tier)
+            if r1 != r2 { return r1 < r2 }
+            return lhs.items.count > rhs.items.count
+        }
+    }
+
+    private func copyDrilldownFixPrompt(for groups: [DrilldownFindingGroup]) {
+        guard !groups.isEmpty else { return }
+        let totalCount = groups.reduce(0) { $0 + $1.items.count }
+        var lines: [String] = [
+            english
+                ? "# Batch Security Remediation Request (\(totalCount) findings across \(groups.count) group(s))"
+                : "# セキュリティ指摘 一括修正依頼（\(groups.count)グループ / 計\(totalCount)件）",
+            "",
+            english
+                ? "Please fix all occurrences listed below together, keeping existing behavior intact and verifying each repository after remediation."
+                : "以下の同種・類似のセキュリティ指摘をまとめて修正してください。既存の動作を壊さないように対応し、必要に応じて認証情報のローテーション・環境変数化・依存パッケージ更新等を実施してください。"
+        ]
+
+        for (idx, group) in groups.enumerated() {
+            lines.append("")
+            lines.append("## \(idx + 1). [\(group.tier)] \(group.title) (\(group.items.count)\(english ? " items" : "件") / \(group.repoCount)\(english ? " repos" : "リポジトリ"))")
+            if let reason = group.items.first(where: { !$0.reason.isEmpty })?.reason {
+                lines.append("- **\(english ? "Priority Reason" : "優先理由")**: \(reason)")
+            }
+            if let desc = group.items.first(where: { !$0.description.isEmpty })?.description {
+                lines.append("- **\(english ? "Details" : "詳細")**: \(desc)")
+            }
+            lines.append("- **\(english ? "Target Locations" : "対象箇所")**:")
+            for item in group.items {
+                let loc = item.file.isEmpty ? item.title : item.file
+                let cmd = item.fixCommand.isEmpty ? "" : " (`\(item.fixCommand)`)"
+                lines.append("  - `\(item.repoName)` · `\(loc)`\(cmd)")
+            }
+        }
+
+        let prompt = lines.joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(prompt, forType: .string)
+
+        let notice = english
+            ? "Copied batch fix request (\(totalCount) items)"
+            : "一括修正依頼プロンプトをコピーしました（\(totalCount)件）"
+        drilldownCopyNotice = notice
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            if drilldownCopyNotice == notice {
+                drilldownCopyNotice = nil
+            }
         }
     }
 }
@@ -3005,6 +3338,26 @@ private struct DashboardDrilldownFilter: Identifiable {
     let id = UUID()
     let tier: String?
     let title: String
+}
+
+private struct DrilldownFindingGroup: Identifiable {
+    let id: String
+    let tier: String
+    let title: String
+    let items: [DrilldownFindingItem]
+
+    var repoCount: Int {
+        Set(items.map(\.repoName)).count
+    }
+
+    var tierColor: Color {
+        switch tier {
+        case "P0": return SemanticColors.role("dangerText")
+        case "P1": return SemanticColors.role("warningText")
+        case "P2": return SemanticColors.role("actionText")
+        default: return SemanticColors.role("infoText")
+        }
+    }
 }
 
 private struct DrilldownFindingItem: Identifiable {
@@ -3016,6 +3369,8 @@ private struct DrilldownFindingItem: Identifiable {
     let file: String
     let reason: String
     let fingerprint: String
+    var description: String = ""
+    var fixCommand: String = ""
 
     var tierColor: Color {
         switch tier {
@@ -3029,11 +3384,27 @@ private struct DrilldownFindingItem: Identifiable {
 
 private struct AspmHistoryPoint: Identifiable {
     let id: String
+    let timestamp: String
+    let repo: String
     let riskScore: Int
+    let repoRiskScore: Int
+    let orgRiskScore: Int?
+    let repoDelta: Int
     let p0Count: Int
     let p1Count: Int
     let newCount: Int
     let resolvedCount: Int
+
+    var shortTimestamp: String {
+        guard !timestamp.isEmpty else { return "-" }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = iso.date(from: timestamp) ?? ISO8601DateFormatter().date(from: timestamp)
+        guard let date else { return String(timestamp.prefix(16)) }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "MM/dd HH:mm"
+        return fmt.string(from: date)
+    }
 }
 
 private struct AspmRepoItem: Identifiable {
