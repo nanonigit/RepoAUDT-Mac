@@ -836,6 +836,14 @@ struct MainContentView: View {
                                                 HStack(alignment: .top, spacing: 10) {
                                                     VStack(alignment: .leading, spacing: 3) {
                                                         HStack(spacing: 6) {
+                                                            if !item.indexCode.isEmpty {
+                                                                Text(item.indexCode)
+                                                                    .font(.caption2.monospaced().bold())
+                                                                    .padding(.horizontal, 6)
+                                                                    .padding(.vertical, 1)
+                                                                    .background(item.tierColor.opacity(0.16), in: RoundedRectangle(cornerRadius: 4))
+                                                                    .foregroundStyle(item.tierColor)
+                                                            }
                                                             Text(item.repoName)
                                                                 .font(.caption.weight(.semibold))
                                                             if let rec, isReq {
@@ -908,8 +916,8 @@ struct MainContentView: View {
                         let rec = remediationRequests[item.fingerprint]
                         let isReq = rec?.status == "requested"
                         HStack(alignment: .top, spacing: 10) {
-                            Text(item.tier)
-                                .font(.caption2.bold())
+                            Text(item.indexCode.isEmpty ? item.tier : item.indexCode)
+                                .font(.caption2.monospaced().bold())
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(item.tierColor.opacity(0.18), in: Capsule())
@@ -3389,17 +3397,21 @@ struct MainContentView: View {
             var summaryTable = ""
             if !crossRepoRows.isEmpty {
                 let sortedRows = crossRepoRows.sorted {
-                    ($0.tierRank, $0.kevRank, $0.confRank, $0.sevRank, -$0.epss)
-                        < ($1.tierRank, $1.kevRank, $1.confRank, $1.sevRank, -$1.epss)
+                    ($0.tierRank, $0.kevRank, $0.confRank, $0.sevRank, -$0.epss, "\($0.repo)|\($0.file)|\($0.title)")
+                        < ($1.tierRank, $1.kevRank, $1.confRank, $1.sevRank, -$1.epss, "\($1.repo)|\($1.file)|\($1.title)")
                 }
+                var tierCounters: [String: Int] = [:]
                 var tbl: [String] = [
                     english ? "## 🚨 Cross-Repository P0 / P1 Top Summary" : "## 🚨 全リポジトリ横断 P0 / P1 サマリー",
                     "",
-                    english ? "| Priority | Repository | Finding | Target File | Recommended Action |" : "| 優先度 | リポジトリ | 指摘タイトル | 対象ファイル | 推奨アクション |",
-                    "| --- | --- | --- | --- | --- |"
+                    english ? "| ID | Priority | Repository | Finding | Target File | Recommended Action |" : "| ID | 優先度 | リポジトリ | 指摘タイトル | 対象ファイル | 推奨アクション |",
+                    "| --- | --- | --- | --- | --- | --- |"
                 ]
                 for row in sortedRows {
-                    tbl.append("| **\(row.tier)** | `\(row.repo)` | \(row.title) | `\(row.file)` | `\(row.action)` |")
+                    let nextIdx = (tierCounters[row.tier] ?? 0) + 1
+                    tierCounters[row.tier] = nextIdx
+                    let code = String(format: "%@-%02d", row.tier, nextIdx)
+                    tbl.append("| `\(code)` | **\(row.tier)** | `\(row.repo)` | \(row.title) | `\(row.file)` | `\(row.action)` |")
                 }
                 summaryTable = "\n" + tbl.joined(separator: "\n") + "\n"
             }
@@ -3576,7 +3588,7 @@ struct MainContentView: View {
             defer { Task { @MainActor in loadingDrilldown = false } }
             guard let state = try? await requestJSON("/api/state"),
                   let diagrams = state["diagrams"] as? [[String: Any]] else { return }
-            var collected: [DrilldownFindingItem] = []
+            var collected: [(item: DrilldownFindingItem, kevRank: Int, confRank: Int, sevRank: Int, epss: Double)] = []
             for d in diagrams {
                 if (d["is_root"] as? Bool) == true { continue }
                 let did = (d["id"] as? String) ?? ""
@@ -3600,7 +3612,24 @@ struct MainContentView: View {
                     let key = "\(did)|\(titleStr)|\(fileStr)"
                     if seen.contains(key) { continue }
                     seen.insert(key)
-                    collected.append(DrilldownFindingItem(
+                    let kRank = (it["in_cisa_kev"] as? Bool) == true ? 0 : 1
+                    let cRank: Int = {
+                        switch ((it["confidence"] as? String) ?? "medium").lowercased() {
+                        case "high": return 0
+                        case "medium": return 1
+                        default: return 2
+                        }
+                    }()
+                    let sRank: Int = {
+                        switch ((it["severity"] as? String) ?? "medium").lowercased() {
+                        case "critical": return 0
+                        case "high": return 1
+                        case "medium": return 2
+                        default: return 3
+                        }
+                    }()
+                    let epssVal = (it["epss_score"] as? Double) ?? 0.0
+                    let finding = DrilldownFindingItem(
                         id: key,
                         diagramId: did,
                         repoName: repoName,
@@ -3611,7 +3640,8 @@ struct MainContentView: View {
                         fingerprint: (it["fingerprint"] as? String) ?? "",
                         description: (it["description"] as? String) ?? "",
                         fixCommand: (it["fix_command"] as? String) ?? ""
-                    ))
+                    )
+                    collected.append((finding, kRank, cRank, sRank, epssVal))
                 }
             }
             let rank: (String) -> Int = { t in
@@ -3622,10 +3652,21 @@ struct MainContentView: View {
                 default: return 3
                 }
             }
-            collected.sort { rank($0.tier) < rank($1.tier) }
-            let initialGroups = groupedDrilldownItems(collected)
+            collected.sort {
+                (rank($0.item.tier), $0.kevRank, $0.confRank, $0.sevRank, -$0.epss, "\($0.item.repoName)|\($0.item.file)|\($0.item.title)")
+                    < (rank($1.item.tier), $1.kevRank, $1.confRank, $1.sevRank, -$1.epss, "\($1.item.repoName)|\($1.item.file)|\($1.item.title)")
+            }
+            var tierCounters: [String: Int] = [:]
+            let indexed: [DrilldownFindingItem] = collected.map { entry in
+                var item = entry.item
+                let nextIdx = (tierCounters[item.tier] ?? 0) + 1
+                tierCounters[item.tier] = nextIdx
+                item.indexCode = String(format: "%@-%02d", item.tier, nextIdx)
+                return item
+            }
+            let initialGroups = groupedDrilldownItems(indexed)
             await MainActor.run {
-                drilldownItems = collected
+                drilldownItems = indexed
                 expandedDrilldownGroups = Set(initialGroups.prefix(8).map(\.id))
                 drilldownCopyNotice = nil
             }
@@ -4261,7 +4302,8 @@ struct MainContentView: View {
                     let loc = item.file.isEmpty ? item.title : item.file
                     let isInspectCmd = item.fixCommand.hasPrefix("sed -n") || item.fixCommand.hasPrefix("cat ")
                     let cmd = (item.fixCommand.isEmpty || isInspectCmd) ? "" : " (`\(item.fixCommand)`)"
-                    section.append("  - `\(item.repoName)` · `\(loc)`\(cmd)")
+                    let idxPrefix = item.indexCode.isEmpty ? "" : "`[\(item.indexCode)]` "
+                    section.append("  - \(idxPrefix)`\(item.repoName)` · `\(loc)`\(cmd)")
                     let trimmedDesc = item.description.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !trimmedDesc.isEmpty && !trimmedDesc.hasPrefix("Verify the credential candidate") {
                         section.append("    - \(trimmedDesc)")
@@ -4366,6 +4408,7 @@ private struct DrilldownFindingItem: Identifiable {
     let file: String
     let reason: String
     let fingerprint: String
+    var indexCode: String = ""
     var description: String = ""
     var fixCommand: String = ""
 
