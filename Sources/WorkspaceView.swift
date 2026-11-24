@@ -1168,8 +1168,23 @@ struct MainContentView: View {
                         .padding(.vertical, 4)
                         .background(Color.secondary.opacity(0.16), in: Capsule())
                     Spacer()
-                    Button {
-                        Task { await reloadAndAnalyzeRepositories() }
+                    Menu {
+                        Button {
+                            Task { await reloadAndAnalyzeRepositories(force: false) }
+                        } label: {
+                            Label(
+                                english ? "Analyze Updated Only (Skip Unchanged)" : "変更ありのみ解析（変更なしはスキップ）",
+                                systemImage: "play.fill"
+                            )
+                        }
+                        Button {
+                            Task { await reloadAndAnalyzeRepositories(force: true) }
+                        } label: {
+                            Label(
+                                english ? "Force Full Re-analysis (Ignore Unchanged)" : "強制的に全リポジトリを再解析（スキップなし）",
+                                systemImage: "arrow.clockwise"
+                            )
+                        }
                     } label: {
                         if refreshingList {
                             HStack(spacing: 6) {
@@ -1179,10 +1194,12 @@ struct MainContentView: View {
                         } else {
                             Label(english ? "Analyze All" : "全リポジトリを解析", systemImage: "play.fill")
                         }
+                    } primaryAction: {
+                        Task { await reloadAndAnalyzeRepositories(force: false) }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(refreshingList || !backend.isReady || allRepos.isEmpty)
-                    .help(english ? "Start analyzing all saved repositories" : "保存済みの全リポジトリの解析を開始")
+                    .help(english ? "Click to analyze updated repos, or open menu to force full re-analysis" : "クリックで変更ありを解析、右のメニューから「強制的に全リポジトリを再解析」を選択できます")
                     Button {
                         showPage(.audit)
                         coordinator.send("analyze")
@@ -3046,10 +3063,12 @@ struct MainContentView: View {
         }
     }
 
-    private func reloadAndAnalyzeRepositories() async {
+    private func reloadAndAnalyzeRepositories(force: Bool = false) async {
         guard !refreshingList else { return }
         refreshingList = true
-        listRefreshNote = english ? "Starting analysis…" : "解析を開始しています…"
+        listRefreshNote = force
+            ? (english ? "Starting forced full re-analysis…" : "強制フル再解析を開始しています…")
+            : (english ? "Starting analysis…" : "解析を開始しています…")
         syncProgress = SyncProgressInfo(
             status: "running",
             total: max(1, dashboardRepositories.count),
@@ -3057,12 +3076,16 @@ struct MainContentView: View {
             currentRepo: "",
             currentStage: english ? "Preparing repositories…" : "対象リポジトリを準備中…",
             etaSeconds: nil,
-            logs: [english ? "▶ Starting security audit…" : "▶ セキュリティ監査を開始しています…"]
+            logs: [
+                force
+                    ? (english ? "▶ Starting forced full security audit (no skips)…" : "▶ 強制フル再解析を開始しています（スキップなし）…")
+                    : (english ? "▶ Starting security audit…" : "▶ セキュリティ監査を開始しています…")
+            ]
         )
         defer { refreshingList = false }
 
         do {
-            let syncResp = try await requestJSON("/api/sync", body: [:])
+            let syncResp = try await requestJSON("/api/sync", body: force ? ["force": true] : [:])
             let jobId = syncResp["job_id"] as? String ?? ""
             if !jobId.isEmpty {
                 listRefreshNote = english ? "Analyzing repositories…" : "全リポジトリを解析中…"
