@@ -6802,7 +6802,7 @@ def build_portal_html(data, is_shareable=False):
       if (!isCards && currentPanZoom) {
         setTimeout(() => {
           safeResizePanZoom();
-          safeFitPanZoom(1.35);
+          safeFitPanZoom(0.95);
         }, 40);
       }
     }
@@ -7156,7 +7156,7 @@ def build_portal_html(data, is_shareable=False):
 
               setTimeout(() => {
                 if (myRenderToken === renderTokenCounter) {
-                  safeFitPanZoom(1.35);
+                  safeFitPanZoom(0.95);
                 }
               }, 60);
             }
@@ -12164,7 +12164,7 @@ def build_portal_html(data, is_shareable=False):
 
                 setTimeout(() => {
                   if (myRenderToken === renderTokenCounter) {
-                    safeFitPanZoom(1.25);
+                    safeFitPanZoom(0.95);
                   }
                 }, 60);
               }
@@ -12362,7 +12362,7 @@ def build_portal_html(data, is_shareable=False):
       try {
         if (currentPanZoom) currentPanZoom.resetZoom();
       } catch (_) {}
-      safeFitPanZoom(1.35);
+      safeFitPanZoom(0.95);
     }
 
     window.addEventListener('resize', () => {

@@ -6752,7 +6752,7 @@
       if (!isCards && currentPanZoom) {
         setTimeout(() => {
           safeResizePanZoom();
-          safeFitPanZoom(1.35);
+          safeFitPanZoom(0.95);
         }, 40);
       }
     }
@@ -7106,7 +7106,7 @@
 
               setTimeout(() => {
                 if (myRenderToken === renderTokenCounter) {
-                  safeFitPanZoom(1.35);
+                  safeFitPanZoom(0.95);
                 }
               }, 60);
             }
@@ -12117,7 +12117,7 @@
 
                 setTimeout(() => {
                   if (myRenderToken === renderTokenCounter) {
-                    safeFitPanZoom(1.25);
+                    safeFitPanZoom(0.95);
                   }
                 }, 60);
               }
@@ -12315,7 +12315,7 @@
       try {
         if (currentPanZoom) currentPanZoom.resetZoom();
       } catch (_) {}
-      safeFitPanZoom(1.35);
+      safeFitPanZoom(0.95);
     }
 
     window.addEventListener('resize', () => {
