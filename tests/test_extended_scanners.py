@@ -194,6 +194,21 @@ class TestExtendedScanners(unittest.TestCase):
                 self.assertEqual(cleared["resolved_count"], 0)
                 self.assertNotIn(fp, cleared["requests"])
 
+    def test_same_file_different_lines_have_distinct_fingerprints(self) -> None:
+        item_line3 = {
+            "title": "[gitleaks] Potential exposed credential (generic-api-key)",
+            "file": "src/configs/constants/credentials.ts:3 (Target: configs)",
+            "severity": "high",
+        }
+        item_line9 = {
+            "title": "[gitleaks] Potential exposed credential (generic-api-key)",
+            "file": "src/configs/constants/credentials.ts:9 (Target: configs)",
+            "severity": "high",
+        }
+        fp3 = triage_engine.compute_finding_fingerprint("plusimpact/Job-Portal", item_line3)
+        fp9 = triage_engine.compute_finding_fingerprint("plusimpact/Job-Portal", item_line9)
+        self.assertNotEqual(fp3, fp9)
+
 
 if __name__ == "__main__":
     unittest.main()

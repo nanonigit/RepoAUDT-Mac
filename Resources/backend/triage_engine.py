@@ -506,11 +506,16 @@ def validate_and_sanitize_finding(item: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def compute_finding_fingerprint(repo_id: str, item: Dict[str, Any]) -> str:
-    """Compute a deterministic 16-char SHA-256 fingerprint for suppression & diffing."""
-    file_base = str(item.get("file") or "").split(" (Target:", 1)[0].split(":", 1)[0].strip().lower()
+    """Compute a deterministic 16-char SHA-256 fingerprint for suppression & diffing.
+
+    Preserves `:line` when present so distinct findings of the same rule on
+    different lines of the same file (e.g. multiple hardcoded secrets or GHA
+    injections in one file) do not collide in remediation tracking or reports.
+    """
+    file_loc = str(item.get("file") or "").split(" (Target:", 1)[0].strip().lower()
     rule_or_pkg = str(item.get("rule_id") or item.get("package_name") or "").strip().lower()
     title_norm = re.sub(r"\s+", " ", str(item.get("title") or "").strip().lower())
-    raw = f"{repo_id}|{file_base}|{rule_or_pkg}|{title_norm}"
+    raw = f"{repo_id}|{file_loc}|{rule_or_pkg}|{title_norm}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
