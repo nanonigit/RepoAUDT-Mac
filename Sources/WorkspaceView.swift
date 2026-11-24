@@ -757,8 +757,10 @@ struct MainContentView: View {
                 }
                 .task(id: backend.isReady) {
                     guard backend.isReady else { return }
+                    await refreshAspmPortfolio()
                     while !Task.isCancelled {
                         await fetchMonitorStatus()
+                        await refreshAspmPortfolio()
                         try? await Task.sleep(for: .seconds(15))
                     }
                 }
