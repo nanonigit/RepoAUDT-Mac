@@ -10357,17 +10357,16 @@ def build_portal_html(data, is_shareable=False):
 
         return `
           <div class="saved-repo-row">
-            <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 0.8rem; font-weight: 800; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
+              <div style="width: 100%; font-size: 0.84rem; font-weight: 800; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(d.repo)}">
                 📦 ${escapeHtml(d.repo)}
-              </span>
-              <span style="font-size: 0.65rem; background: #1e293b; color: #93c5fd; padding: 2px 6px; border-radius: 4px; white-space: nowrap;">
-                ${escapeHtml(d.category || 'Repo')}
-              </span>
-              <span style="font-size: 0.65rem; color: #64748b; white-space: nowrap;">
-                (${escapeHtml(d.perspective || 'overall')})
-              </span>
-              ${hasAct ? `<span class="sec-legend-badge sec-legend-red" style="font-size: 0.62rem; padding: 1px 6px;">${currentLang === 'en' ? '🔴 Action Req' : '🔴 要対応'}</span>` : `<span class="sec-legend-badge sec-legend-green" style="font-size: 0.62rem; padding: 1px 6px;">${currentLang === 'en' ? '🟢 Clean' : '🟢 正常'}</span>`}
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                ${hasAct ? `<span class="sec-legend-badge sec-legend-red" style="font-size: 0.62rem; padding: 1px 6px;">${currentLang === 'en' ? '🔴 Action Req' : '🔴 要対応'}</span>` : `<span class="sec-legend-badge sec-legend-green" style="font-size: 0.62rem; padding: 1px 6px;">${currentLang === 'en' ? '🟢 Clean' : '🟢 正常'}</span>`}
+                <span style="font-size: 0.65rem; background: #1e293b; color: #93c5fd; padding: 1px 6px; border-radius: 4px; white-space: nowrap;">
+                  ${escapeHtml(d.category || 'Repo')}
+                </span>
+              </div>
             </div>
             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
               <button class="table-view-btn" onclick="selectDiagram(${idx}); closeAnalyzeModal();" title="${escapeHtml(dict.modal_btn_show_repo || 'このリポジトリの構成図を開く')}">

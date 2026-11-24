@@ -36,6 +36,18 @@ enum RepositorySortOrder: String, CaseIterable, Identifiable {
         case .severityDesc: return english ? "Highest severity" : "重要度が高い順"
         }
     }
+
+    func shortTitle(english: Bool) -> String {
+        switch self {
+        case .defaultOrder: return english ? "Saved" : "保存順"
+        case .riskScoreDesc: return english ? "Risk" : "リスク順"
+        case .nameAsc: return "A→Z"
+        case .nameDesc: return "Z→A"
+        case .updatedDesc: return english ? "Updated" : "更新順"
+        case .findingsDesc: return english ? "Count" : "件数順"
+        case .severityDesc: return english ? "Severity" : "重要度順"
+        }
+    }
 }
 
 enum DashboardSortOrder: String, CaseIterable, Identifiable {
@@ -155,6 +167,10 @@ struct MainContentView: View {
     @State private var remediationOverdue3dCount = 0
     @State private var creatingIssueGroupID: String?
     @State private var showRemediationTrackerSheet = false
+    @State private var showAddRepoSheet = false
+    @State private var addRepoInput = ""
+    @State private var addingRepo = false
+    @State private var addRepoError: String?
     @State private var threatFeedItems: [ThreatFeedItem] = []
     @State private var threatFeedMatchedCount = 0
     @State private var threatFeedUnaffectedCount = 0
@@ -556,13 +572,13 @@ struct MainContentView: View {
                         .disabled(!coordinator.ready)
                     }
                     Button {
-                        showPage(.audit)
-                        coordinator.send("analyze")
+                        addRepoError = nil
+                        showAddRepoSheet = true
                     } label: {
                         Label(english ? "Add repository" : "リポジトリを追加", systemImage: "plus")
                     }
                     .help(english ? "Analyze a GitHub URL" : "GitHub URL を指定して解析")
-                    .disabled(!coordinator.ready)
+                    .disabled(!backend.isReady)
                     Picker(english ? "Language" : "言語", selection: $language) {
                         Text("日本語").tag("ja")
                         Text("English").tag("en")
@@ -961,6 +977,10 @@ struct MainContentView: View {
         .sheet(isPresented: $showRemediationTrackerSheet) {
             remediationTrackerSheet()
         }
+        .sheet(isPresented: $showAddRepoSheet) {
+            addRepositorySheet()
+                .frame(width: 520)
+        }
         .confirmationDialog(
             reposPendingDeletion.count > 1
                 ? (english
@@ -1073,21 +1093,21 @@ struct MainContentView: View {
             .help(helpText)
             Spacer()
             Menu {
-                ForEach(RepositorySortOrder.allCases) { option in
-                    Button {
-                        sortOrderRaw = option.rawValue
-                    } label: {
-                        if sortOrder == option {
-                            Label(option.title(english: english), systemImage: "checkmark")
-                        } else {
-                            Text(option.title(english: english))
-                        }
+                Picker(english ? "Sort" : "並び替え", selection: $sortOrderRaw) {
+                    ForEach(RepositorySortOrder.allCases) { option in
+                        Text(option.title(english: english)).tag(option.rawValue)
                     }
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
             } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.caption)
-                    .foregroundStyle(sortOrder == .defaultOrder ? Color.secondary : Color.accentColor)
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.caption2)
+                    Text(sortOrder.shortTitle(english: english))
+                        .font(.caption2.weight(.medium))
+                }
+                .foregroundStyle(sortOrder == .defaultOrder ? Color.secondary : Color.accentColor)
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
@@ -1170,13 +1190,13 @@ struct MainContentView: View {
                     .disabled(refreshingList || !backend.isReady || allRepos.isEmpty)
                     .help(english ? "Click to analyze updated repos, or open menu to force full re-analysis" : "クリックで変更ありを解析、右のメニューから「強制的に全リポジトリを再解析」を選択できます")
                     Button {
-                        showPage(.audit)
-                        coordinator.send("analyze")
+                        addRepoError = nil
+                        showAddRepoSheet = true
                     } label: {
                         Label(english ? "Add Repository" : "リポジトリを追加", systemImage: "plus")
                     }
                     .buttonStyle(.bordered)
-                    .disabled(!coordinator.ready)
+                    .disabled(!backend.isReady)
                     .help(english ? "Analyze a GitHub URL" : "GitHub URL を指定して解析")
                     Divider()
                         .frame(height: 18)
@@ -4288,6 +4308,110 @@ struct MainContentView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+        }
+    }
+
+    @ViewBuilder
+    private func addRepositorySheet() -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label(english ? "Add Repository" : "リポジトリを追加", systemImage: "plus.circle.fill")
+                    .font(.title3.bold())
+                Spacer()
+                Button(english ? "Close" : "閉じる") {
+                    if !addingRepo {
+                        showAddRepoSheet = false
+                    }
+                }
+                .keyboardShortcut(.cancelAction)
+                .disabled(addingRepo)
+            }
+            Text(
+                english
+                    ? "Enter a GitHub repository URL or owner/repo (supports /tree/<branch> or /commit/<sha>)."
+                    : "GitHub リポジトリ URL または owner/repo を入力してください（/tree/<ブランチ> や /commit/<SHA> も指定可能）。"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            TextField(
+                english ? "https://github.com/owner/repo or owner/repo" : "https://github.com/owner/repo または owner/repo",
+                text: $addRepoInput
+            )
+            .textFieldStyle(.roundedBorder)
+            .disabled(addingRepo)
+            .onSubmit {
+                Task { await submitAddRepository() }
+            }
+
+            if let err = addRepoError, !err.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text(err)
+                }
+                .font(.caption)
+                .foregroundStyle(SemanticColors.role("dangerText"))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                if addingRepo {
+                    ProgressView().controlSize(.small)
+                    Text(english ? "Cloning and running security audit…" : "取得・セキュリティ監査を実行中…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(english ? "Cancel" : "キャンセル") {
+                    showAddRepoSheet = false
+                }
+                .disabled(addingRepo)
+                Button {
+                    Task { await submitAddRepository() }
+                } label: {
+                    Label(english ? "Start Analysis" : "解析を開始", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(addingRepo || addRepoInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+    }
+
+    private func submitAddRepository() async {
+        let raw = addRepoInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty, !addingRepo else { return }
+        let normalizedUrl: String = {
+            if raw.hasPrefix("http://") || raw.hasPrefix("https://") || raw.hasPrefix("/") || raw.hasPrefix("~") {
+                return raw
+            }
+            if raw.contains("/") {
+                return "https://github.com/\(raw)"
+            }
+            return raw
+        }()
+        addingRepo = true
+        addRepoError = nil
+        defer { addingRepo = false }
+        do {
+            let resp = try await requestJSON("/api/analyze", body: ["url": normalizedUrl])
+            if let err = resp["error"] as? String, !err.isEmpty {
+                addRepoError = err
+                return
+            }
+            let diagram = resp["diagram"] as? [String: Any]
+            let newId = (diagram?["id"] as? String) ?? ""
+            addRepoInput = ""
+            showAddRepoSheet = false
+            coordinator.send("refresh")
+            await refreshAspmPortfolio()
+            await refreshThreatFeed(force: false)
+            if !newId.isEmpty {
+                selection = ["repo:\(newId)"]
+            }
+        } catch {
+            addRepoError = error.localizedDescription
         }
     }
 
