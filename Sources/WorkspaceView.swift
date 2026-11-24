@@ -1021,7 +1021,8 @@ struct MainContentView: View {
                         value: "\(p0Total)",
                         subtitle: english ? "Secrets / Malware" : "シークレット漏洩 / マルウェア",
                         symbol: "flame.fill",
-                        tint: SemanticColors.role("dangerText")
+                        tint: p0Total > 0 ? SemanticColors.role("dangerText") : .secondary,
+                        highlightTint: p0Total > 0 ? SemanticColors.role("dangerText") : nil
                     ) {
                         openDrilldown(tier: "P0", title: english ? "P0 Critical Findings" : "P0 緊急対応一覧（シークレット・マルウェア）")
                     }
@@ -1030,7 +1031,8 @@ struct MainContentView: View {
                         value: "\(p1Total)",
                         subtitle: english ? "KEV / RCE / Auth Bypass" : "KEV / RCE / 認証バイパス",
                         symbol: "exclamationmark.triangle.fill",
-                        tint: SemanticColors.role("warningText")
+                        tint: p1Total > 0 ? .orange : .secondary,
+                        highlightTint: p1Total > 0 ? .orange : nil
                     ) {
                         openDrilldown(tier: "P1", title: english ? "P1 High Findings" : "P1 最優先対応一覧（KEV / RCE 等）")
                     }
@@ -1039,7 +1041,8 @@ struct MainContentView: View {
                         value: "\(p2Total)",
                         subtitle: english ? "CI/CD / IaC / License" : "CI/CD / IaC / ライセンス",
                         symbol: "wrench.and.screwdriver.fill",
-                        tint: SemanticColors.role("actionText")
+                        tint: p2Total > 0 ? .yellow : .secondary,
+                        highlightTint: p2Total > 0 ? .yellow : nil
                     ) {
                         openDrilldown(tier: "P2", title: english ? "P2 Planned Findings" : "P2 計画対応一覧")
                     }
@@ -1048,7 +1051,8 @@ struct MainContentView: View {
                         value: "\(p3Total)",
                         subtitle: english ? "Dev tools / Revoked" : "開発ツール / 失効済み等",
                         symbol: "tray.full.fill",
-                        tint: SemanticColors.role("infoText")
+                        tint: p3Total > 0 ? SemanticColors.role("infoText") : .secondary,
+                        highlightTint: p3Total > 0 ? SemanticColors.role("infoText") : nil
                     ) {
                         openDrilldown(tier: "P3", title: english ? "P3 Backlog Findings" : "P3 低優先バックログ一覧")
                     }
@@ -1308,6 +1312,7 @@ struct MainContentView: View {
         subtitle: String,
         symbol: String,
         tint: Color,
+        highlightTint: Color? = nil,
         action: (() -> Void)? = nil
     ) -> some View {
         let content = GroupBox {
@@ -1322,6 +1327,7 @@ struct MainContentView: View {
                 }
                 Text(value)
                     .font(.title3.bold().monospacedDigit())
+                    .foregroundStyle(highlightTint ?? .primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 HStack(spacing: 4) {
@@ -1340,6 +1346,14 @@ struct MainContentView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
+        .background(
+            highlightTint.map { $0.opacity(0.12) } ?? Color.clear,
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(highlightTint?.opacity(0.42) ?? Color.clear, lineWidth: 1)
+        )
         return Group {
             if let action {
                 Button(action: action) {
