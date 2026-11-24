@@ -893,6 +893,18 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
             if Path(target_file).name.lower() in manifest_names:
                 g["target_file"] = target_file
 
+    # Detect repo-level lockfile hint (yarn.lock / pnpm-lock.yaml) so package.json
+    # items in Yarn/pnpm repos also receive yarn/pnpm remediation commands.
+    repo_lock_hint = ""
+    for _it in items or []:
+        _f = str(_it.get("file") or "").lower()
+        if "yarn.lock" in _f:
+            repo_lock_hint = "yarn.lock"
+            break
+        if "pnpm-lock.yaml" in _f:
+            repo_lock_hint = "pnpm-lock.yaml"
+            break
+
     grouped_items: List[Dict[str, Any]] = []
     for key in order:
         g = groups[key]
@@ -900,12 +912,16 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
         installed = g["installed"]
         fixed = g["fixed_version"]
         cves = g["cves"]
+        rem_file_hint = g["target_file"]
+        if repo_lock_hint and Path(rem_file_hint).name.lower() == "package.json":
+            rem_file_hint = repo_lock_hint
         rem = build_advisory_remediation({
             "package_name": pkg_name,
             "ecosystem": g["ecosystem"],
             "installed": installed,
             "fixed_version": fixed,
             "safe_version": fixed,
+            "file": rem_file_hint,
         })
         if len(cves) > 1:
             ver_part = f" v{installed}" if installed else ""

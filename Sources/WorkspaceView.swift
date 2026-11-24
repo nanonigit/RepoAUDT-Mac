@@ -3260,6 +3260,9 @@ struct MainContentView: View {
                         if tier == "P0" {
                             return english ? "Revoke/rotate immediately & purge from Git" : "即時無効化・ローテーション＆Git履歴から削除"
                         }
+                        if shortFile.contains(".github/workflows/") || title.contains("シェルインジェクション") || title.lowercased().contains("shell injection") {
+                            return english ? "Move ${{ ... }} to step env: and reference as $VAR / process.env" : "env: に定義して $VAR / process.env 経由で参照"
+                        }
                         return reason.isEmpty ? (english ? "Upgrade to fixed version" : "安全版へ更新・修正") : reason
                     }()
                     let shortAction = (fixCmd.isEmpty || isInspectOnlyCmd) ? fallbackAction : fixCmd
@@ -3295,6 +3298,50 @@ struct MainContentView: View {
             let header = english
                 ? "# 🛡️ RepoAUDT Mac — Critical & High-Risk Audit Report\n\n- **Affected Repositories**: \(affectedRepos)\n- **Total Critical / High Findings**: \(totalHighFindings)\n"
                 : "# 🛡️ RepoAUDT Mac — 重大・高リスク一括監査レポート\n\n- **対象リポジトリ数**: \(affectedRepos) 件\n- **重大・高リスク指摘合計**: \(totalHighFindings) 件\n"
+
+            var threatFeedSection = ""
+            if let tf = try? await requestJSON("/api/threat-feed") {
+                let sources = tf["sources"] as? [String: Any] ?? [:]
+                let kevInfo = sources["cisa_kev"] as? [String: Any] ?? [:]
+                let ghsaInfo = sources["ghsa_critical"] as? [String: Any] ?? [:]
+                let kevCount = kevInfo["count"] as? Int ?? 0
+                let ghsaCount = ghsaInfo["count"] as? Int ?? 0
+                let fetchedAt = tf["fetched_at"] as? String ?? ""
+                let scannedRepos = tf["scanned_repos"] as? Int ?? diagrams.count
+                let matchedCount = tf["matched_count"] as? Int ?? 0
+                let rawItems = tf["items"] as? [[String: Any]] ?? []
+                let matchedItems = rawItems.filter { ($0["match_status"] as? String ?? "not_affected") != "not_affected" }
+
+                var tfLines: [String] = []
+                if english {
+                    tfLines.append("## 🌐 Live Threat Intelligence Correlation (CISA KEV / GHSA Critical)")
+                    tfLines.append("")
+                    tfLines.append("- **Feeds Checked**: CISA KEV (\(kevCount)) + GHSA Critical (\(ghsaCount)) · **Scanned Repos**: \(scannedRepos)" + (fetchedAt.isEmpty ? "" : " · **Fetched**: `\(fetchedAt)`"))
+                    tfLines.append("- **Matched Active Threats**: **\(matchedCount)**" + (matchedCount == 0 ? " (No saved repositories matched current Critical/KEV threats)" : ""))
+                } else {
+                    tfLines.append("## 🌐 ライブ脅威インテリジェンス照合（CISA KEV / GHSA Critical）")
+                    tfLines.append("")
+                    tfLines.append("- **照合フィード**: CISA KEV（\(kevCount) 件）+ GHSA Critical（\(ghsaCount) 件） · **照合対象リポジトリ**: \(scannedRepos) 件" + (fetchedAt.isEmpty ? "" : " · **取得時刻**: `\(fetchedAt)`"))
+                    tfLines.append("- **影響該当件数**: **\(matchedCount) 件**" + (matchedCount == 0 ? "（現時点で保存済みリポジトリへの該当なし）" : ""))
+                }
+                if !matchedItems.isEmpty {
+                    tfLines.append("")
+                    tfLines.append(english ? "| Status | Source | ID | Threat | Matched Repositories |" : "| 判定 | ソース | ID | 脆弱性 | 該当リポジトリ |")
+                    tfLines.append("| --- | --- | --- | --- | --- |")
+                    for it in matchedItems.prefix(20) {
+                        let st = (it["match_status"] as? String ?? "") == "confirmed"
+                            ? (english ? "CONFIRMED" : "CVE一致")
+                            : (english ? "STACK MATCH" : "技術一致")
+                        let src = it["source"] as? String ?? ""
+                        let cid = it["cve"] as? String ?? (it["id"] as? String ?? "")
+                        let ttl = (it["title"] as? String ?? "").replacingOccurrences(of: "|", with: "/")
+                        let repos = ((it["matched_repos"] as? [[String: Any]]) ?? []).compactMap { $0["repo"] as? String }.joined(separator: ", ")
+                        tfLines.append("| **\(st)** | `\(src)` | `\(cid)` | \(ttl) | `\(repos)` |")
+                    }
+                }
+                threatFeedSection = "\n" + tfLines.joined(separator: "\n") + "\n"
+            }
+
             var summaryTable = ""
             if !crossRepoRows.isEmpty {
                 let sortedRows = crossRepoRows.sorted { $0.tierRank < $1.tierRank }
@@ -3310,8 +3357,8 @@ struct MainContentView: View {
                 summaryTable = "\n" + tbl.joined(separator: "\n") + "\n"
             }
             let report = sections.isEmpty
-                ? header + (english ? "\nNo Critical or High findings." : "\n重大・高リスクの指摘はありません。")
-                : header + summaryTable + "\n---\n\n" + sections.joined(separator: "\n\n---\n\n")
+                ? header + threatFeedSection + (english ? "\nNo Critical or High findings." : "\n重大・高リスクの指摘はありません。")
+                : header + threatFeedSection + summaryTable + "\n---\n\n" + sections.joined(separator: "\n\n---\n\n")
 
             let pb = NSPasteboard.general
             pb.clearContents()

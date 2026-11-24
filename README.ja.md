@@ -10,7 +10,7 @@ GitHub リポジトリの URL または `owner/repo` を入力し、解析結果
 
 - **リポジトリの作業画面：** セクションの並び替え・折りたたみに対応したダッシュボード、検索、構成図・実行フロー・監査・チャット共通のサイドバー選択ハイライト、および **リスクスコアが高い順** などの並び替え。
 - **コード監査：** 静的解析、依存パッケージの脆弱性チェック、Web・サプライチェーン設定検査（`dangerouslyAllowSVG`、CORS ワイルドカード + credentials、不審な npm ライフサイクルスクリプト、秘密鍵ストアやソースマップのコミット）、根拠、対象コンポーネント、修正案を表示。英語優先・日本語併記の依頼文コピーとレポート保存に対応。
-- **ライブ脅威インテリジェンス照合：** **CISA KEV**（悪用確認済み脆弱性）および **GitHub Security Advisories (Critical)** の公式フィードを取得し、保存済みリポジトリの技術スタック・設定ファイル（`Dockerfile`, `nginx.conf`, `composer.json`, `package.json`, `*.tf`, Kubernetes Ingress）や検出済み CVE と自動照合してダッシュボードに表示します。「全リポジトリを解析」完了時にも自動で最新フィードを再取得・照合します。
+- **ライブ脅威インテリジェンス照合：** **CISA KEV**（悪用確認済み脆弱性）および **GitHub Security Advisories (Critical)** の公式フィードを取得し、保存済みリポジトリの技術スタック・設定ファイル（`Dockerfile`, `nginx.conf`, `composer.json`, `package.json`, `*.tf`, Kubernetes Ingress）や検出済み CVE と自動照合してダッシュボードに表示します。「全リポジトリを解析」完了時にも自動で再取得・照合し、一括監査レポートのコピーにも結果を含めます。
 - **修正依頼トラッカー：** 指摘ごとの Slack / GitHub Issue 依頼状況と経過日数を記録し、`すべて` / `未依頼` / `依頼済み` フィルタ、再スキャン時の自動解消、`gh issue create` による GitHub Issue 作成に対応。
 - **利用コンポーネントとセキュリティ更新：** リポジトリに宣言されたイメージ・ランタイム版・互換要件を一覧化します。PHP・nginx・Node.js・Go・PostgreSQLの公式情報と照合し、確認できた修正版やセキュリティリリースの出典を表示します。
 - **マルチスキャナー連携：** **Gitleaks**（最新ツリー＋Git 履歴）、**TruffleHog**（オフライン `--no-verification`）、**Trivy**（SCA・IaC）、**Semgrep**、**Hadolint**（Dockerfile）、**Ruff**、**zizmor** を統合。秘密情報の候補はソース比較とレポートで伏せ、各 CLI の導入状態は「実行環境・更新」で確認できます。
