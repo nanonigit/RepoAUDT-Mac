@@ -3080,6 +3080,10 @@ struct MainContentView: View {
                     continuation.resume()
                 }
             }
+            listRefreshNote = english ? "Correlating live threat feeds…" : "最新脅威フィードを照合中…"
+            await refreshThreatFeed(force: true)
+            await refreshAspmPortfolio()
+            await refreshRemediationRequests()
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy/MM/dd HH:mm:ss"
             let time = formatter.string(from: Date())
