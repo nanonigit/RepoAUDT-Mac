@@ -16,6 +16,7 @@ struct WorkspaceRepository: Decodable, Identifiable {
 
 enum RepositorySortOrder: String, CaseIterable, Identifiable {
     case defaultOrder
+    case riskScoreDesc
     case nameAsc
     case nameDesc
     case updatedDesc
@@ -27,6 +28,7 @@ enum RepositorySortOrder: String, CaseIterable, Identifiable {
     func title(english: Bool) -> String {
         switch self {
         case .defaultOrder: return english ? "Default order" : "保存順"
+        case .riskScoreDesc: return english ? "Highest risk score" : "リスクスコアが高い順"
         case .nameAsc: return english ? "Name (A–Z)" : "名前順 (A → Z)"
         case .nameDesc: return english ? "Name (Z–A)" : "名前順 (Z → A)"
         case .updatedDesc: return english ? "Recently updated" : "変更・更新が新しい順"
@@ -306,6 +308,20 @@ struct MainContentView: View {
         switch order {
         case .defaultOrder:
             return items
+        case .riskScoreDesc:
+            return items.sorted { lhs, rhs in
+                let la = aspmRepos.first(where: { $0.id == lhs.id || $0.repo == lhs.name })
+                let ra = aspmRepos.first(where: { $0.id == rhs.id || $0.repo == rhs.name })
+                let lScore = la?.riskScore ?? 0
+                let rScore = ra?.riskScore ?? 0
+                if lScore != rScore { return lScore > rScore }
+                let lP0 = la?.p0 ?? 0, rP0 = ra?.p0 ?? 0
+                if lP0 != rP0 { return lP0 > rP0 }
+                let lP1 = la?.p1 ?? 0, rP1 = ra?.p1 ?? 0
+                if lP1 != rP1 { return lP1 > rP1 }
+                if lhs.findings != rhs.findings { return lhs.findings > rhs.findings }
+                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+            }
         case .nameAsc:
             return items.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         case .nameDesc:
@@ -393,10 +409,24 @@ struct MainContentView: View {
                 }
                 Section {
                     if repositoriesExpanded {
+                        let showingRepoWorkspace = [.audit, .chat, .architecture, .sequence].contains(coordinator.page)
                         ForEach(repositories) { repo in
+                            let isActiveRepo = showingRepoWorkspace && coordinator.selectedRepositoryID == repo.id
                             HStack(spacing: 6) {
-                                Label(repo.name, systemImage: "folder")
-                                    .lineLimit(1)
+                                if isActiveRepo {
+                                    RoundedRectangle(cornerRadius: 2)
+                                        .fill(Color.accentColor)
+                                        .frame(width: 3, height: 14)
+                                }
+                                Label {
+                                    Text(repo.name)
+                                        .fontWeight(isActiveRepo ? .semibold : .regular)
+                                        .foregroundStyle(isActiveRepo ? Color.accentColor : Color.primary)
+                                } icon: {
+                                    Image(systemName: isActiveRepo ? "folder.fill" : "folder")
+                                        .foregroundStyle(isActiveRepo ? Color.accentColor : Color.secondary)
+                                }
+                                .lineLimit(1)
                                 Spacer(minLength: 4)
                                 if busyRepoIDs.contains(repo.id) {
                                     ProgressView()
@@ -435,6 +465,14 @@ struct MainContentView: View {
                                         .background(sevColor.opacity(0.18), in: Capsule())
                                 }
                             }
+                            .padding(.vertical, isActiveRepo ? 2 : 0)
+                            .padding(.horizontal, isActiveRepo ? 4 : 0)
+                            .background(
+                                isActiveRepo
+                                    ? Color.accentColor.opacity(0.14)
+                                    : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 6)
+                            )
                             .help({
                                 if let aspm = aspmRepos.first(where: { $0.id == repo.id || $0.repo == repo.name }),
                                    (aspm.p0 + aspm.p1 + aspm.p2 + aspm.p3) > 0 {

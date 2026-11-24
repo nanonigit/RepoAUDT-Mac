@@ -147,6 +147,7 @@ final class BackendServerManager: ObservableObject {
 final class WebViewCoordinator: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     @Published var page: WorkspacePage = .dashboard
     @Published private(set) var repositories: [WorkspaceRepository] = []
+    @Published private(set) var selectedRepositoryID: String?
     @Published private(set) var ready = false
     @Published private(set) var loadError: String?
     var language = "ja"
@@ -223,6 +224,9 @@ final class WebViewCoordinator: NSObject, ObservableObject, WKNavigationDelegate
         // Keep a single sidebar row for each saved repository.
         var seen = Set<String>()
         repositories = snapshot.repositories.filter { seen.insert($0.id).inserted }
+        if let sid = snapshot.selectedID, !sid.isEmpty {
+            selectedRepositoryID = sid
+        }
         if ![WorkspacePage.dashboard, .ai, .mcp, .system].contains(page), let mode = snapshot.page {
             switch mode {
             case "arch": page = .architecture
