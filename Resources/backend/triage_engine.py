@@ -635,7 +635,7 @@ def build_slack_digest(diagrams: List[Dict[str, Any]], *, lang: str = "ja") -> s
     is_both = lang == "both"
 
     if is_both:
-        lines.append("*🛡️ RepoAUDT Mac セキュリティ監査ダイジェスト / Security Audit Digest*")
+        lines.append("*🛡️ RepoAUDT Mac Security Audit Digest (P0 / P1) / セキュリティ監査ダイジェスト（P0 / P1）*")
     elif is_en:
         lines.append("*🛡️ RepoAUDT Mac Security Audit Digest (P0 / P1)*")
     else:
@@ -659,7 +659,10 @@ def build_slack_digest(diagrams: List[Dict[str, Any]], *, lang: str = "ja") -> s
         for it in items:
             tier = str(it.get("priority_tier") or "").upper()
             sev = str(it.get("severity") or "").lower()
-            if tier not in ("P0", "P1") and sev not in ("critical", "high"):
+            if tier:
+                if tier not in ("P0", "P1"):
+                    continue
+            elif sev not in ("critical", "high"):
                 continue
             key = f"{it.get('title', '')}|{it.get('file', '')}"
             if key in seen:

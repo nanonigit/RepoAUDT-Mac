@@ -2952,13 +2952,12 @@ struct MainContentView: View {
         defer { copyingHighRiskReport = false }
 
         do {
-            let langParam = english ? "en" : "ja"
-            let json = try await requestJSON("/api/report/slack?lang=\(langParam)")
+            let json = try await requestJSON("/api/report/slack?lang=both")
             let markdown = json["markdown"] as? String ?? ""
             let pb = NSPasteboard.general
             pb.clearContents()
             pb.setString(markdown, forType: .string)
-            highRiskCopyStatus = english ? "✓ Copied Slack digest" : "✓ Slackサマリーをコピーしました"
+            highRiskCopyStatus = english ? "✓ Copied Slack digest (EN + JA)" : "✓ Slackサマリー（英日併記）をコピーしました"
             Task {
                 try? await Task.sleep(for: .seconds(4))
                 if highRiskCopyStatus != nil {
@@ -3408,43 +3407,122 @@ struct MainContentView: View {
         }
     }
 
+    private func remediationChecklist(for group: DrilldownFindingGroup, isEnglish: Bool) -> [String] {
+        let lowTitle = group.title.lowercased()
+        let hasWorkflow = group.items.contains { $0.file.lowercased().contains(".github/workflows") }
+        let hasDep = group.items.contains {
+            let f = $0.file.lowercased()
+            return f.contains("package.json") || f.contains("package-lock.json") || f.contains("yarn.lock")
+                || f.contains("requirements.txt") || f.contains("go.mod") || f.contains("pnpm-lock")
+        }
+        let hasIaC = group.items.contains {
+            let f = $0.file.lowercased()
+            return f.contains(".tf") || f.contains("dockerfile") || f.contains("cloudformation")
+        }
+
+        if group.tier == "P0" || lowTitle.contains("secret") || lowTitle.contains("シークレット")
+            || lowTitle.contains("gitleaks") || lowTitle.contains("trufflehog") || lowTitle.contains("credential") {
+            return isEnglish
+                ? [
+                    "Revoke / rotate the exposed key, password, or private key immediately on the provider side (e.g., AWS IAM, OpenAI, DB, SSH/TLS) and review audit logs / CloudTrail for unauthorized access.",
+                    "Move credentials to environment variables or a secret manager (AWS Secrets Manager / Vault / GitHub Secrets) — never hardcode them in source or frontend bundles.",
+                    "Remove committed credential files (`git rm --cached` + `.gitignore`) and purge them from Git history if needed (`git filter-repo` / BFG)."
+                ]
+                : [
+                    "コード修正より先に、プロバイダ側（AWS IAM / OpenAI / DB / SSH 等）で該当キー・パスワード・秘密鍵を即時無効化・ローテーションし、不正利用履歴（CloudTrail・監査ログ等）を確認してください。",
+                    "認証情報はソースコードやフロントエンドに直書きせず、環境変数またはシークレットマネージャー（AWS Secrets Manager / Vault / GitHub Secrets 等）へ移行してください。",
+                    "誤コミットされたファイルは `git rm --cached`＋`.gitignore` 追加のうえ、必要に応じ Git 履歴からも削除（`git filter-repo` 等）してください。"
+                ]
+        }
+        if hasWorkflow || lowTitle.contains("zizmor") || lowTitle.contains("github actions") {
+            return isEnglish
+                ? [
+                    "Avoid direct `${{ ... }}` interpolation of untrusted inputs (e.g., `github.head_ref`, PR title/body) inside `run:` or `github-script`; pass them via step `env:` instead.",
+                    "Apply least-privilege `permissions:` and pin third-party actions to full commit SHAs where applicable."
+                ]
+                : [
+                    "`${{ github.head_ref }}` 等の外部入力を `run:` / `github-script` 内に直接展開せず、ステップの `env:` 経由で参照するよう修正してください。",
+                    "必要に応じて `permissions:` の最小権限化およびサードパーティ Action のコミット SHA 固定を行ってください。"
+                ]
+        }
+        if hasDep || lowTitle.contains("osv") || lowTitle.contains("依存関係") {
+            return isEnglish
+                ? [
+                    "Upgrade the affected package(s) to the fixed version(s) and regenerate the lockfile.",
+                    "Run build and regression tests to confirm there are no breaking changes."
+                ]
+                : [
+                    "対象パッケージを修正済みバージョンへ更新し、ロックファイルを再生成してください。",
+                    "ビルドおよびテストを実行し、既存機能に破壊的変更がないことを確認してください。"
+                ]
+        }
+        if hasIaC || lowTitle.contains("hadolint") || lowTitle.contains("trivy") {
+            return isEnglish
+                ? [
+                    "Harden Terraform / CloudFormation / Dockerfile settings (least-privilege ingress/egress, encryption enabled, non-root user, pinned tags).",
+                    "Verify changes with `terraform plan` or container build before deploying."
+                ]
+                : [
+                    "Terraform / CloudFormation / Dockerfile の設定を強化（最小権限化・暗号化有効化・非 root 実行・イメージタグ固定など）してください。",
+                    "デプロイ前に `terraform plan` やコンテナビルドで動作確認を行ってください。"
+                ]
+        }
+        return isEnglish
+            ? ["Review each location below, apply the recommended fix, and verify with automated tests."]
+            : ["下記の対象箇所を確認して修正を適用し、テストで動作に影響がないことを確認してください。"]
+    }
+
     private func copyDrilldownFixPrompt(for groups: [DrilldownFindingGroup]) {
         guard !groups.isEmpty else { return }
         let totalCount = groups.reduce(0) { $0 + $1.items.count }
-        var lines: [String] = [
-            english
-                ? "# Batch Security Remediation Request (\(totalCount) findings across \(groups.count) group(s))"
-                : "# セキュリティ指摘 一括修正依頼（\(groups.count)グループ / 計\(totalCount)件）",
-            "",
-            english
-                ? "Please fix all occurrences listed below together, keeping existing behavior intact and verifying each repository after remediation."
-                : "以下の同種・類似のセキュリティ指摘をまとめて修正してください。既存の動作を壊さないように対応し、必要に応じて認証情報のローテーション・環境変数化・依存パッケージ更新等を実施してください。"
-        ]
 
-        for (idx, group) in groups.enumerated() {
-            lines.append("")
-            lines.append("## \(idx + 1). [\(group.tier)] \(group.title) (\(group.items.count)\(english ? " items" : "件") / \(group.repoCount)\(english ? " repos" : "リポジトリ"))")
-            if let reason = group.items.first(where: { !$0.reason.isEmpty })?.reason {
-                lines.append("- **\(english ? "Priority Reason" : "優先理由")**: \(reason)")
+        func buildSection(isEnglish: Bool) -> [String] {
+            var section: [String] = [
+                isEnglish
+                    ? "# 🛡️ Batch Security Remediation Request (\(totalCount) findings across \(groups.count) group(s))"
+                    : "# 🛡️ セキュリティ指摘 一括修正依頼（\(groups.count)グループ / 計\(totalCount)件）",
+                "",
+                isEnglish
+                    ? "Please review and remediate the following security findings without breaking existing behavior."
+                    : "以下の同種・類似のセキュリティ指摘を確認し、既存の動作を壊さないようにまとめて対応してください。"
+            ]
+            for (idx, group) in groups.enumerated() {
+                section.append("")
+                section.append("## \(idx + 1). [\(group.tier)] \(group.title) (\(group.items.count)\(isEnglish ? " items" : "件") / \(group.repoCount)\(isEnglish ? " repo(s)" : "リポジトリ"))")
+                if let reason = group.items.first(where: { !$0.reason.isEmpty })?.reason {
+                    section.append("- **\(isEnglish ? "Priority Reason" : "優先理由")**: \(reason)")
+                }
+                section.append("- **\(isEnglish ? "Target Locations" : "対象箇所")**:")
+                for item in group.items {
+                    let loc = item.file.isEmpty ? item.title : item.file
+                    let isInspectCmd = item.fixCommand.hasPrefix("sed -n") || item.fixCommand.hasPrefix("cat ")
+                    let cmd = (item.fixCommand.isEmpty || isInspectCmd) ? "" : " (`\(item.fixCommand)`)"
+                    section.append("  - `\(item.repoName)` · `\(loc)`\(cmd)")
+                    let trimmedDesc = item.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmedDesc.isEmpty && !trimmedDesc.hasPrefix("Verify the credential candidate") {
+                        section.append("    - \(trimmedDesc)")
+                    }
+                }
+                let checklist = remediationChecklist(for: group, isEnglish: isEnglish)
+                if !checklist.isEmpty {
+                    section.append("- **\(isEnglish ? "Action Checklist" : "対応のポイント")**:")
+                    for (cIdx, step) in checklist.enumerated() {
+                        section.append("  \(cIdx + 1). \(step)")
+                    }
+                }
             }
-            if let desc = group.items.first(where: { !$0.description.isEmpty })?.description {
-                lines.append("- **\(english ? "Details" : "詳細")**: \(desc)")
-            }
-            lines.append("- **\(english ? "Target Locations" : "対象箇所")**:")
-            for item in group.items {
-                let loc = item.file.isEmpty ? item.title : item.file
-                let cmd = item.fixCommand.isEmpty ? "" : " (`\(item.fixCommand)`)"
-                lines.append("  - `\(item.repoName)` · `\(loc)`\(cmd)")
-            }
+            return section
         }
 
+        // Bilingual output for Slack engineering threads: English first, Japanese second.
+        let lines = buildSection(isEnglish: true) + ["", "---", ""] + buildSection(isEnglish: false)
         let prompt = lines.joined(separator: "\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(prompt, forType: .string)
 
         let notice = english
-            ? "Copied batch fix request (\(totalCount) items)"
-            : "一括修正依頼プロンプトをコピーしました（\(totalCount)件）"
+            ? "Copied bilingual fix request (EN + JA · \(totalCount) items)"
+            : "一括修正依頼（英語→日本語併記）をコピーしました（\(totalCount)件）"
         drilldownCopyNotice = notice
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
             if drilldownCopyNotice == notice {
