@@ -32,7 +32,7 @@ REPOS_CACHE_DIR = APP_SUPPORT_DIR / "repos"
 STATE_FILE = APP_SUPPORT_DIR / "analyzed_repos.json"
 HISTORY_FILE = APP_SUPPORT_DIR / "scan_history.json"
 MAX_SCAN_HISTORY = 90
-AUDIT_ENGINE_VERSION = "2026.11.24-4"
+AUDIT_ENGINE_VERSION = "2026.11.24-5"
 _STATE_LOCK = threading.Lock()
 _GITHUB_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from workflow_audit import MAX_REPORT_BYTES, read_small_file
 
@@ -867,7 +867,7 @@ def _is_test_or_doc_relpath(rel_path: str) -> bool:
     return name.startswith("test_") or name.endswith((".test.ts", ".test.js", ".spec.ts", ".spec.js", ".md"))
 
 
-def parse_gitleaks_git(raw: str, match_component) -> List[Dict[str, Any]]:
+def parse_gitleaks_git(raw: str, match_component, *, repo_root: Optional[Path] = None) -> List[Dict[str, Any]]:
     data = json.loads(raw or "[]")
     if not isinstance(data, list):
         return []
@@ -882,6 +882,11 @@ def parse_gitleaks_git(raw: str, match_component) -> List[Dict[str, Any]]:
         rule = str(item.get("RuleID") or "secret")
         commit = str(item.get("Commit") or "")[:8]
         line = int(item.get("StartLine") or 1)
+        if repo_root is not None:
+            if rule == "generic-api-key" and _is_benign_generic_api_key(repo_root, rel, line):
+                continue
+            if rule == "private-key" and _is_benign_private_key_doc(repo_root, rel, line):
+                continue
         dedup_key = (rel, rule, line, commit)
         if dedup_key in seen:
             continue
@@ -929,7 +934,7 @@ def scan_git_history_secrets(repo: Path, match_component, *, max_commits: int = 
     base_env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", "")}
     try:
         raw = run_read_only(cmd, repo_path, base_env, allowed=(0, 10), timeout=35)
-        return parse_gitleaks_git(raw, match_component), "complete"
+        return parse_gitleaks_git(raw, match_component, repo_root=repo_path), "complete"
     except subprocess.TimeoutExpired:
         return [], "timeout"
     except (OSError, ValueError, KeyError, TypeError):

@@ -664,30 +664,46 @@ def merge_secret_and_gitleaks_findings(items: List[Dict[str, Any]]) -> List[Dict
     custom_by_loc: Dict[Tuple[str, int], Dict[str, Any]] = {}
     gitleaks_indices: set[int] = set()
 
-    def _is_gitleaks(it: Dict[str, Any]) -> bool:
-        return str(it.get("scanner") or "").lower() == "gitleaks" or "[gitleaks]" in str(it.get("title") or "").lower()
+    def _is_secondary_secret(it: Dict[str, Any]) -> bool:
+        sc = str(it.get("scanner") or "").lower()
+        tl = str(it.get("title") or "").lower()
+        return (
+            sc in ("gitleaks", "gitleaks-git", "trufflehog")
+            or "[gitleaks]" in tl
+            or "[gitleaks-history]" in tl
+            or "[trufflehog]" in tl
+        )
 
-    def _is_custom_secret(it: Dict[str, Any]) -> bool:
-        if _is_gitleaks(it):
+    def _is_primary_secret(it: Dict[str, Any]) -> bool:
+        if _is_secondary_secret(it):
             return False
         return "シークレット漏洩検知" in str(it.get("title") or "") or str(it.get("category") or "").lower() == "secrets"
 
     for it in items:
-        if not isinstance(it, dict) or not _is_custom_secret(it):
+        if not isinstance(it, dict) or not _is_primary_secret(it):
+            continue
+        loc = _normalize_secret_file_line(it.get("file") or it.get("path") or "")
+        if loc and loc not in custom_by_loc:
+            custom_by_loc[loc] = it
+
+    # Also treat working-tree `gitleaks` hits as primary over `gitleaks-git` / `trufflehog` on the same (file, line)
+    for it in items:
+        if not isinstance(it, dict) or str(it.get("scanner") or "").lower() != "gitleaks":
             continue
         loc = _normalize_secret_file_line(it.get("file") or it.get("path") or "")
         if loc and loc not in custom_by_loc:
             custom_by_loc[loc] = it
 
     for idx, it in enumerate(items):
-        if not isinstance(it, dict) or not _is_gitleaks(it):
+        if not isinstance(it, dict) or not _is_secondary_secret(it):
             continue
         loc = _normalize_secret_file_line(it.get("file") or it.get("path") or "")
-        if loc and loc in custom_by_loc:
+        if loc and loc in custom_by_loc and custom_by_loc[loc] is not it:
             base = custom_by_loc[loc]
-            detected_by = list(base.get("detected_by") or ["secret_scanner"])
-            if "gitleaks" not in detected_by:
-                detected_by.append("gitleaks")
+            sc_name = str(it.get("scanner") or "gitleaks").lower()
+            detected_by = list(base.get("detected_by") or [str(base.get("scanner") or "secret_scanner")])
+            if sc_name not in detected_by:
+                detected_by.append(sc_name)
             base["detected_by"] = detected_by
             if it.get("official_source") and not base.get("official_source"):
                 base["official_source"] = it["official_source"]

@@ -40,6 +40,41 @@ class TestExtendedScanners(unittest.TestCase):
         tier, _reason = triage_engine.classify_priority_tier(items[0])
         self.assertEqual(tier, "P0")
 
+    def test_gitleaks_git_filters_recaptcha_and_provenance_key_and_dedups_with_head(self) -> None:
+        import security_audit_engine
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "Recaptcha.tsx").write_text(
+                '<GoogleReCaptchaProvider reCaptchaKey="6Ld2FS000000000000000000000000000000B7qo">\n',
+                encoding="utf-8",
+            )
+            (root / "src" / "migration.ts").write_text(
+                "const PROVENANCE_KEY = 'cerebras_gemma4_retirement_provenance';\n",
+                encoding="utf-8",
+            )
+            (root / "src" / "real.ts").write_text("const secret = 'REAL_VALUE_1234567890';\n", encoding="utf-8")
+
+            raw = json.dumps([
+                {"RuleID": "generic-api-key", "File": "src/Recaptcha.tsx", "StartLine": 1, "Commit": "aaaa1111"},
+                {"RuleID": "generic-api-key", "File": "src/migration.ts", "StartLine": 1, "Commit": "aaaa1111"},
+                {"RuleID": "aws-access-token", "File": "src/real.ts", "StartLine": 1, "Commit": "aaaa1111"},
+            ])
+            hist_items = source_scanners.parse_gitleaks_git(raw, lambda p: "src", repo_root=root)
+            self.assertEqual(len(hist_items), 1)
+            self.assertIn("real.ts", hist_items[0]["file"])
+
+            head_item = {
+                "title": "🚨 [シークレット漏洩検知] AWS Access Key ID",
+                "file": "src/real.ts:1 (Target: src)",
+                "category": "secrets",
+                "severity": "critical",
+            }
+            merged = security_audit_engine.merge_secret_and_gitleaks_findings([head_item, hist_items[0]])
+            self.assertEqual(len(merged), 1)
+            self.assertIn("gitleaks-git", merged[0].get("detected_by", []))
+
     def test_parse_hadolint_and_triage_p2_iac(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
