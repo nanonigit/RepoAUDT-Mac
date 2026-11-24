@@ -1893,6 +1893,52 @@ struct MainContentView: View {
                         }
                         .disabled(refreshingList || !coordinator.ready)
                     }
+                    HStack(spacing: 12) {
+                        HStack(spacing: 4) {
+                            Text("P0")
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(SemanticColors.role("dangerText").opacity(0.18), in: Capsule())
+                                .foregroundStyle(SemanticColors.role("dangerText"))
+                            Text(english ? "Critical (Secrets/Malware)" : "緊急（シークレット漏洩等）")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        HStack(spacing: 4) {
+                            Text("P1")
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(SemanticColors.role("warningText").opacity(0.18), in: Capsule())
+                                .foregroundStyle(SemanticColors.role("warningText"))
+                            Text(english ? "High (Immediate Fix)" : "高（重大脆弱性・即時対応）")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        HStack(spacing: 4) {
+                            Text("P2")
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(SemanticColors.role("actionText").opacity(0.18), in: Capsule())
+                                .foregroundStyle(SemanticColors.role("actionText"))
+                            Text(english ? "Medium (Planned Fix)" : "中（一般的な脆弱性）")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        HStack(spacing: 4) {
+                            Text("P3")
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(SemanticColors.role("infoText").opacity(0.18), in: Capsule())
+                                .foregroundStyle(SemanticColors.role("infoText"))
+                            Text(english ? "Low (Info)" : "低（軽微・情報）")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     if dashboardRepositories.isEmpty {
                         ContentUnavailableView(
                             query.isEmpty ? (english ? "No timestamped analyses yet" : "解析日時付きの保存データはありません") :
@@ -1961,43 +2007,94 @@ struct MainContentView: View {
     }
 
     private func repositoryRow(_ repo: WorkspaceRepository) -> some View {
-        Button {
-            selection = ["repo:" + repo.id]
-            coordinator.page = .audit
-            coordinator.send("repository", value: repo.id)
-            coordinator.send("page", value: WorkspacePage.audit.command)
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "folder").font(.title3).foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(repo.name).font(.body.weight(.medium)).lineLimit(1)
-                    HStack(spacing: 6) {
-                        Text(repo.commit.isEmpty ? (english ? "Commit not recorded" : "コミット未記録") : String(repo.commit.prefix(10)))
-                        Text("·")
-                        if let analyzedLabel = formattedAnalysisDate(repo.analyzedAt) {
-                            Text(english ? "Analyzed: \(analyzedLabel)" : "解析日時: \(analyzedLabel)")
-                        } else if let ghUpdated = formattedAnalysisDate(repo.updatedAt) {
-                            Text(english ? "Analysis date not recorded (GitHub updated: \(ghUpdated))" : "解析日時未記録 (GitHub更新: \(ghUpdated))")
-                        } else {
-                            Text(english ? "Analysis date not recorded" : "解析日時未記録")
+        let aspm = aspmRepos.first(where: { $0.id == repo.id || $0.repo == repo.name })
+        return HStack(spacing: 12) {
+            Button {
+                selection = ["repo:" + repo.id]
+                coordinator.page = .audit
+                coordinator.send("repository", value: repo.id)
+                coordinator.send("page", value: WorkspacePage.audit.command)
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "folder").font(.title3).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(repo.name).font(.body.weight(.medium)).lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(repo.commit.isEmpty ? (english ? "Commit not recorded" : "コミット未記録") : String(repo.commit.prefix(10)))
+                            Text("·")
+                            if let analyzedLabel = formattedAnalysisDate(repo.analyzedAt) {
+                                Text(english ? "Analyzed: \(analyzedLabel)" : "解析日時: \(analyzedLabel)")
+                            } else if let ghUpdated = formattedAnalysisDate(repo.updatedAt) {
+                                Text(english ? "Analysis date not recorded (GitHub updated: \(ghUpdated))" : "解析日時未記録 (GitHub更新: \(ghUpdated))")
+                            } else {
+                                Text(english ? "Analysis date not recorded" : "解析日時未記録")
+                            }
+                        }
+                        .font(.caption.monospaced()).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 10)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if let aspm, (aspm.p0 + aspm.p1 + aspm.p2 + aspm.p3) > 0 {
+                HStack(spacing: 6) {
+                    if aspm.p0 > 0 {
+                        savedAnalysisTierPill(label: "P0", count: aspm.p0, color: SemanticColors.role("dangerText")) {
+                            openDrilldown(tier: "P0", diagramId: repo.id, title: "\(repo.name) — P0")
                         }
                     }
-                    .font(.caption.monospaced()).foregroundStyle(.secondary)
+                    if aspm.p1 > 0 {
+                        savedAnalysisTierPill(label: "P1", count: aspm.p1, color: SemanticColors.role("warningText")) {
+                            openDrilldown(tier: "P1", diagramId: repo.id, title: "\(repo.name) — P1")
+                        }
+                    }
+                    if aspm.p2 > 0 {
+                        savedAnalysisTierPill(label: "P2", count: aspm.p2, color: SemanticColors.role("actionText")) {
+                            openDrilldown(tier: "P2", diagramId: repo.id, title: "\(repo.name) — P2")
+                        }
+                    }
+                    if aspm.p3 > 0 {
+                        savedAnalysisTierPill(label: "P3", count: aspm.p3, color: SemanticColors.role("infoText")) {
+                            openDrilldown(tier: "P3", diagramId: repo.id, title: "\(repo.name) — P3")
+                        }
+                    }
                 }
-                Spacer(minLength: 10)
+            } else {
                 Label(english ? "\(repo.findings) findings" : "指摘 \(repo.findings)件",
                       systemImage: SemanticColors.severitySymbol(repo.severity))
                     .font(.callout).foregroundStyle(SemanticColors.severityColor(repo.severity))
+            }
+
+            Button {
+                selection = ["repo:" + repo.id]
+                coordinator.page = .audit
+                coordinator.send("repository", value: repo.id)
+                coordinator.send("page", value: WorkspacePage.audit.command)
+            } label: {
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
             }
-            .padding(16)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(16)
         .help(english ? "Open saved audit for \(repo.name)" : "\(repo.name) の監査結果を開く")
         .contextMenu {
             repositoryContextMenu(for: repo)
         }
+    }
+
+    private func savedAnalysisTierPill(label: String, count: Int, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text("\(label): \(count)")
+                .font(.caption2.bold().monospacedDigit())
+                .foregroundStyle(color)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(color.opacity(0.16), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(english ? "View \(label) findings (\(count))" : "\(label) の指摘を表示 (\(count)件)")
     }
 
     private var selectedRepositories: [WorkspaceRepository] {

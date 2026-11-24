@@ -6382,12 +6382,22 @@
     updateAutoSyncChipText();
 
     let currentVulnAdv = null;
+    function severityToTierBadge(sev) {
+      const s = String(sev || '').trim().toUpperCase();
+      if (s === 'P0' || s === 'P1' || s === 'P2' || s === 'P3') return s;
+      if (s === 'CRITICAL') return 'P0';
+      if (s === 'HIGH') return 'P1';
+      if (s === 'MEDIUM' || s === 'WARNING') return 'P2';
+      if (s === 'LOW' || s === 'INFO') return 'P3';
+      return 'P1';
+    }
+
     function openVulnModal(advJsonStr) {
       try {
         const isEn = currentLang === 'en';
         const adv = typeof advJsonStr === 'string' ? JSON.parse(decodeURIComponent(advJsonStr)) : advJsonStr;
         currentVulnAdv = adv;
-        document.getElementById('vm-sev-badge').textContent = (adv.severity || 'HIGH') + (adv.cvss ? ` (${adv.cvss.split(' ')[0]})` : '');
+        document.getElementById('vm-sev-badge').textContent = severityToTierBadge(adv.severity || 'HIGH') + (adv.cvss ? ` (${adv.cvss.split(' ')[0]})` : '');
         document.getElementById('vm-cve-id').textContent = adv.cve || 'SECURITY-ADVISORY';
         document.getElementById('vm-title').textContent = adv.title || (isEn ? 'Security Vulnerability Advisory' : '脆弱性警告');
         document.getElementById('vm-summary').innerHTML = `
@@ -7806,7 +7816,7 @@
                 <div class="sec-advisory-box" onclick="openVulnModal('${advEncoded}')">
                   <div class="sec-adv-header">
                     <span style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                      <span class="sec-legend-badge sec-legend-red">${adv.severity || 'HIGH'}</span>
+                      <span class="sec-legend-badge sec-legend-red">${severityToTierBadge(adv.severity || 'HIGH')}</span>
                       <strong style="color: #fff; font-family: monospace;">${adv.cve || 'CVE'}</strong>
                       ${adv.epss !== undefined && adv.epss !== null ? `<span class="sec-legend-badge" style="background: rgba(250, 204, 21, 0.16); color: #fde047; border: 1px solid rgba(250, 204, 21, 0.4);">🎯 EPSS ${(Number(adv.epss) * 100).toFixed(1)}%</span>` : ''}
                     </span>
@@ -8918,7 +8928,6 @@
               return `<details class="audit-issue" data-fp="${fpAttr}" ${ts.selectedFp === issue._fp ? 'open' : ''}>
                 <summary>
                   ${tierTag}${confLabel}
-                  <span class="issue-severity ${tone}"><span aria-hidden="true">${tone === 'danger' ? '⛔' : tone === 'warning' ? '△' : tone === 'info' ? 'ⓘ' : '—'}</span> ${escapeHtml(severity.toUpperCase())}</span>
                   ${catTag}${kevTag}${epssTag}${newTag}${reachTag}${updTag}${evChips}
                   <div class="issue-heading">
                     <div class="issue-title">${escapeHtml((en && issue.title_en) || issue.title || (en ? 'Review finding' : '確認事項'))}</div>
