@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/24 09:00:49</strong>
+              <strong id="portal-sync-time">2026/11/24 09:16:58</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -8791,6 +8791,10 @@
             <button type="button" data-quick-tier="P2" style="font-size:0.78rem;padding:4px 10px;border-radius:999px;cursor:pointer;border:1px solid ${ts.tier==='P2' ? '#eab308' : 'var(--workspace-border)'};background:${p2Cnt>0 ? (ts.tier==='P2' ? 'rgba(234,179,8,0.28)' : 'rgba(234,179,8,0.12)') : 'var(--workspace-surface)'};color:${p2Cnt>0 ? '#facc15' : 'var(--workspace-muted)'};font-weight:700;">P2 (${p2Cnt})</button>
             <button type="button" data-quick-tier="P3" style="font-size:0.78rem;padding:4px 10px;border-radius:999px;cursor:pointer;border:1px solid ${ts.tier==='P3' ? '#38bdf8' : 'var(--workspace-border)'};background:${p3Cnt>0 ? (ts.tier==='P3' ? 'rgba(56,189,248,0.26)' : 'rgba(56,189,248,0.12)') : 'var(--workspace-surface)'};color:${p3Cnt>0 ? '#38bdf8' : 'var(--workspace-muted)'};font-weight:700;">P3 (${p3Cnt})</button>
           </div>
+          <details id="repo-risk-trend-panel" ${(typeof safeStorageGet !== 'function' || safeStorageGet('repoaudt_repo_trend_open') !== '0') ? 'open' : ''} ontoggle="if (typeof safeStorageSet === 'function') safeStorageSet('repoaudt_repo_trend_open', this.open ? '1' : '0')" style="margin-bottom: 12px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); padding: 10px 14px;">
+            <summary style="cursor: pointer; font-weight: 700; font-size: 0.88rem;">📈 ${en ? 'Repository Risk Score Trend' : 'このリポジトリのリスクスコア推移'}</summary>
+            <div id="repo-risk-trend-body" style="margin-top: 10px; font-size: 0.82rem; color: var(--workspace-muted);">${en ? 'Loading trend…' : '推移を読み込み中…'}</div>
+          </details>
           <details id="aspm-portfolio-panel" ${(ts.aspmOpen || (typeof safeStorageGet === 'function' && safeStorageGet('repoaudt_aspm_open') === '1')) ? 'open' : ''} style="margin-bottom: 12px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); padding: 10px 14px;">
             <summary style="cursor: pointer; font-weight: 700; font-size: 0.88rem;">📊 ${en ? 'ASPM Portfolio, Coverage Matrix & Risk Trend' : 'ASPM 組織ポートフォリオ（資産カバレッジ行列・リスク推移）'}</summary>
             <div id="aspm-portfolio-body" style="margin-top: 10px; font-size: 0.82rem; color: var(--workspace-muted);">${en ? 'Loading ASPM portfolio…' : 'ASPM ポートフォリオを読み込み中…'}</div>
@@ -9322,13 +9326,120 @@
           const aspm = await resp.json();
           const reposList = Array.isArray(aspm.repos) ? aspm.repos : [];
           const curEntry = reposList.find(r => (r.id && r.id === repo.id) || r.repo === repo.repo);
+          const riskScoreHex = (s) => {
+            const n = Number(s || 0);
+            if (n >= 80) return '#f87171';
+            if (n >= 50) return '#fb923c';
+            if (n >= 20) return '#38bdf8';
+            return '#34d399';
+          };
           const badgeBox = view.querySelector('#repo-aspm-badges');
           if (badgeBox && curEntry) {
             const g = curEntry.release_gate || 'PASS';
             const gIcon = g === 'BLOCK' ? '🔴' : (g === 'WARN' ? '🟡' : '🟢');
             const gCls = g === 'BLOCK' ? 'danger' : (g === 'WARN' ? 'warning' : 'success');
             const reasonTitle = (curEntry.gate_reasons || []).join(' / ');
-            badgeBox.innerHTML = `<span class="issue-severity ${gCls}" title="${escapeHtml(reasonTitle)}">${gIcon} ${escapeHtml(g)}</span><span class="issue-severity neutral" title="${en ? 'Weighted Risk Score (0-100)' : '重要度加重リスクスコア (0-100)'}">Risk ${escapeHtml(String(curEntry.risk_score ?? 0))}/100</span>`;
+            const rScore = Number(curEntry.risk_score ?? 0);
+            const rCol = riskScoreHex(rScore);
+            badgeBox.innerHTML = `<span class="issue-severity ${gCls}" title="${escapeHtml(reasonTitle)}">${gIcon} ${escapeHtml(g)}</span><span class="issue-severity neutral" style="color:${rCol};border-color:${rCol}44;font-weight:700;" title="${en ? 'Weighted Risk Score (0-100)' : '重要度加重リスクスコア (0-100)'}">Risk ${escapeHtml(String(rScore))}/100</span>`;
+          }
+          const repoTrendEl = view.querySelector('#repo-risk-trend-body');
+          if (repoTrendEl) {
+            const allHist = Array.isArray(aspm.history) ? aspm.history : [];
+            let repoHist = allHist.filter(pt => (pt.repo_id && repo.id && pt.repo_id === repo.id) || (pt.repo && repo.repo && pt.repo === repo.repo)).slice(-20);
+            if (repoHist.length === 0 && curEntry) {
+              const c = curEntry.counts || {};
+              repoHist = [{
+                timestamp: '',
+                risk_score: Number(curEntry.risk_score ?? 0),
+                p0_count: Number(c.P0 || 0),
+                p1_count: Number(c.P1 || 0),
+                new_since_prev: 0,
+                resolved_since_prev: 0,
+                repo_delta: 0
+              }];
+            }
+            if (repoHist.length > 0) {
+              const plotPts = repoHist.length === 1 ? [repoHist[0], repoHist[0]] : repoHist;
+              const latestPt = repoHist[repoHist.length - 1];
+              const prevPt = repoHist.length >= 2 ? repoHist[repoHist.length - 2] : null;
+              const latestScore = Number(latestPt.risk_score ?? 0);
+              const prevScore = prevPt ? Number(prevPt.risk_score ?? 0) : latestScore;
+              const delta = prevPt ? (latestScore - prevScore) : Number(latestPt.repo_delta || 0);
+              const avgScore = Math.round(repoHist.reduce((acc, p) => acc + Number(p.risk_score || 0), 0) / repoHist.length);
+              const totalNew = repoHist.reduce((acc, p) => acc + Number(p.new_since_prev || 0), 0);
+              const totalResolved = repoHist.reduce((acc, p) => acc + Number(p.resolved_since_prev || 0), 0);
+              const cCounts = (curEntry && curEntry.counts) ? curEntry.counts : {};
+              const p0Now = Number(cCounts.P0 ?? latestPt.p0_count ?? 0);
+              const p1Now = Number(cCounts.P1 ?? latestPt.p1_count ?? 0);
+              const lineCol = riskScoreHex(latestScore);
+
+              const w = 460, h = 84, pad = 8;
+              const usableW = w - pad * 2, usableH = h - pad * 2;
+              const coords = plotPts.map((pt, idx) => {
+                const x = pad + (idx * usableW) / Math.max(1, plotPts.length - 1);
+                const norm = Math.min(1, Math.max(0, Number(pt.risk_score || 0) / 100));
+                const y = pad + usableH * (1 - norm);
+                return { x, y };
+              });
+              const linePoints = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+              const areaPath = `M ${coords[0].x.toFixed(1)},${(h - pad).toFixed(1)} ` + coords.map(c => `L ${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ') + ` L ${coords[coords.length - 1].x.toFixed(1)},${(h - pad).toFixed(1)} Z`;
+              const deltaHtml = (prevPt && delta !== 0)
+                ? `<span style="font-size:0.75rem;font-weight:700;color:${delta > 0 ? '#f87171' : '#34d399'};">${delta > 0 ? `▲+${delta}` : `▼${delta}`}</span>`
+                : '';
+
+              const reasonRows = repoHist.slice().reverse().slice(0, 8).map(pt => {
+                const sc = Number(pt.risk_score || 0);
+                const dlt = Number(pt.repo_delta || 0);
+                const tsLabel = pt.timestamp ? String(pt.timestamp).slice(5, 16).replace('T', ' ') : '-';
+                const dltBadge = dlt !== 0
+                  ? `<span style="font-weight:700;color:${dlt > 0 ? '#f87171' : '#34d399'};">${dlt > 0 ? `▲+${dlt}` : `▼${dlt}`}</span>`
+                  : `<span style="color:var(--workspace-muted);">±0</span>`;
+                return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:3px 0;border-top:1px solid var(--workspace-border);font-size:0.75rem;">
+                  <span style="font-family:monospace;color:var(--workspace-muted);">${escapeHtml(tsLabel)}</span>
+                  <span style="font-weight:700;color:${riskScoreHex(sc)};">Risk ${sc}</span>
+                  ${dltBadge}
+                  <span style="margin-left:auto;display:flex;gap:8px;">
+                    ${pt.new_since_prev ? `<span style="color:#f87171;">${en ? `+${pt.new_since_prev} new` : `新規+${pt.new_since_prev}`}</span>` : ''}
+                    ${pt.resolved_since_prev ? `<span style="color:#34d399;">${en ? `-${pt.resolved_since_prev} fixed` : `解消-${pt.resolved_since_prev}`}</span>` : ''}
+                    <span style="color:var(--workspace-muted);">P0:${pt.p0_count || 0} P1:${pt.p1_count || 0}</span>
+                  </span>
+                </div>`;
+              }).join('');
+
+              repoTrendEl.innerHTML = `<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+                <svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="flex:1 1 320px;min-width:240px;max-width:640px;height:${h}px;background:var(--workspace-background);border:1px solid var(--workspace-border);border-radius:8px;">
+                  <defs>
+                    <linearGradient id="repo-trend-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="${lineCol}" stop-opacity="0.30"/>
+                      <stop offset="100%" stop-color="${lineCol}" stop-opacity="0.02"/>
+                    </linearGradient>
+                  </defs>
+                  <line x1="${pad}" y1="${pad}" x2="${w - pad}" y2="${pad}" stroke="currentColor" stroke-opacity="0.14" stroke-dasharray="3 3"/>
+                  <line x1="${pad}" y1="${h / 2}" x2="${w - pad}" y2="${h / 2}" stroke="currentColor" stroke-opacity="0.14" stroke-dasharray="3 3"/>
+                  <line x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}" stroke="currentColor" stroke-opacity="0.14" stroke-dasharray="3 3"/>
+                  <path d="${areaPath}" fill="url(#repo-trend-grad)"/>
+                  <polyline fill="none" stroke="${lineCol}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" points="${linePoints}"/>
+                </svg>
+                <div style="min-width:210px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--workspace-text);">
+                  <div style="display:flex;align-items:baseline;gap:6px;">
+                    <span style="color:var(--workspace-muted);">${en ? 'Latest:' : '直近スコア:'}</span>
+                    <strong style="font-size:0.95rem;color:${lineCol};">${latestScore} / 100</strong>
+                    ${deltaHtml}
+                    <span style="font-size:0.75rem;color:${riskScoreHex(avgScore)};">(${en ? `Avg ${avgScore}` : `平均 ${avgScore}`})</span>
+                  </div>
+                  <div><strong>P0: ${p0Now} · P1: ${p1Now}</strong></div>
+                  <div style="color:var(--workspace-muted);">${en ? `New: +${totalNew} · Resolved: -${totalResolved}` : `新規: +${totalNew} · 解消: -${totalResolved}`}</div>
+                  <div style="font-size:0.74rem;color:var(--workspace-muted);">${en ? `Last ${repoHist.length} scans` : `直近 ${repoHist.length} スキャン`}</div>
+                </div>
+              </div>
+              <details style="margin-top:8px;">
+                <summary style="cursor:pointer;font-size:0.75rem;color:#38bdf8;">${en ? 'Why it changed (Recent scans)' : '変動理由を見る（このリポジトリの直近スキャン）'}</summary>
+                <div style="margin-top:6px;">${reasonRows}</div>
+              </details>`;
+            } else {
+              repoTrendEl.textContent = en ? 'No scan history recorded for this repository yet.' : 'このリポジトリのスキャン履歴はまだありません。';
+            }
           }
           const bodyEl = view.querySelector('#aspm-portfolio-body');
           if (bodyEl) {
@@ -9347,7 +9458,7 @@
               return `<tr style="border-top: 1px solid var(--workspace-border);">
                 <td style="padding: 6px 8px; font-weight: 600;">${escapeHtml(r.repo || '')}</td>
                 <td style="padding: 6px 8px;">${escapeHtml(r.criticality || 'tier2_internal')}</td>
-                <td style="padding: 6px 8px; font-weight: 700;">${escapeHtml(String(r.risk_score ?? 0))}</td>
+                <td style="padding: 6px 8px; font-weight: 700; color: ${riskScoreHex(r.risk_score ?? 0)};">${escapeHtml(String(r.risk_score ?? 0))}</td>
                 <td style="padding: 6px 8px;" title="${escapeHtml(reasons)}">${gIcon} ${escapeHtml(g)}</td>
                 <td style="padding: 6px 8px;">${cellIcon(cv.secrets)}</td>
                 <td style="padding: 6px 8px;">${cellIcon(cv.sca)}</td>
