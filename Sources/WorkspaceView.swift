@@ -139,11 +139,12 @@ struct MainContentView: View {
     @State private var monitorEnabled = true
     @State private var monitorIntervalSec = 900
     @State private var aspmRepos: [AspmRepoItem] = []
+    @State private var aspmHistory: [AspmHistoryPoint] = []
     @State private var drilldownFilter: DashboardDrilldownFilter?
     @State private var drilldownItems: [DrilldownFindingItem] = []
     @State private var loadingDrilldown = false
     @State private var showAspmLegend = false
-    @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "commit_monitor,monitor_updates,kpi,priority_repos,aspm,audit_scope"
+    @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "commit_monitor,monitor_updates,kpi,risk_trend,priority_repos,aspm,audit_scope"
     @AppStorage("dashboardCollapsedSections") private var dashboardCollapsedSectionsRaw = ""
     @State private var monitorChecking = false
     @State private var monitorLastCheckTime = ""
@@ -1092,6 +1093,15 @@ struct MainContentView: View {
                             }
                         }
 
+                    case "risk_trend":
+                        if aspmHistory.count >= 2 {
+                            dashboardSectionWrapper(id: "risk_trend", title: english ? "Risk Score Trend (Recent Scans)" : "リスクスコア推移（全体トレンド）") {
+                                EmptyView()
+                            } content: {
+                                riskTrendChartCard()
+                            }
+                        }
+
                     case "priority_repos":
                         dashboardSectionWrapper(id: "priority_repos", title: english ? "Top Priority Repositories" : "優先対応リポジトリ（危険度順）") {
                             HStack(spacing: 8) {
@@ -1327,7 +1337,7 @@ struct MainContentView: View {
     }
 
     private var orderedDashboardSections: [String] {
-        let defaults = ["commit_monitor", "monitor_updates", "kpi", "priority_repos", "aspm", "audit_scope"]
+        let defaults = ["commit_monitor", "monitor_updates", "kpi", "risk_trend", "priority_repos", "aspm", "audit_scope"]
         let parsed = dashboardSectionOrderRaw.split(separator: ",").map(String.init).filter { defaults.contains($0) }
         let missing = defaults.filter { !parsed.contains($0) }
         return parsed + missing
@@ -1456,6 +1466,108 @@ struct MainContentView: View {
                 .background(solid ? color : color.opacity(0.18), in: Capsule())
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func riskTrendChartCard() -> some View {
+        let pts = Array(aspmHistory.suffix(20))
+        let latest = pts.last
+        let avgScore = pts.isEmpty ? 0 : pts.reduce(0) { $0 + $1.riskScore } / pts.count
+        let totalNew = pts.reduce(0) { $0 + $1.newCount }
+        let totalResolved = pts.reduce(0) { $0 + $1.resolvedCount }
+        let p0Total = aspmRepos.reduce(0) { $0 + $1.p0 }
+        let p1Total = aspmRepos.reduce(0) { $0 + $1.p1 }
+
+        GroupBox {
+            HStack(alignment: .center, spacing: 20) {
+                GeometryReader { geo in
+                    let w = max(1, geo.size.width)
+                    let h = max(1, geo.size.height)
+                    let pad: CGFloat = 8
+                    let usableW = max(1, w - pad * 2)
+                    let usableH = max(1, h - pad * 2)
+
+                    ZStack {
+                        // Subtle horizontal reference lines (0, 50, 100)
+                        ForEach([0.0, 0.5, 1.0], id: \.self) { frac in
+                            let y = pad + usableH * CGFloat(1.0 - frac)
+                            Path { p in
+                                p.move(to: CGPoint(x: pad, y: y))
+                                p.addLine(to: CGPoint(x: w - pad, y: y))
+                            }
+                            .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        }
+
+                        // Area fill
+                        Path { path in
+                            for (idx, pt) in pts.enumerated() {
+                                let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
+                                let norm = min(1.0, max(0.0, Double(pt.riskScore) / 100.0))
+                                let y = pad + usableH * CGFloat(1.0 - norm)
+                                if idx == 0 {
+                                    path.move(to: CGPoint(x: x, y: h - pad))
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                } else {
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                }
+                            }
+                            if pts.count >= 2 {
+                                path.addLine(to: CGPoint(x: w - pad, y: h - pad))
+                                path.closeSubpath()
+                            }
+                        }
+                        .fill(
+                            LinearGradient(
+                                colors: [SemanticColors.role("infoText").opacity(0.28), SemanticColors.role("infoText").opacity(0.02)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                        // Line stroke
+                        Path { path in
+                            for (idx, pt) in pts.enumerated() {
+                                let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
+                                let norm = min(1.0, max(0.0, Double(pt.riskScore) / 100.0))
+                                let y = pad + usableH * CGFloat(1.0 - norm)
+                                if idx == 0 {
+                                    path.move(to: CGPoint(x: x, y: y))
+                                } else {
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                }
+                            }
+                        }
+                        .stroke(SemanticColors.role("infoText"), style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                    }
+                }
+                .frame(height: 84)
+                .background(Color(nsColor: .windowBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(english ? "Latest:" : "直近スコア:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("\(latest?.riskScore ?? 0) / 100")
+                            .font(.subheadline.bold().monospacedDigit())
+                        Text(english ? "(Avg \(avgScore))" : "(平均 \(avgScore))")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("P0: \(p0Total) · P1: \(p1Total)")
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                    Text(english ? "New: +\(totalNew) · Resolved: -\(totalResolved)" : "新規: +\(totalNew) · 解消: -\(totalResolved)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Text(english ? "Last \(pts.count) snapshots" : "直近 \(pts.count) スキャン")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(width: 195, alignment: .leading)
+            }
+            .padding(10)
+        }
     }
 
     private func summaryMetricCard(
@@ -2798,7 +2910,21 @@ struct MainContentView: View {
                     p3: (counts["P3"] as? Int) ?? 0
                 )
             }
-            await MainActor.run { aspmRepos = parsed }
+            let rawHistory = json["history"] as? [[String: Any]] ?? []
+            let parsedHistory: [AspmHistoryPoint] = rawHistory.enumerated().map { idx, h in
+                AspmHistoryPoint(
+                    id: "\(idx)-\((h["timestamp"] as? String) ?? "")",
+                    riskScore: (h["risk_score"] as? Int) ?? 0,
+                    p0Count: (h["p0_count"] as? Int) ?? 0,
+                    p1Count: (h["p1_count"] as? Int) ?? 0,
+                    newCount: (h["new_since_prev"] as? Int) ?? 0,
+                    resolvedCount: (h["resolved_since_prev"] as? Int) ?? 0
+                )
+            }
+            await MainActor.run {
+                aspmRepos = parsed
+                aspmHistory = parsedHistory
+            }
         } catch {
             // Non-fatal dashboard enhancement
         }
@@ -2886,6 +3012,15 @@ private struct DrilldownFindingItem: Identifiable {
         default: return SemanticColors.role("infoText")
         }
     }
+}
+
+private struct AspmHistoryPoint: Identifiable {
+    let id: String
+    let riskScore: Int
+    let p0Count: Int
+    let p1Count: Int
+    let newCount: Int
+    let resolvedCount: Int
 }
 
 private struct AspmRepoItem: Identifiable {
