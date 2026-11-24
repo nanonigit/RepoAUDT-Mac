@@ -142,6 +142,7 @@ struct MainContentView: View {
     @State private var drilldownFilter: DashboardDrilldownFilter?
     @State private var drilldownItems: [DrilldownFindingItem] = []
     @State private var loadingDrilldown = false
+    @State private var showAspmLegend = false
     @State private var monitorChecking = false
     @State private var monitorLastCheckTime = ""
     @State private var monitorSummary = ""
@@ -1141,10 +1142,30 @@ struct MainContentView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     if !aspmRepos.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            HStack {
+                            HStack(spacing: 10) {
                                 Text(english ? "ASPM Portfolio & Coverage Matrix" : "ASPM 組織ポートフォリオ & 資産カバレッジ")
                                     .font(.headline)
                                 Spacer()
+                                Button {
+                                    showAspmLegend.toggle()
+                                } label: {
+                                    Label(english ? "Legend" : "見方", systemImage: "questionmark.circle")
+                                }
+                                .buttonStyle(.borderless)
+                                .font(.caption)
+                                .popover(isPresented: $showAspmLegend, arrowEdge: .top) {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(english ? "ASPM Portfolio Guide" : "ASPM ポートフォリオの見方")
+                                            .font(.headline)
+                                        Text(english
+                                            ? "• Gate: 🔴 BLOCK (unresolved P0 / Tier1 KEV) · 🟡 WARN (P1) · 🟢 PASS (clean)\n• Tier: Business criticality weight (Tier 1 Prod 1.5x / Tier 2 Internal 1.0x / Tier 3 Demo 0.5x)\n• Risk 0–100: Higher = riskier (P0–P3 × Tier × Public visibility)\n• Domains: Sec (Secrets) · SCA (Deps) · SAST (Code) · CI (Actions) · IaC (Infra) · GH (Repo Posture)\n• Status: ✅ Clean · ⚠️ Issues · ⬜ Unscanned (Blind Spot) · ➖ N/A"
+                                            : "• ゲート: 🔴 BLOCK (P0/本番KEV残存) · 🟡 WARN (P1残存) · 🟢 PASS (安全)\n• Tier: 業務重要度重み (Tier 1 本番 1.5x / Tier 2 社内 1.0x / Tier 3 デモ 0.5x)\n• Risk 0–100: 高いほど危険 (P0〜P3 × Tier × 公開設定)\n• 6領域: Sec=鍵 · SCA=依存 · SAST=静的解析 · CI=Actions · IaC=構成 · GH=GitHub設定\n• 状態: ✅問題なし · ⚠️指摘あり · ⬜未検査 (Blind Spot) · ➖対象外")
+                                            .font(.caption)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    .padding(14)
+                                    .frame(width: 440)
+                                }
                                 Button {
                                     Task { await refreshAspmPortfolio() }
                                 } label: {
@@ -1153,32 +1174,49 @@ struct MainContentView: View {
                                 .buttonStyle(.borderless)
                                 .font(.caption)
                             }
+                            Text(
+                                english
+                                    ? "🔴 BLOCK (P0) · 🟡 WARN (P1) · 🟢 PASS  |  Sec=Secrets · SCA=Deps · SAST=Code · CI=Actions · IaC=Infra · GH=Posture  |  ✅ Clean  ⚠️ Issues  ⬜ Unscanned  ➖ N/A"
+                                    : "🔴 BLOCK (P0) · 🟡 WARN (P1) · 🟢 PASS  ｜  Sec=鍵 · SCA=依存 · SAST=静的 · CI=Actions · IaC=構成 · GH=設定  ｜  ✅安全  ⚠️指摘  ⬜未検査  ➖対象外"
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(nsColor: .controlBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
                             VStack(spacing: 6) {
                                 ForEach(aspmRepos.prefix(8)) { item in
-                                    HStack(spacing: 10) {
-                                        Text(item.gateEmoji + " " + item.releaseGate)
-                                            .font(.caption.weight(.bold))
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(item.gateColor.opacity(0.15), in: Capsule())
-                                            .foregroundStyle(item.gateColor)
-                                        Text(item.repo)
-                                            .font(.subheadline.weight(.semibold))
-                                            .lineLimit(1)
-                                        Text(item.criticalityLabel(english: english))
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                        Spacer()
-                                        Text("Risk \(item.riskScore)/100")
-                                            .font(.caption.monospacedDigit().weight(.semibold))
-                                        Text(item.coverageCompact)
-                                            .font(.caption2.monospaced())
-                                            .foregroundStyle(.secondary)
+                                    Button {
+                                        selection = [item.id]
+                                        showPage(.audit)
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            Text(item.gateEmoji + " " + item.releaseGate)
+                                                .font(.caption.weight(.bold))
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(item.gateColor.opacity(0.15), in: Capsule())
+                                                .foregroundStyle(item.gateColor)
+                                            Text(item.repo)
+                                                .font(.subheadline.weight(.semibold))
+                                                .lineLimit(1)
+                                            Text(item.criticalityLabel(english: english))
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                            Spacer()
+                                            Text("Risk \(item.riskScore)/100")
+                                                .font(.caption.monospacedDigit().weight(.semibold))
+                                            Text(item.coverageCompact)
+                                                .font(.caption2.monospaced())
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
                                     }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
+                                    .buttonStyle(.plain)
                                     .help(item.gateReasons.joined(separator: " / "))
                                 }
                             }
