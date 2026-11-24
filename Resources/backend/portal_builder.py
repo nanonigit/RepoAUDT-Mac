@@ -8805,7 +8805,7 @@ def build_portal_html(data, is_shareable=False):
             </div>`;
           })()}
 
-          <details id="aspm-portfolio-panel" style="margin-bottom: 12px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); padding: 10px 14px;">
+          <details id="aspm-portfolio-panel" ${(ts.aspmOpen || (typeof safeStorageGet === 'function' && safeStorageGet('repoaudt_aspm_open') === '1')) ? 'open' : ''} style="margin-bottom: 12px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); padding: 10px 14px;">
             <summary style="cursor: pointer; font-weight: 700; font-size: 0.88rem;">📊 ${en ? 'ASPM Portfolio, Coverage Matrix & Risk Trend' : 'ASPM 組織ポートフォリオ（資産カバレッジ行列・リスク推移）'}</summary>
             <div id="aspm-portfolio-body" style="margin-top: 10px; font-size: 0.82rem; color: var(--workspace-muted);">${en ? 'Loading ASPM portfolio…' : 'ASPM ポートフォリオを読み込み中…'}</div>
           </details>
@@ -9062,6 +9062,13 @@ def build_portal_html(data, is_shareable=False):
           })() : ''}
         </section>`;
       const sortSelect = view.querySelector('#finding-sort-select');
+      const aspmPanelEl = view.querySelector('#aspm-portfolio-panel');
+      if (aspmPanelEl) {
+        aspmPanelEl.addEventListener('toggle', () => {
+          ts.aspmOpen = aspmPanelEl.open;
+          if (typeof safeStorageSet === 'function') safeStorageSet('repoaudt_aspm_open', aspmPanelEl.open ? '1' : '0');
+        });
+      }
       if (sortSelect) {
         sortSelect.addEventListener('change', () => {
           safeStorageSet('repoaudt_finding_sort', sortSelect.value);
