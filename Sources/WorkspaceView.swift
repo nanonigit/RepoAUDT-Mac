@@ -3185,7 +3185,7 @@ struct MainContentView: View {
             let state = try await requestJSON("/api/state")
             let diagrams = state["diagrams"] as? [[String: Any]] ?? []
             var sections: [String] = []
-            var crossRepoRows: [(tierRank: Int, tier: String, repo: String, title: String, file: String, action: String)] = []
+            var crossRepoRows: [(tierRank: Int, kevRank: Int, confRank: Int, sevRank: Int, epss: Double, tier: String, repo: String, title: String, file: String, action: String)] = []
             var totalHighFindings = 0
             var affectedRepos = 0
 
@@ -3221,15 +3221,35 @@ struct MainContentView: View {
                 }
 
                 highItems.sort { lhs, rhs in
-                    let rank: ([String: Any]) -> Int = { it in
-                        switch (it["priority_tier"] as? String ?? "P2").uppercased() {
-                        case "P0": return 0
-                        case "P1": return 1
-                        case "P2": return 2
-                        default: return 3
-                        }
+                    let sortTuple: ([String: Any]) -> (Int, Int, Int, Int, Double) = { it in
+                        let tRank: Int = {
+                            switch (it["priority_tier"] as? String ?? "P2").uppercased() {
+                            case "P0": return 0
+                            case "P1": return 1
+                            case "P2": return 2
+                            default: return 3
+                            }
+                        }()
+                        let kRank = (it["in_cisa_kev"] as? Bool) == true ? 0 : 1
+                        let cRank: Int = {
+                            switch (it["confidence"] as? String ?? "medium").lowercased() {
+                            case "high": return 0
+                            case "medium": return 1
+                            default: return 2
+                            }
+                        }()
+                        let sRank: Int = {
+                            switch (it["severity"] as? String ?? "medium").lowercased() {
+                            case "critical": return 0
+                            case "high": return 1
+                            case "medium": return 2
+                            default: return 3
+                            }
+                        }()
+                        let epss = (it["epss_score"] as? Double) ?? 0.0
+                        return (tRank, kRank, cRank, sRank, -epss)
                     }
-                    return rank(lhs) < rank(rhs)
+                    return sortTuple(lhs) < sortTuple(rhs)
                 }
 
                 guard !highItems.isEmpty else { continue }
@@ -3269,8 +3289,29 @@ struct MainContentView: View {
                         return reason.isEmpty ? (english ? "Upgrade to fixed version" : "安全版へ更新・修正") : reason
                     }()
                     let shortAction = (fixCmd.isEmpty || isInspectOnlyCmd) ? fallbackAction : fixCmd
+                    let kRank = (item["in_cisa_kev"] as? Bool) == true ? 0 : 1
+                    let cRank: Int = {
+                        switch (item["confidence"] as? String ?? "medium").lowercased() {
+                        case "high": return 0
+                        case "medium": return 1
+                        default: return 2
+                        }
+                    }()
+                    let sRank: Int = {
+                        switch sev.lowercased() {
+                        case "critical": return 0
+                        case "high": return 1
+                        case "medium": return 2
+                        default: return 3
+                        }
+                    }()
+                    let epssVal = (item["epss_score"] as? Double) ?? 0.0
                     crossRepoRows.append((
                         tierRank: tRank,
+                        kevRank: kRank,
+                        confRank: cRank,
+                        sevRank: sRank,
+                        epss: epssVal,
                         tier: tier.isEmpty ? (sev == "critical" ? "P0" : "P1") : tier,
                         repo: displayRepo,
                         title: title.replacingOccurrences(of: "|", with: "/"),
@@ -3347,7 +3388,10 @@ struct MainContentView: View {
 
             var summaryTable = ""
             if !crossRepoRows.isEmpty {
-                let sortedRows = crossRepoRows.sorted { $0.tierRank < $1.tierRank }
+                let sortedRows = crossRepoRows.sorted {
+                    ($0.tierRank, $0.kevRank, $0.confRank, $0.sevRank, -$0.epss)
+                        < ($1.tierRank, $1.kevRank, $1.confRank, $1.sevRank, -$1.epss)
+                }
                 var tbl: [String] = [
                     english ? "## 🚨 Cross-Repository P0 / P1 Top Summary" : "## 🚨 全リポジトリ横断 P0 / P1 サマリー",
                     "",

@@ -279,6 +279,57 @@ class TestTriageAndValidation(unittest.TestCase):
         self.assertEqual(plan["combined_npm_command"], "npm install next@^16.4.5 axios@^1.20.0")
         self.assertNotIn("-rc", plan["combined_npm_command"])
 
+    def test_intra_tier_sorting_prioritizes_kev_confidence_severity_epss(self) -> None:
+        items = [
+            {
+                "title": "P1 medium-conf low-epss RCE",
+                "file": "package.json",
+                "severity": "high",
+                "package_name": "pkg-a",
+                "desc": "Remote Code Execution",
+                "epss_score": 0.05,
+            },
+            {
+                "title": "P1 high-conf critical RCE",
+                "file": "package.json",
+                "severity": "critical",
+                "package_name": "pkg-b",
+                "desc": "Remote Code Execution",
+                "epss_score": 0.10,
+            },
+            {
+                "title": "P1 KEV vulnerability (CVE-2025-99999)",
+                "file": "package.json",
+                "severity": "high",
+                "package_name": "pkg-c",
+                "desc": "Known exploited issue",
+                "epss_score": 0.20,
+            },
+            {
+                "title": "P1 high-conf critical high-epss RCE",
+                "file": "package.json",
+                "severity": "critical",
+                "package_name": "pkg-d",
+                "desc": "Remote Code Execution",
+                "epss_score": 0.85,
+            },
+        ]
+        res = triage_engine.triage_and_validate_findings(
+            items,
+            repo_id="org/app",
+            kev_set={"CVE-2025-99999"},
+        )
+        titles = [r["title"] for r in res]
+        self.assertEqual(
+            titles,
+            [
+                "P1 KEV vulnerability (CVE-2025-99999)",
+                "P1 high-conf critical high-epss RCE",
+                "P1 high-conf critical RCE",
+                "P1 medium-conf low-epss RCE",
+            ],
+        )
+
     def test_slack_digest_redacts_secrets_and_formats_p0_p1(self) -> None:
         raw_secret = "sk-proj-RealSecretValueThatMustNeverAppearInSlack123456"
         diagrams = [

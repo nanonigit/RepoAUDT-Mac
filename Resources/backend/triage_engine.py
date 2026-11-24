@@ -570,10 +570,21 @@ def triage_and_validate_findings(
             item["suppressed"] = False
         processed.append(item)
 
+    _conf_order = {"high": 0, "medium": 1, "low": 2}
+
+    def _epss_val(entry: Dict[str, Any]) -> float:
+        try:
+            return float(entry.get("epss_score") or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
     processed.sort(
         key=lambda x: (
             TIER_ORDER.get(str(x.get("priority_tier") or "P2"), 2),
+            0 if x.get("in_cisa_kev") else 1,
+            _conf_order.get(str(x.get("confidence") or "medium").lower(), 1),
             SEV_ORDER.get(str(x.get("severity") or "medium").lower(), 2),
+            -_epss_val(x),
             str(x.get("title") or ""),
         )
     )
