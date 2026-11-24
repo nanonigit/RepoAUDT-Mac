@@ -3000,10 +3000,16 @@ struct MainContentView: View {
                     if (item["suppressed"] as? Bool) == true { continue }
                     let sev = (item["severity"] as? String ?? "").lowercased()
                     let tier = (item["priority_tier"] as? String ?? "").uppercased()
-                    guard sev == "critical" || sev == "high" || tier == "P0" || tier == "P1" else { continue }
+                    if !tier.isEmpty {
+                        guard tier == "P0" || tier == "P1" else { continue }
+                    } else {
+                        guard sev == "critical" || sev == "high" else { continue }
+                    }
                     let title = item["title"] as? String ?? ""
                     let file = item["file"] as? String ?? ""
-                    let key = "\(title)|\(file)"
+                    let cve = item["cve"] as? String ?? ""
+                    let fp = (item["fingerprint"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    let key = fp.isEmpty ? "\(title)|\(file)|\(cve)" : fp
                     if seenKeys.contains(key) { continue }
                     seenKeys.insert(key)
                     highItems.append(item)
@@ -3047,7 +3053,14 @@ struct MainContentView: View {
                     let displayRepo = repoName.isEmpty ? githubUrl : repoName
                     let tRank = tier == "P0" ? 0 : 1
                     let shortFile = file.components(separatedBy: " (Target:").first ?? file
-                    let shortAction = fixCmd.isEmpty ? (reason.isEmpty ? (tier == "P0" ? "即時無効化・履歴削除" : "安全版へ更新") : reason) : fixCmd
+                    let isInspectOnlyCmd = fixCmd.hasPrefix("sed -n") || fixCmd.hasPrefix("cat ") || fixCmd.hasPrefix("head ") || fixCmd.hasPrefix("grep ")
+                    let fallbackAction: String = {
+                        if tier == "P0" {
+                            return english ? "Revoke/rotate immediately & purge from Git" : "即時無効化・ローテーション＆Git履歴から削除"
+                        }
+                        return reason.isEmpty ? (english ? "Upgrade to fixed version" : "安全版へ更新・修正") : reason
+                    }()
+                    let shortAction = (fixCmd.isEmpty || isInspectOnlyCmd) ? fallbackAction : fixCmd
                     crossRepoRows.append((
                         tierRank: tRank,
                         tier: tier.isEmpty ? (sev == "critical" ? "P0" : "P1") : tier,

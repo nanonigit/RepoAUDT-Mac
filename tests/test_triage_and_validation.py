@@ -323,6 +323,38 @@ class TestTriageAndValidation(unittest.TestCase):
         digest_both = triage_engine.build_slack_digest(diagrams, lang="both")
         self.assertIn("Security Audit Digest", digest_both)
 
+    def test_trivy_sca_not_mislabeled_as_iac_and_yarn_lock_uses_yarn_cmd(self) -> None:
+        trivy_sca = {
+            "title": "[Trivy] form-data: Form field override via CRLF injection (CVE-2026-12143)",
+            "file": "package-lock.json",
+            "scanner": "trivy",
+            "severity": "high",
+            "package_name": "form-data",
+            "cve": "CVE-2026-12143",
+        }
+        tier, reason = triage_engine.classify_priority_tier(trivy_sca)
+        self.assertEqual(tier, "P2")
+        self.assertNotIn("IaC", reason)
+
+        trivy_iac = {
+            "title": "[trivy] Unencrypted SNS topic. (main.tf:4)",
+            "file": "main.tf:4",
+            "scanner": "trivy",
+            "severity": "high",
+        }
+        iac_tier, iac_reason = triage_engine.classify_priority_tier(trivy_iac)
+        self.assertEqual(iac_tier, "P2")
+        self.assertIn("IaC", iac_reason)
+
+        yarn_rem = analyzer.build_advisory_remediation({
+            "package_name": "axios",
+            "ecosystem": "npm",
+            "installed": "1.11.0",
+            "fixed_version": "1.20.0",
+            "target": "yarn.lock",
+        })
+        self.assertEqual(yarn_rem["fix_cmd"], "yarn add axios@^1.20.0")
+
 
 if __name__ == "__main__":
     unittest.main()

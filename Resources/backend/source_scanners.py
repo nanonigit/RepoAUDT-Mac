@@ -676,6 +676,12 @@ def parse_trivy(raw, files, match_component, *, repo_dir: Optional[Path] = None)
             title = str(vuln.get("Title") or f"{pkg} ({installed}) vulnerability {cve}").strip()
             desc = str(vuln.get("Description") or title).strip()
             ref_url = str(vuln.get("PrimaryURL") or f"https://avd.aquasec.com/nvd/{cve.lower()}")
+            clean_title = title.strip()
+            pkg_prefix = f"{pkg.lower()}:"
+            while clean_title.lower().startswith(pkg_prefix):
+                clean_title = clean_title[len(pkg_prefix):].lstrip()
+            if not clean_title:
+                clean_title = title.strip()
             advisories.append({
                 "cve": cve,
                 "cwe_ids": [str(c).strip() for c in (vuln.get("CweIDs") or []) if str(c).strip()],
@@ -688,7 +694,7 @@ def parse_trivy(raw, files, match_component, *, repo_dir: Optional[Path] = None)
                 "fixed_version": fixed,
                 "safe_version": fixed,
                 "fixed_versions_all": raw_fixed,
-                "title": f"[Trivy] {pkg}: {title} ({cve})" if cve not in title else f"[Trivy] {pkg}: {title}",
+                "title": f"[Trivy] {pkg}: {clean_title} ({cve})" if cve not in clean_title else f"[Trivy] {pkg}: {clean_title}",
                 "summary": desc,
                 "target": target,
                 "scanner": "trivy",

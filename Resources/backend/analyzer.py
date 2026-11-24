@@ -32,7 +32,7 @@ REPOS_CACHE_DIR = APP_SUPPORT_DIR / "repos"
 STATE_FILE = APP_SUPPORT_DIR / "analyzed_repos.json"
 HISTORY_FILE = APP_SUPPORT_DIR / "scan_history.json"
 MAX_SCAN_HISTORY = 90
-AUDIT_ENGINE_VERSION = "2026.11.24-2"
+AUDIT_ENGINE_VERSION = "2026.11.24-3"
 _STATE_LOCK = threading.Lock()
 _GITHUB_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
@@ -696,6 +696,7 @@ def build_advisory_remediation(adv: Dict[str, Any]) -> Dict[str, str]:
     eco_low = eco.lower()
 
     if eco_low == "npm":
+        target_hint = str(adv.get("target") or adv.get("file") or "").lower()
         target_file = "package.json"
         if fixed and installed:
             diff_text = f'- "{pkg_name}": "^{installed}"\n+ "{pkg_name}": "^{fixed}"'
@@ -703,7 +704,12 @@ def build_advisory_remediation(adv: Dict[str, Any]) -> Dict[str, str]:
             diff_text = f'+ "{pkg_name}": "^{fixed}"'
         else:
             diff_text = ""
-        fix_cmd = f"npm install {pkg_name}@^{fixed}" if fixed else f"npm install {pkg_name}@latest"
+        if "yarn.lock" in target_hint:
+            fix_cmd = f"yarn add {pkg_name}@^{fixed}" if fixed else f"yarn upgrade {pkg_name}"
+        elif "pnpm-lock" in target_hint:
+            fix_cmd = f"pnpm add {pkg_name}@^{fixed}" if fixed else f"pnpm update {pkg_name}"
+        else:
+            fix_cmd = f"npm install {pkg_name}@^{fixed}" if fixed else f"npm install {pkg_name}@latest"
     elif eco_low == "pypi":
         target_file = "requirements.txt"
         if fixed and installed:

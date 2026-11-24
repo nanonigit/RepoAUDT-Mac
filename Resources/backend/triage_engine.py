@@ -391,7 +391,33 @@ def classify_priority_ssvc(item: Dict[str, Any], kev_set: Optional[Set[str]] = N
     if scanner in ("zizmor", "actionlint") or rule_id in ("template-injection", "dangerous-triggers"):
         evidence.append("CI/CD Hardening")
         return _finish("P2", "CI/CD ワークフローのセキュリティ強化", "high")
-    if "trivy" in low_title or scanner == "trivy" or any(k in low_blob for k in (".tf", "terraform", "cloudformation", "dockerfile")):
+    low_file = str(item.get("file") or item.get("path") or "").lower()
+    is_pkg_vuln = bool(
+        item.get("pkg")
+        or item.get("package_name")
+        or item.get("cve")
+        or any(
+            lf in low_file
+            for lf in (
+                "package.json",
+                "package-lock.json",
+                "yarn.lock",
+                "pnpm-lock.yaml",
+                "requirements.txt",
+                "poetry.lock",
+                "pyproject.toml",
+                "go.mod",
+                "cargo.lock",
+                "composer.lock",
+                "gemfile.lock",
+            )
+        )
+    )
+    if (not is_pkg_vuln) and (
+        "trivy" in low_title
+        or scanner == "trivy"
+        or any(k in low_blob for k in (".tf", "terraform", "cloudformation", "dockerfile"))
+    ):
         evidence.append("IaC / Container")
         return _finish("P2", "IaC / コンテナ設定のセキュリティ強化", "high")
     if "eol" in low_blob or str(item.get("category") or "").lower() == "eol":
