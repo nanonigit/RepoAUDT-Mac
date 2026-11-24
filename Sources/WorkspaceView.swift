@@ -398,7 +398,7 @@ struct MainContentView: View {
                                           (aspm.p0 + aspm.p1 + aspm.p2 + aspm.p3) > 0 {
                                     HStack(spacing: 3) {
                                         if aspm.p0 > 0 {
-                                            sidebarTierPill(count: aspm.p0, color: Color(red: 0.88, green: 0.16, blue: 0.22), solid: true) {
+                                            sidebarTierPill(count: aspm.p0, color: Color(red: 0.92, green: 0.24, blue: 0.28), solid: true) {
                                                 openDrilldown(tier: "P0", diagramId: repo.id, title: "\(repo.name) — P0")
                                             }
                                         }
@@ -1176,8 +1176,8 @@ struct MainContentView: View {
                                         value: "\(p0Total)",
                                         subtitle: english ? "Secrets / Malware" : "シークレット漏洩 / マルウェア",
                                         symbol: "flame.fill",
-                                        tint: p0Total > 0 ? SemanticColors.role("dangerText") : .secondary,
-                                        highlightTint: p0Total > 0 ? SemanticColors.role("dangerText") : nil
+                                        tint: p0Total > 0 ? Color(red: 0.92, green: 0.24, blue: 0.28) : .secondary,
+                                        highlightTint: p0Total > 0 ? Color(red: 0.92, green: 0.24, blue: 0.28) : nil
                                     ) {
                                         openDrilldown(tier: "P0", title: english ? "P0 Critical Findings" : "P0 緊急対応一覧（シークレット・マルウェア）")
                                     }
@@ -1593,9 +1593,9 @@ struct MainContentView: View {
 
     private func riskScoreColor(_ score: Int) -> Color {
         switch score {
-        case 80...: return SemanticColors.role("dangerText")
-        case 50..<80: return SemanticColors.role("warningText")
-        case 20..<50: return SemanticColors.role("actionText")
+        case 80...: return Color(red: 0.92, green: 0.24, blue: 0.28)
+        case 50..<80: return .orange
+        case 20..<50: return .yellow
         default: return SemanticColors.role("successText")
         }
     }
@@ -1899,8 +1899,8 @@ struct MainContentView: View {
                                 .font(.caption2.bold())
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
-                                .background(SemanticColors.role("dangerText").opacity(0.18), in: Capsule())
-                                .foregroundStyle(SemanticColors.role("dangerText"))
+                                .background(Color(red: 0.92, green: 0.24, blue: 0.28).opacity(0.22), in: Capsule())
+                                .foregroundStyle(Color(red: 0.92, green: 0.24, blue: 0.28))
                             Text(english ? "Critical (Secrets/Malware)" : "緊急（シークレット漏洩等）")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -1910,8 +1910,8 @@ struct MainContentView: View {
                                 .font(.caption2.bold())
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
-                                .background(SemanticColors.role("warningText").opacity(0.18), in: Capsule())
-                                .foregroundStyle(SemanticColors.role("warningText"))
+                                .background(Color.orange.opacity(0.18), in: Capsule())
+                                .foregroundStyle(.orange)
                             Text(english ? "High (Immediate Fix)" : "高（重大脆弱性・即時対応）")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -1921,8 +1921,8 @@ struct MainContentView: View {
                                 .font(.caption2.bold())
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
-                                .background(SemanticColors.role("actionText").opacity(0.18), in: Capsule())
-                                .foregroundStyle(SemanticColors.role("actionText"))
+                                .background(Color.yellow.opacity(0.18), in: Capsule())
+                                .foregroundStyle(.yellow)
                             Text(english ? "Medium (Planned Fix)" : "中（一般的な脆弱性）")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -2041,17 +2041,17 @@ struct MainContentView: View {
             if let aspm, (aspm.p0 + aspm.p1 + aspm.p2 + aspm.p3) > 0 {
                 HStack(spacing: 6) {
                     if aspm.p0 > 0 {
-                        savedAnalysisTierPill(label: "P0", count: aspm.p0, color: SemanticColors.role("dangerText")) {
+                        savedAnalysisTierPill(label: "P0", count: aspm.p0, color: Color(red: 0.92, green: 0.24, blue: 0.28)) {
                             openDrilldown(tier: "P0", diagramId: repo.id, title: "\(repo.name) — P0")
                         }
                     }
                     if aspm.p1 > 0 {
-                        savedAnalysisTierPill(label: "P1", count: aspm.p1, color: SemanticColors.role("warningText")) {
+                        savedAnalysisTierPill(label: "P1", count: aspm.p1, color: .orange) {
                             openDrilldown(tier: "P1", diagramId: repo.id, title: "\(repo.name) — P1")
                         }
                     }
                     if aspm.p2 > 0 {
-                        savedAnalysisTierPill(label: "P2", count: aspm.p2, color: SemanticColors.role("actionText")) {
+                        savedAnalysisTierPill(label: "P2", count: aspm.p2, color: .yellow) {
                             openDrilldown(tier: "P2", diagramId: repo.id, title: "\(repo.name) — P2")
                         }
                     }
@@ -3472,9 +3472,9 @@ private struct DrilldownFindingGroup: Identifiable {
 
     var tierColor: Color {
         switch tier {
-        case "P0": return SemanticColors.role("dangerText")
-        case "P1": return SemanticColors.role("warningText")
-        case "P2": return SemanticColors.role("actionText")
+        case "P0": return Color(red: 0.92, green: 0.24, blue: 0.28)
+        case "P1": return .orange
+        case "P2": return .yellow
         default: return SemanticColors.role("infoText")
         }
     }
@@ -3494,9 +3494,9 @@ private struct DrilldownFindingItem: Identifiable {
 
     var tierColor: Color {
         switch tier {
-        case "P0": return SemanticColors.role("dangerText")
-        case "P1": return SemanticColors.role("warningText")
-        case "P2": return SemanticColors.role("actionText")
+        case "P0": return Color(red: 0.92, green: 0.24, blue: 0.28)
+        case "P1": return .orange
+        case "P2": return .yellow
         default: return SemanticColors.role("infoText")
         }
     }

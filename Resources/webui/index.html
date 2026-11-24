@@ -9334,9 +9334,9 @@
           const curEntry = reposList.find(r => (r.id && r.id === repo.id) || r.repo === repo.repo);
           const riskScoreHex = (s) => {
             const n = Number(s || 0);
-            if (n >= 80) return '#f87171';
+            if (n >= 80) return '#ef4444';
             if (n >= 50) return '#fb923c';
-            if (n >= 20) return '#38bdf8';
+            if (n >= 20) return '#facc15';
             return '#34d399';
           };
           const badgeBox = view.querySelector('#repo-aspm-badges');
