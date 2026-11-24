@@ -408,11 +408,9 @@ struct MainContentView: View {
                             .tag(item.rawValue)
                     }
                 }
-                Section(english ? "Connections" : "接続") {
+                Section(english ? "System" : "システム") {
                     Label(english ? "AI connections" : "AI 接続", systemImage: "brain").tag(WorkspacePage.ai.rawValue)
                     Label("MCP", systemImage: "point.3.filled.connected.trianglepath.dotted").tag(WorkspacePage.mcp.rawValue)
-                }
-                Section(english ? "System" : "システム") {
                     Label(english ? "Runtime & Update" : "実行環境・更新", systemImage: "wrench.and.screwdriver").tag(WorkspacePage.system.rawValue)
                 }
                 Section {
@@ -503,36 +501,7 @@ struct MainContentView: View {
             .listStyle(.sidebar)
             .searchable(text: $query, placement: .sidebar,
                         prompt: english ? "Find repositories" : "リポジトリを検索")
-            .safeAreaInset(edge: .bottom) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Button {
-                        showPage(.audit)
-                        coordinator.send("settings")
-                    } label: {
-                        Label(english ? "Settings" : "設定", systemImage: "gearshape")
-                    }
-                    .buttonStyle(.plain)
-                    Button {
-                        triggerSidebarAppUpdate = true
-                        showPage(.system)
-                    } label: {
-                        Label(english ? "Update App" : "アプリをアップデート", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!backend.isReady)
-                    .padding(.bottom, 8)
-                    Label(coordinator.ready ? (english ? "Local engine" : "ローカル解析エンジン") :
-                            (english ? "Loading" : "読み込み中"),
-                          systemImage: coordinator.ready ? "desktopcomputer" : "hourglass")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("RepoAUDT Mac").font(.caption2).foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
-                .background(.bar)
-            }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 280, max: 520)
         } detail: {
             ZStack {
                 Color(nsColor: .windowBackgroundColor)

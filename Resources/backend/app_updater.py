@@ -2,15 +2,28 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 from typing import Any, Dict
 
 import copilot_bridge
+
+BREW_UPGRADABLE_TOOLS = frozenset({
+    "gh",
+    "gitleaks",
+    "trufflehog",
+    "trivy",
+    "semgrep",
+    "ruff",
+    "zizmor",
+    "hadolint",
+})
 
 
 def find_repo_dir() -> Path:
@@ -80,8 +93,63 @@ def check_for_updates() -> Dict[str, Any]:
     }
 
 
-def _probe_cli_scanners() -> list[Dict[str, Any]]:
+def _find_brew() -> str:
+    for candidate in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew"):
+        if Path(candidate).exists():
+            return candidate
+    return shutil.which("brew") or ""
+
+
+def _probe_brew_outdated() -> Dict[str, str]:
+    """Return {formula_name: latest_version} for outdated allowlisted Homebrew tools."""
+    brew_bin = _find_brew()
+    if not brew_bin:
+        return {}
+    env = dict(os.environ)
+    env["HOMEBREW_NO_AUTO_UPDATE"] = "1"
+    env["HOMEBREW_NO_ENV_HINTS"] = "1"
+    try:
+        proc = subprocess.run(
+            [brew_bin, "outdated", "--formula", "--json=v2"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
+            check=False,
+        )
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return {}
+        data = json.loads(proc.stdout)
+        outdated: Dict[str, str] = {}
+        for formula in data.get("formulae") or []:
+            if not isinstance(formula, dict):
+                continue
+            name = str(formula.get("name") or "").strip().lower()
+            latest = str(formula.get("current_version") or "").strip()
+            if name in BREW_UPGRADABLE_TOOLS and latest:
+                outdated[name] = latest
+        return outdated
+    except Exception:
+        return {}
+
+
+def _probe_pypi_latest(package: str) -> str:
+    """Return the latest version string for a PyPI package, or empty string on error."""
+    try:
+        req = urllib.request.Request(
+            f"https://pypi.org/pypi/{package}/json",
+            headers={"User-Agent": "RepoAUDT-Mac/1.2"},
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+        return str((data.get("info") or {}).get("version") or "").strip()
+    except Exception:
+        return ""
+
+
+def _probe_cli_scanners(outdated_map: Dict[str, str] | None = None) -> list[Dict[str, Any]]:
     """Probe installed CLI security scanners for the Runtime Diagnostics screen."""
+    outdated = outdated_map if isinstance(outdated_map, dict) else {}
     specs = [
         ("gitleaks", "Gitleaks (Secrets + Git History)", ["version"], "brew install gitleaks"),
         ("trufflehog", "TruffleHog (800+ Secret Detectors)", ["--version"], "brew install trufflehog"),
@@ -108,6 +176,7 @@ def _probe_cli_scanners() -> list[Dict[str, Any]]:
                 version = first_line[:60]
             except Exception:
                 version = "installed"
+        latest = outdated.get(name, "")
         results.append({
             "name": name,
             "label": label,
@@ -115,14 +184,58 @@ def _probe_cli_scanners() -> list[Dict[str, Any]]:
             "path": found,
             "version": version,
             "install_hint": hint,
+            "update_available": bool(found and latest),
+            "latest_version": latest,
         })
     return results
+
+
+def upgrade_cli_tool(tool_name: str) -> Dict[str, Any]:
+    """Upgrade (or install) an allowlisted CLI tool via Homebrew."""
+    clean = str(tool_name or "").strip().lower()
+    if clean not in BREW_UPGRADABLE_TOOLS:
+        raise ValueError(f"Unsupported tool: {tool_name}")
+    brew_bin = _find_brew()
+    if not brew_bin:
+        raise RuntimeError("Homebrew (brew) が見つかりません。")
+    tool_dirs = ("/opt/homebrew/bin", "/usr/local/bin")
+    already_installed = bool(
+        next((f"{d}/{clean}" for d in tool_dirs if Path(f"{d}/{clean}").exists()), "")
+        or shutil.which(clean)
+    )
+    action = "upgrade" if already_installed else "install"
+    env = dict(os.environ)
+    env["HOMEBREW_NO_AUTO_UPDATE"] = "1"
+    env["HOMEBREW_NO_ENV_HINTS"] = "1"
+    proc = subprocess.run(
+        [brew_bin, action, clean],
+        capture_output=True,
+        text=True,
+        timeout=180,
+        env=env,
+        check=False,
+    )
+    output = "\n".join(part.strip() for part in (proc.stdout, proc.stderr) if part and part.strip())
+    if proc.returncode != 0:
+        raise RuntimeError(f"brew {action} {clean} に失敗しました: {output[:500]}")
+    return {
+        "ok": True,
+        "tool": clean,
+        "action": action,
+        "log": output[-1500:] if output else f"brew {action} {clean} completed.",
+        "diagnostics": get_runtime_diagnostics(),
+    }
 
 
 def get_runtime_diagnostics() -> Dict[str, Any]:
     """Return runtime environment diagnostics for the System / Update view."""
     copilot_status = copilot_bridge.get_copilot_runtime_status()
     gh_bin = shutil.which("gh") or ""
+    outdated = _probe_brew_outdated()
+    gh_latest = outdated.get("gh", "")
+    copilot_cur = str(copilot_status.get("sdk_version") or "").strip()
+    copilot_latest = _probe_pypi_latest("github-copilot-sdk") if copilot_status.get("sdk_installed") else ""
+    copilot_update_available = bool(copilot_cur and copilot_latest and copilot_cur != copilot_latest)
     repo_info: Dict[str, Any] = {"ok": False, "repo_dir": "", "local_commit": "", "dirty": False}
     try:
         repo_dir = find_repo_dir()
@@ -141,10 +254,14 @@ def get_runtime_diagnostics() -> Dict[str, Any]:
         "python_version": sys.version.split()[0],
         "gh_path": gh_bin,
         "gh_authenticated": copilot_status.get("gh_authenticated", False),
+        "gh_update_available": bool(gh_bin and gh_latest),
+        "gh_latest_version": gh_latest,
         "copilot_sdk_installed": copilot_status.get("sdk_installed", False),
-        "copilot_sdk_version": copilot_status.get("sdk_version", ""),
+        "copilot_sdk_version": copilot_cur,
+        "copilot_sdk_update_available": copilot_update_available,
+        "copilot_sdk_latest_version": copilot_latest,
         "repo": repo_info,
-        "scanners": _probe_cli_scanners(),
+        "scanners": _probe_cli_scanners(outdated),
     }
 
 

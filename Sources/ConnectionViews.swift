@@ -405,6 +405,8 @@ struct ScannerDiagnostic: Identifiable {
     let path: String
     let version: String
     let installHint: String
+    var updateAvailable: Bool = false
+    var latestVersion: String = ""
 }
 
 struct SystemUpdateView: View {
@@ -413,10 +415,15 @@ struct SystemUpdateView: View {
     @State private var pythonVersion = ""
     @State private var ghPath = ""
     @State private var ghAuthenticated = false
+    @State private var ghUpdateAvailable = false
+    @State private var ghLatestVersion = ""
+    @State private var copilotUpdateAvailable = false
+    @State private var copilotLatestVersion = ""
     @State private var repoDir = ""
     @State private var localCommit = ""
     @State private var dirtyRepo = false
     @State private var scanners: [ScannerDiagnostic] = []
+    @State private var upgradingTool: String? = nil
     @State private var logText = ""
     @State private var updateAvailable = false
     @State private var remoteCommit = ""
@@ -445,13 +452,38 @@ struct SystemUpdateView: View {
                             detail: pythonPath.isEmpty ? "-" : "\(pythonPath) (\(pythonVersion))"
                         )
                         Divider()
-                        diagnosticRow(
-                            ok: !ghPath.isEmpty && ghAuthenticated,
-                            title: "GitHub CLI (gh)",
-                            detail: ghPath.isEmpty
-                                ? (english ? "Not installed" : "未インストール")
-                                : (ghAuthenticated ? "\(ghPath) · \(english ? "Logged in" : "ログイン済み")" : "\(ghPath) · \(english ? "Not logged in" : "未ログイン")")
-                        )
+                        HStack(spacing: 12) {
+                            Image(systemName: (!ghPath.isEmpty && ghAuthenticated) ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                .foregroundStyle(SemanticColors.role((!ghPath.isEmpty && ghAuthenticated) ? "successText" : "dangerText"))
+                            Text("GitHub CLI (gh)")
+                                .font(.body.weight(.medium))
+                            Spacer()
+                            Text(ghPath.isEmpty
+                                 ? (english ? "Not installed" : "未インストール")
+                                 : (ghAuthenticated ? "\(ghPath) · \(english ? "Logged in" : "ログイン済み")" : "\(ghPath) · \(english ? "Not logged in" : "未ログイン")"))
+                                .font(.callout.monospaced())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            if ghUpdateAvailable && !ghLatestVersion.isEmpty {
+                                Text("→ \(ghLatestVersion)")
+                                    .font(.caption.monospaced().weight(.semibold))
+                                    .foregroundStyle(SemanticColors.role("actionText"))
+                            }
+                            if upgradingTool == "gh" {
+                                ProgressView().controlSize(.small)
+                            } else if ghPath.isEmpty || ghUpdateAvailable {
+                                Button(ghPath.isEmpty
+                                       ? (english ? "Install" : "導入")
+                                       : (english ? "Update" : "アップデート")) {
+                                    runCliToolUpgrade("gh")
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .disabled(store.busy || upgradingTool != nil)
+                            }
+                        }
+                        .padding(.vertical, 10)
                         Divider()
                         HStack(spacing: 12) {
                             Image(systemName: store.copilotInstalled ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
@@ -464,13 +496,21 @@ struct SystemUpdateView: View {
                                  : (english ? "Not installed" : "未インストール"))
                                 .font(.callout.monospaced())
                                 .foregroundStyle(.secondary)
-                            Button(store.copilotInstalled
-                                   ? (english ? "Update" : "更新")
-                                   : (english ? "Install" : "導入")) {
-                                runCopilotInstall()
+                            if copilotUpdateAvailable && !copilotLatestVersion.isEmpty {
+                                Text("→ v\(copilotLatestVersion)")
+                                    .font(.caption.monospaced().weight(.semibold))
+                                    .foregroundStyle(SemanticColors.role("actionText"))
                             }
-                            .buttonStyle(.bordered)
-                            .disabled(store.busy)
+                            if !store.copilotInstalled || copilotUpdateAvailable {
+                                Button(store.copilotInstalled
+                                       ? (english ? "Update" : "アップデート")
+                                       : (english ? "Install" : "導入")) {
+                                    runCopilotInstall()
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .disabled(store.busy || upgradingTool != nil)
+                            }
                         }
                         .padding(.vertical, 10)
                         Divider()
@@ -494,13 +534,38 @@ struct SystemUpdateView: View {
                             VStack(spacing: 0) {
                                 ForEach(Array(scanners.enumerated()), id: \.element.id) { idx, sc in
                                     if idx > 0 { Divider() }
-                                    diagnosticRow(
-                                        ok: sc.installed,
-                                        title: sc.label,
-                                        detail: sc.installed
-                                            ? (sc.version.isEmpty ? sc.path : "\(sc.version) · \(sc.path)")
-                                            : (english ? "Not installed (\(sc.installHint))" : "未導入（\(sc.installHint)）")
-                                    )
+                                    HStack(spacing: 12) {
+                                        Image(systemName: sc.installed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                            .foregroundStyle(SemanticColors.role(sc.installed ? "successText" : "dangerText"))
+                                        Text(sc.label)
+                                            .font(.body.weight(.medium))
+                                        Spacer()
+                                        Text(sc.installed
+                                             ? (sc.version.isEmpty ? sc.path : "\(sc.version) · \(sc.path)")
+                                             : (english ? "Not installed (\(sc.installHint))" : "未導入（\(sc.installHint)）"))
+                                            .font(.callout.monospaced())
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                        if sc.updateAvailable && !sc.latestVersion.isEmpty {
+                                            Text("→ \(sc.latestVersion)")
+                                                .font(.caption.monospaced().weight(.semibold))
+                                                .foregroundStyle(SemanticColors.role("actionText"))
+                                        }
+                                        if upgradingTool == sc.id {
+                                            ProgressView().controlSize(.small)
+                                        } else if !sc.installed || sc.updateAvailable {
+                                            Button(sc.installed
+                                                   ? (english ? "Update" : "アップデート")
+                                                   : (english ? "Install" : "導入")) {
+                                                runCliToolUpgrade(sc.id)
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .controlSize(.small)
+                                            .disabled(store.busy || upgradingTool != nil)
+                                        }
+                                    }
+                                    .padding(.vertical, 10)
                                 }
                             }
                             .padding(.horizontal, 12)
@@ -604,6 +669,43 @@ struct SystemUpdateView: View {
         }
     }
 
+    private func runCliToolUpgrade(_ tool: String) {
+        guard !store.busy, upgradingTool == nil else { return }
+        upgradingTool = tool
+        appendLog(english ? "Updating \(tool) via Homebrew..." : "Homebrew で \(tool) をアップデートしています…")
+        Task {
+            defer { upgradingTool = nil }
+            do {
+                let res = try await store.request("/api/app/tool/upgrade", body: ["tool": tool])
+                if let out = res["log"] as? String, !out.isEmpty {
+                    appendLog(out)
+                }
+                if let diag = res["diagnostics"] as? [String: Any] {
+                    ghPath = diag["gh_path"] as? String ?? ghPath
+                    ghAuthenticated = diag["gh_authenticated"] as? Bool ?? ghAuthenticated
+                    ghUpdateAvailable = diag["gh_update_available"] as? Bool ?? false
+                    ghLatestVersion = diag["gh_latest_version"] as? String ?? ""
+                    let rawScanners = diag["scanners"] as? [[String: Any]] ?? []
+                    scanners = rawScanners.map { sc in
+                        ScannerDiagnostic(
+                            id: sc["name"] as? String ?? UUID().uuidString,
+                            label: sc["label"] as? String ?? (sc["name"] as? String ?? "Scanner"),
+                            installed: sc["installed"] as? Bool ?? false,
+                            path: sc["path"] as? String ?? "",
+                            version: sc["version"] as? String ?? "",
+                            installHint: sc["install_hint"] as? String ?? "",
+                            updateAvailable: sc["update_available"] as? Bool ?? false,
+                            latestVersion: sc["latest_version"] as? String ?? ""
+                        )
+                    }
+                }
+                appendLog(english ? "\(tool) updated successfully." : "\(tool) のアップデートが完了しました。")
+            } catch {
+                appendLog("Error (\(tool)): \(error.localizedDescription)")
+            }
+        }
+    }
+
     private func loadDiagnosticsAndCheckUpdate(autoUpdate: Bool) async {
         guard !store.busy else { return }
         store.busy = true
@@ -615,8 +717,12 @@ struct SystemUpdateView: View {
             pythonVersion = diag["python_version"] as? String ?? ""
             ghPath = diag["gh_path"] as? String ?? ""
             ghAuthenticated = diag["gh_authenticated"] as? Bool ?? false
+            ghUpdateAvailable = diag["gh_update_available"] as? Bool ?? false
+            ghLatestVersion = diag["gh_latest_version"] as? String ?? ""
             store.copilotInstalled = diag["copilot_sdk_installed"] as? Bool ?? false
             store.copilotVersion = diag["copilot_sdk_version"] as? String ?? ""
+            copilotUpdateAvailable = diag["copilot_sdk_update_available"] as? Bool ?? false
+            copilotLatestVersion = diag["copilot_sdk_latest_version"] as? String ?? ""
             let repo = diag["repo"] as? [String: Any] ?? [:]
             repoDir = repo["repo_dir"] as? String ?? ""
             localCommit = repo["local_commit"] as? String ?? ""
@@ -629,7 +735,9 @@ struct SystemUpdateView: View {
                     installed: sc["installed"] as? Bool ?? false,
                     path: sc["path"] as? String ?? "",
                     version: sc["version"] as? String ?? "",
-                    installHint: sc["install_hint"] as? String ?? ""
+                    installHint: sc["install_hint"] as? String ?? "",
+                    updateAvailable: sc["update_available"] as? Bool ?? false,
+                    latestVersion: sc["latest_version"] as? String ?? ""
                 )
             }
 

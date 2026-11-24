@@ -856,6 +856,15 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": str(exc)})
             return
 
+        if self.path == "/api/app/tool/upgrade":
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                tool_name = str(body.get("tool") or "").strip()
+                self._send_json(200, app_updater.upgrade_cli_tool(tool_name))
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
         if self.path == "/api/audit/copilot-issue":
             host = self.headers.get("Host")
             allowed_hosts = {f"127.0.0.1:{self.server_port}", f"localhost:{self.server_port}"}
