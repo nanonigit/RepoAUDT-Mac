@@ -1089,6 +1089,55 @@ pnpm-lock\.yaml$
             return [], "tool_error"
 
 
+_POPULAR_NPM_PACKAGES = {
+    "react", "react-dom", "next", "express", "axios", "lodash", "typescript",
+    "tailwindcss", "eslint", "prettier", "prisma", "zod", "stripe", "openai",
+    "chalk", "commander", "dotenv", "cors", "jsonwebtoken", "mongoose",
+    "sequelize", "uuid", "moment", "dayjs", "webpack", "vite", "vitest",
+    "jest", "playwright", "puppeteer", "socket.io", "redis", "mysql2",
+    "multer", "helmet", "bcrypt", "bcryptjs", "yup", "formik", "rxjs",
+    "nodemailer", "winston", "pino", "fastify", "nestjs", "svelte", "vue",
+}
+
+_POPULAR_PYPI_PACKAGES = {
+    "requests", "fastapi", "django", "flask", "pydantic", "numpy", "pandas",
+    "boto3", "httpx", "uvicorn", "sqlalchemy", "pytest", "celery", "redis",
+    "cryptography", "pyjwt", "pillow", "scipy", "torch", "transformers",
+    "openai", "anthropic", "aiohttp", "beautifulsoup4", "lxml", "pyyaml",
+    "jinja2", "click", "typer", "alembic", "psycopg2", "pymongo", "sentry-sdk",
+}
+
+
+def _levenshtein_1(a: str, b: str) -> bool:
+    """Return True if two strings have Levenshtein edit distance == 1."""
+    if a == b or abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        return sum(1 for x, y in zip(a, b) if x != y) == 1
+    shorter, longer = (a, b) if len(a) < len(b) else (b, a)
+    i = j = diffs = 0
+    while i < len(shorter) and j < len(longer):
+        if shorter[i] != longer[j]:
+            diffs += 1
+            if diffs > 1:
+                return False
+            j += 1
+        else:
+            i += 1
+            j += 1
+    return True
+
+
+def _detect_typosquat(pkg_name: str, popular: set[str]) -> Optional[str]:
+    low = pkg_name.strip().lower()
+    if not low or low.startswith("@") or len(low) < 4 or low in popular:
+        return None
+    for target in popular:
+        if len(target) >= 4 and _levenshtein_1(low, target):
+            return target
+    return None
+
+
 def scan_web_and_supply_chain_config(repo: Path, match_component) -> Tuple[List[Dict[str, Any]], str]:
     """Fast built-in audit for Next.js risky config, CORS wildcard+credentials, suspicious npm install scripts, and committed keystores/sourcemaps."""
     repo_path = Path(repo)
@@ -1176,6 +1225,95 @@ def scan_web_and_supply_chain_config(repo: Path, match_component) -> Tuple[List[
                                 "scanner": "web-config-audit",
                                 "confidence": "high",
                             })
+                for dep_section in ("dependencies", "devDependencies"):
+                    dep_map = pkg_data.get(dep_section) if isinstance(pkg_data, dict) else None
+                    if not isinstance(dep_map, dict):
+                        continue
+                    for dep_name, dep_ver in dep_map.items():
+                        dep_s = str(dep_name or "").strip()
+                        ver_s = str(dep_ver or "").strip()
+                        if re.match(r"^(?:http://|git\+http://)", ver_s, re.IGNORECASE):
+                            findings.append({
+                                "severity": "high",
+                                "category": "sca",
+                                "rule_id": "npm-insecure-tarball-url",
+                                "title": f"[サプライチェーン監査] `{dep_s}` が平文 HTTP URL から取得されています",
+                                "file": f"{rel}:1 (Target: {match_component(rel)})",
+                                "desc": f"`{rel}` の `{dep_section}.{dep_s}` が平文 HTTP (`{ver_s[:100]}`) を参照しています。中間者攻撃やパッケージ差し替えリスクがあるため npm レジストリまたは HTTPS+integrity 検証へ移行してください。",
+                                "package_name": dep_s,
+                                "scanner": "web-config-audit",
+                                "confidence": "high",
+                            })
+                        typo_target = _detect_typosquat(dep_s, _POPULAR_NPM_PACKAGES)
+                        if typo_target:
+                            findings.append({
+                                "severity": "high",
+                                "category": "sca",
+                                "rule_id": "npm-typosquat-suspect",
+                                "title": f"⚠️ [サプライチェーン監査] `{dep_s}` は人気パッケージ `{typo_target}` のタイポスクワッティング疑いがあります",
+                                "file": f"{rel}:1 (Target: {match_component(rel)})",
+                                "desc": f"`{rel}` の `{dep_section}` に `{dep_s}` が含まれています（人気パッケージ `{typo_target}` と1文字違い）。意図した正規パッケージか確認してください。",
+                                "package_name": dep_s,
+                                "scanner": "web-config-audit",
+                                "confidence": "medium",
+                            })
+
+            # 4b. Python requirements.txt insecure index/URL & typosquatting
+            if low_name == "requirements.txt" or (low_name.startswith("requirements") and low_name.endswith(".txt")):
+                try:
+                    req_lines = full.read_text(encoding="utf-8", errors="ignore").splitlines()
+                except OSError:
+                    req_lines = []
+                for idx, rline in enumerate(req_lines, 1):
+                    stripped = rline.strip()
+                    if not stripped or stripped.startswith("#"):
+                        continue
+                    if re.search(r"--(?:extra-)?index-url\s+http://", stripped, re.IGNORECASE):
+                        findings.append({
+                            "severity": "high",
+                            "category": "sca",
+                            "rule_id": "pypi-insecure-index-url",
+                            "title": f"[サプライチェーン監査] `{fn}` に平文 HTTP の PyPI インデックスURLが含まれます (L{idx})",
+                            "file": f"{rel}:{idx} (Target: {match_component(rel)})",
+                            "desc": f"`{rel}` (L{idx}) で平文 `http://` の index-url が指定されています。Dependency Confusion / 中間者攻撃リスクがあります。",
+                            "scanner": "web-config-audit",
+                            "confidence": "high",
+                        })
+                        continue
+                    m_pkg = re.match(r"^([A-Za-z0-9_.-]+)", stripped)
+                    if m_pkg:
+                        py_pkg = m_pkg.group(1)
+                        typo_target = _detect_typosquat(py_pkg, _POPULAR_PYPI_PACKAGES)
+                        if typo_target:
+                            findings.append({
+                                "severity": "high",
+                                "category": "sca",
+                                "rule_id": "pypi-typosquat-suspect",
+                                "title": f"⚠️ [サプライチェーン監査] `{py_pkg}` は人気 PyPI パッケージ `{typo_target}` のタイポスクワッティング疑いがあります",
+                                "file": f"{rel}:{idx} (Target: {match_component(rel)})",
+                                "desc": f"`{rel}` (L{idx}) の `{py_pkg}` は人気パッケージ `{typo_target}` と1文字違いです。正規パッケージか確認してください。",
+                                "package_name": py_pkg,
+                                "scanner": "web-config-audit",
+                                "confidence": "medium",
+                            })
+
+            # 4c. Python setup.py install-time network/shell execution
+            if low_name == "setup.py" and not _is_test_or_doc_relpath(rel):
+                try:
+                    setup_txt = full.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    setup_txt = ""
+                if "setup(" in setup_txt and re.search(r"\b(?:urllib\.request|requests\.|subprocess\.|os\.system|eval\(|exec\()", setup_txt):
+                    findings.append({
+                        "severity": "high",
+                        "category": "sast",
+                        "rule_id": "pypi-setup-exec",
+                        "title": f"[サプライチェーン監査] `setup.py` 内にインストール時外部通信/シェル実行が含まれます",
+                        "file": f"{rel}:1 (Target: {match_component(rel)})",
+                        "desc": f"`{rel}` に `subprocess` / `os.system` / `urllib` / `eval` 等が含まれています。`pip install` 時の任意コード実行リスクがないか確認してください。",
+                        "scanner": "web-config-audit",
+                        "confidence": "medium",
+                    })
 
             # 5. Dangerous CORS wildcard + credentials: true in TS/JS backend files
             if low_name.endswith((".ts", ".js", ".mjs", ".cjs")) and not _is_test_or_doc_relpath(rel):

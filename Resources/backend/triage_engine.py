@@ -219,6 +219,93 @@ def _extract_cwe_ids(item: Dict[str, Any]) -> List[str]:
     return cwes
 
 
+_JS_IMPORT_RE = re.compile(
+    r"""(?:import\s+[^;]*?from\s+['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\s*\)|import\(\s*['"]([^'"]+)['"]\s*\))"""
+)
+_PY_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+([A-Za-z0-9_]+)", re.MULTILINE)
+_GO_IMPORT_RE = re.compile(r'"(github\.com/[^"]+|golang\.org/[^"]+|gopkg\.in/[^"]+)"')
+
+
+def _normalize_import_pkg(raw: str) -> str:
+    s = raw.strip()
+    if not s or s.startswith(".") or s.startswith("/"):
+        return ""
+    if s.startswith("@"):
+        parts = s.split("/")
+        return "/".join(parts[:2]).lower() if len(parts) >= 2 else s.lower()
+    return s.split("/", 1)[0].lower()
+
+
+def collect_repo_imported_packages(repo_dir: Optional[Path]) -> Tuple[Set[str], bool]:
+    """Scan repository source files to collect directly imported third-party package names."""
+    if not repo_dir or not Path(repo_dir).is_dir():
+        return set(), False
+    root_path = Path(repo_dir)
+    ignore_dirs = {
+        ".git", "node_modules", "vendor", "dist", "build", ".next",
+        ".nuxt", "__pycache__", ".venv", "venv", ".tox", "coverage",
+    }
+    imported: Set[str] = set()
+    scanned_files = 0
+    max_files = 400
+    for walk_root, dirs, files in os.walk(root_path):
+        dirs[:] = [d for d in dirs if d not in ignore_dirs]
+        for fn in files:
+            low = fn.lower()
+            if not low.endswith((".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go")):
+                continue
+            full = Path(walk_root, fn)
+            try:
+                if full.stat().st_size > 150_000:
+                    continue
+                text = full.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            scanned_files += 1
+            if low.endswith(".py"):
+                for m in _PY_IMPORT_RE.finditer(text):
+                    mod = m.group(1).lower()
+                    imported.add(mod)
+                    imported.add(mod.replace("_", "-"))
+            elif low.endswith(".go"):
+                for m in _GO_IMPORT_RE.finditer(text):
+                    imported.add(m.group(1).lower())
+            else:
+                for m in _JS_IMPORT_RE.finditer(text):
+                    raw_mod = m.group(1) or m.group(2) or m.group(3) or ""
+                    norm = _normalize_import_pkg(raw_mod)
+                    if norm:
+                        imported.add(norm)
+            if scanned_files >= max_files:
+                return imported, True
+    return imported, scanned_files > 0
+
+
+def annotate_code_reachability(
+    item: Dict[str, Any],
+    imported_pkgs: Set[str],
+    has_sources: bool,
+) -> None:
+    """Annotate SCA findings with reachable / indirect / unlikely based on actual code imports."""
+    if not has_sources:
+        return
+    existing = str(item.get("reachability") or "").lower()
+    if existing in ("unlikely", "mitigated"):
+        return
+    pkg_name = str(item.get("package_name") or item.get("pkg") or "").strip().lower()
+    if not pkg_name:
+        return
+    candidates = {pkg_name, pkg_name.replace("-", "_"), pkg_name.replace("_", "-")}
+    if candidates & imported_pkgs:
+        item["reachability"] = "reachable"
+        return
+    dep_scope = str(item.get("dep_scope") or "").lower()
+    if dep_scope == "prod":
+        item["reachability"] = "indirect"
+    elif dep_scope in ("dev", "transitive"):
+        item["reachability"] = "unlikely"
+
+
 def _load_package_json_deps(repo_dir: Optional[Path]) -> Tuple[Set[str], Set[str]]:
     if not repo_dir:
         return set(), set()
@@ -274,12 +361,23 @@ def classify_priority_ssvc(item: Dict[str, Any], kev_set: Optional[Set[str]] = N
     elif dep_scope == "transitive":
         evidence.append("Transitive Dependency")
 
+    if reachability == "reachable":
+        evidence.append("コード内で直接インポート確認")
+    elif reachability == "unlikely":
+        evidence.append("コード内で直接未使用")
+
     def _finish(tier: str, reason: str, confidence: str) -> Dict[str, Any]:
-        # Automatic 1-tier downgrade for devDependencies-only packages (unless CISA KEV)
+        # Automatic 1-tier downgrade for devDependencies-only or unreachable packages (unless CISA KEV)
+        downgraded = False
         if dep_scope == "dev" and not in_kev and tier in ("P1", "P2"):
             tier = "P2" if tier == "P1" else "P3"
+            downgraded = True
             if "devDependencies のみ" not in reason:
                 reason = f"{reason}（devDependencies のみの為1段階降格）"
+        if not downgraded and reachability == "unlikely" and not in_kev and epss_val < 0.10 and tier in ("P1", "P2"):
+            tier = "P2" if tier == "P1" else "P3"
+            if "直接未使用" not in reason:
+                reason = f"{reason}（ソースコード内で直接未使用のため降格）"
         dedup_ev: List[str] = []
         for ev in evidence:
             if ev and ev not in dedup_ev:
@@ -531,6 +629,7 @@ def triage_and_validate_findings(
     """Run reachability annotation, P0-P3 triage, output validation, fingerprinting, and sorting."""
     is_linux = detect_linux_container_repo(repo_dir)
     prod_deps, dev_deps = _load_package_json_deps(repo_dir)
+    imported_pkgs, has_sources = collect_repo_imported_packages(repo_dir)
     prev_fps = set(previous_fingerprints or ())
     supp = suppressed_map or {}
     has_prev = bool(prev_fps)
@@ -549,6 +648,7 @@ def triage_and_validate_findings(
             else:
                 item["dep_scope"] = "transitive"
         annotate_windows_cve_reachability(item, is_linux)
+        annotate_code_reachability(item, imported_pkgs, has_sources)
         classify_priority_ssvc(item, kev_set=kev_set)
         item["category"] = item.get("category") or classify_category(item)
         validate_and_sanitize_finding(item)

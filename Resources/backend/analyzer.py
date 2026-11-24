@@ -896,7 +896,7 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
     # Detect repo-level lockfile hint (yarn.lock / pnpm-lock.yaml) so package.json
     # items in Yarn/pnpm repos also receive yarn/pnpm remediation commands.
     repo_lock_hint = ""
-    for _it in items or []:
+    for _it in advisories or []:
         _f = str(_it.get("file") or "").lower()
         if "yarn.lock" in _f:
             repo_lock_hint = "yarn.lock"

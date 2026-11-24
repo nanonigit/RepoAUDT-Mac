@@ -1461,6 +1461,153 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(410, {"ok": False, "error": "Embedded command execution has been retired."})
             return
 
+        if self.path == "/api/remediation/create-fix-pr":
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                repo_slug = str(body.get("repo") or "").strip()
+                diagram_id = str(body.get("diagram_id") or "").strip()
+                pr_title = str(body.get("title") or "chore(security): apply RepoAUDT remediation fixes").strip()[:180]
+                items = body.get("items") if isinstance(body.get("items"), list) else []
+                draft = bool(body.get("draft", True))
+                if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo_slug):
+                    self._send_json(400, {"ok": False, "error": "Invalid repository slug (expected owner/repo)"})
+                    return
+                gh_bin = shutil.which("gh") or next((p for p in ("/opt/homebrew/bin/gh", "/usr/local/bin/gh") if Path(p).exists()), "")
+                if not gh_bin:
+                    self._send_json(503, {"ok": False, "error": "GitHub CLI (gh) is not installed"})
+                    return
+
+                state = analyzer.load_saved_analyses()
+                diagrams = state.get("diagrams", [])
+                matched = next(
+                    (d for d in diagrams if (diagram_id and str(d.get("id") or "") == diagram_id) or str(d.get("repo") or "") == repo_slug),
+                    None,
+                )
+                local_dir_str = str(
+                    (matched or {}).get("local_path")
+                    or ((matched or {}).get("source_revision") or {}).get("local_path")
+                    or ""
+                ).strip()
+
+                import tempfile
+                tmp_clone_dir: Optional[tempfile.TemporaryDirectory] = None
+                work_dir: Optional[Path] = Path(local_dir_str) if local_dir_str and Path(local_dir_str).is_dir() else None
+                try:
+                    if work_dir is None or not (work_dir / ".git").exists():
+                        tmp_clone_dir = tempfile.TemporaryDirectory(prefix="repoaudt-pr-")
+                        work_dir = Path(tmp_clone_dir.name) / "repo"
+                        clone_proc = subprocess.run(
+                            [gh_bin, "repo", "clone", repo_slug, str(work_dir), "--", "--depth=1"],
+                            capture_output=True, text=True, timeout=60,
+                        )
+                        if clone_proc.returncode != 0:
+                            self._send_json(502, {"ok": False, "error": (clone_proc.stderr or "gh repo clone failed")[:300]})
+                            return
+
+                    branch = f"repoaudt-fix/{int(time.time())}"
+                    subprocess.run(["git", "-C", str(work_dir), "checkout", "-b", branch], check=True, capture_output=True, text=True)
+
+                    changed_files: List[str] = []
+                    # 1. Apply deterministic package.json version updates if present
+                    pkg_updates: Dict[str, str] = {}
+                    gitignore_entries: List[str] = []
+                    for it in items:
+                        if not isinstance(it, dict):
+                            continue
+                        it_title = str(it.get("title") or "")
+                        it_file = str(it.get("file") or "").split(" (", 1)[0].split(":", 1)[0].strip()
+                        it_cmd = str(it.get("fix_command") or "")
+                        # Extract npm install pkg@ver or yarn add pkg@ver
+                        m_upd = re.search(r"(?:npm\s+install|yarn\s+add|pnpm\s+add)\s+([@A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?)@([0-9]+\.[0-9]+[^\s`]*)", it_cmd)
+                        if m_upd:
+                            pkg_updates[m_upd.group(1)] = m_upd.group(2)
+                        elif "→" in it_title:
+                            m_pkg = re.search(r"([@A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?)\s+v?[0-9][^\s]*.*→\s*([0-9]+\.[0-9]+[^\s)）]*)", it_title)
+                            if m_pkg:
+                                pkg_updates[m_pkg.group(1)] = m_pkg.group(2)
+                        if (".env" in it_file or ".p12" in it_file or ".pfx" in it_file or ".pem" in it_file) and it_file:
+                            gitignore_entries.append(it_file)
+
+                    if pkg_updates:
+                        pkg_path = work_dir / "package.json"
+                        if pkg_path.is_file():
+                            try:
+                                pkg_data = json.loads(pkg_path.read_text(encoding="utf-8"))
+                                modified_pkg = False
+                                for sec in ("dependencies", "devDependencies"):
+                                    if isinstance(pkg_data.get(sec), dict):
+                                        for p_name, p_ver in pkg_updates.items():
+                                            if p_name in pkg_data[sec]:
+                                                pkg_data[sec][p_name] = f"^{p_ver}"
+                                                modified_pkg = True
+                                if modified_pkg:
+                                    pkg_path.write_text(json.dumps(pkg_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                                    changed_files.append("package.json")
+                            except Exception:
+                                pass
+
+                    if gitignore_entries:
+                        gi_path = work_dir / ".gitignore"
+                        existing_gi = gi_path.read_text(encoding="utf-8", errors="ignore") if gi_path.is_file() else ""
+                        lines_gi = existing_gi.splitlines()
+                        added_gi = False
+                        for entry in sorted(set(gitignore_entries)):
+                            if entry not in lines_gi:
+                                lines_gi.append(entry)
+                                added_gi = True
+                        if added_gi:
+                            gi_path.write_text("\n".join(lines_gi) + "\n", encoding="utf-8")
+                            changed_files.append(".gitignore")
+
+                    if not changed_files:
+                        plan_path = work_dir / "SECURITY_REMEDIATION_PLAN.md"
+                        plan_lines = [f"# {pr_title}", "", "## Target Findings", ""]
+                        for it in items:
+                            if isinstance(it, dict):
+                                plan_lines.append(f"- [ ] **[{it.get('tier', 'P1')}]** {it.get('title', '')} (`{it.get('file', '')}`)")
+                        plan_path.write_text("\n".join(plan_lines) + "\n", encoding="utf-8")
+                        changed_files.append("SECURITY_REMEDIATION_PLAN.md")
+
+                    subprocess.run(["git", "-C", str(work_dir), "add"] + changed_files, check=True, capture_output=True, text=True)
+                    subprocess.run(["git", "-C", str(work_dir), "commit", "-m", pr_title], check=True, capture_output=True, text=True)
+                    push_proc = subprocess.run(["git", "-C", str(work_dir), "push", "-u", "origin", branch], capture_output=True, text=True, timeout=45)
+                    if push_proc.returncode != 0:
+                        self._send_json(502, {"ok": False, "error": (push_proc.stderr or "git push failed")[:300]})
+                        return
+
+                    pr_body_lines = [
+                        "## RepoAUDT Mac Automated Remediation PR",
+                        "",
+                        f"- **Changed files**: {', '.join(f'`{f}`' for f in changed_files)}",
+                        "",
+                        "### Addressed Findings",
+                    ]
+                    for it in items[:25]:
+                        if isinstance(it, dict):
+                            pr_body_lines.append(f"- [{it.get('tier', 'P1')}] {it.get('title', '')} (`{it.get('file', '')}`)")
+                    pr_args = [gh_bin, "pr", "create", "--repo", repo_slug, "--head", branch, "--title", pr_title, "--body", "\n".join(pr_body_lines)]
+                    if draft:
+                        pr_args.append("--draft")
+                    pr_proc = subprocess.run(pr_args, cwd=str(work_dir), capture_output=True, text=True, timeout=30)
+                    if pr_proc.returncode != 0:
+                        self._send_json(502, {"ok": False, "error": (pr_proc.stderr or pr_proc.stdout or "gh pr create failed")[:350]})
+                        return
+                    pr_url = (pr_proc.stdout or "").strip().splitlines()[-1].strip() if (pr_proc.stdout or "").strip() else ""
+                    summary = analyzer.mark_remediation_requests(
+                        items,
+                        requested=True,
+                        note=f"GitHub PR: {pr_url}" if pr_url else "",
+                        channel="github_pr",
+                        issue_url=pr_url,
+                    )
+                    self._send_json(200, {"ok": True, "pr_url": pr_url, "branch": branch, "changed_files": changed_files, **summary})
+                finally:
+                    if tmp_clone_dir is not None:
+                        tmp_clone_dir.cleanup()
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
         if self.path.startswith("/api/remediate/auto-fix"):
             try:
                 body = json.loads(body_raw) if body_raw else {}

@@ -14,6 +14,8 @@ from typing import Any, Dict, Optional, Tuple
 
 _TIMEOUT_SEC = 10
 
+_ANTHROPIC_RE = re.compile(r"\b(sk-ant-[A-Za-z0-9_-]{20,})\b")
+_STRIPE_RE = re.compile(r"\b((?:sk|rk)_live_[A-Za-z0-9]{16,})\b")
 _OPENAI_RE = re.compile(r"\b(sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,})\b")
 _GITHUB_RE = re.compile(r"\b(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b")
 _SLACK_RE = re.compile(r"\b(xox[bp]-[A-Za-z0-9-]{10,})\b")
@@ -66,6 +68,41 @@ def _http_request(
         except Exception:
             body = ""
         return int(exc.code), body
+
+
+def _verify_anthropic(api_key: str) -> Dict[str, Any]:
+    try:
+        code, _ = _http_request(
+            "https://api.anthropic.com/v1/models",
+            method="GET",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        if code == 200:
+            return {"status": "active", "message": "Anthropic API key is active (HTTP 200)."}
+        if code in (401, 403):
+            return {"status": "revoked", "message": f"Anthropic API key is revoked or invalid (HTTP {code})."}
+        return {"status": "unknown", "message": f"Anthropic verification inconclusive (HTTP {code})."}
+    except Exception as exc:
+        return {"status": "unknown", "message": _scrub_secret(f"Anthropic check failed: {type(exc).__name__}", api_key)}
+
+
+def _verify_stripe(api_key: str) -> Dict[str, Any]:
+    try:
+        code, _ = _http_request(
+            "https://api.stripe.com/v1/balance",
+            method="GET",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        if code == 200:
+            return {"status": "active", "message": "Stripe live key is active (HTTP 200)."}
+        if code == 401:
+            return {"status": "revoked", "message": "Stripe key is revoked or invalid (HTTP 401)."}
+        return {"status": "unknown", "message": f"Stripe verification inconclusive (HTTP {code})."}
+    except Exception as exc:
+        return {"status": "unknown", "message": _scrub_secret(f"Stripe check failed: {type(exc).__name__}", api_key)}
 
 
 def _verify_openai(api_key: str) -> Dict[str, Any]:
@@ -202,6 +239,12 @@ def _extract_secret_target(content: str, line_hint: Optional[int] = None) -> Tup
     search_order.append(content)
 
     for chunk in search_order:
+        m_ant = _ANTHROPIC_RE.search(chunk)
+        if m_ant:
+            return ("anthropic", m_ant.group(1), "")
+        m_str = _STRIPE_RE.search(chunk)
+        if m_str:
+            return ("stripe", m_str.group(1), "")
         m_oai = _OPENAI_RE.search(chunk)
         if m_oai:
             return ("openai", m_oai.group(1), "")
@@ -267,7 +310,11 @@ def verify_secret_in_file(
         }
 
     masked = mask_secret(primary)
-    if provider == "openai":
+    if provider == "anthropic":
+        res = _verify_anthropic(primary)
+    elif provider == "stripe":
+        res = _verify_stripe(primary)
+    elif provider == "openai":
         res = _verify_openai(primary)
     elif provider == "github":
         res = _verify_github(primary)
