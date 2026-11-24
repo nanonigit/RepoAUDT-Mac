@@ -122,6 +122,12 @@ _PUBLIC_CLIENT_KEY_RE = re.compile(
     r"(?:reCaptchaKey|RECAPTCHA_SITE_KEY|NEXT_PUBLIC_[A-Z0-9_]+|VITE_PUBLIC_[A-Z0-9_]+)",
 )
 
+_QUOTED_ASSIGNMENT_RE = re.compile(
+    r"""^\s*(?:export\s+)?(?:const|let|var)?\s*([A-Za-z0-9_."'\[\]-]+)\s*[:=]\s*(['"])([^'"\n]+)\2\s*[,;]?\s*$"""
+)
+_LOWER_SNAKE_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z][a-z0-9]*){2,}$")
+_SECRET_PREFIXES = ("sk_", "pk_", "rk_", "whsec_", "ghp_", "gho_", "ghu_", "ghs_", "xox", "akia")
+
 
 def _is_public_client_key_line(line: str) -> bool:
     low = line.lower()
@@ -130,13 +136,30 @@ def _is_public_client_key_line(line: str) -> bool:
     return bool(_PUBLIC_CLIENT_KEY_RE.search(line))
 
 
+def _is_snake_case_identifier_key_line(line: str) -> bool:
+    """Return True for benign map/metadata key constants like `const PROVENANCE_KEY = 'cerebras_gemma4_retirement_provenance'`."""
+    m = _QUOTED_ASSIGNMENT_RE.match(line)
+    if not m:
+        return False
+    lhs, _, val = m.groups()
+    lhs_low = lhs.lower()
+    if any(s in lhs_low for s in ("secret", "password", "passwd", "token", "credential", "private")):
+        return False
+    if val.startswith(_SECRET_PREFIXES):
+        return False
+    return bool(_LOWER_SNAKE_IDENTIFIER_RE.fullmatch(val))
+
+
 def _is_benign_generic_api_key(directory: Path, relative: str, line: int) -> bool:
     """Return True if a generic-api-key hit is an obvious doc/test/example/seed entry or public client key."""
     try:
         lines = (directory / relative).read_text(encoding="utf-8", errors="ignore").splitlines()
     except OSError:
         lines = []
-    if 1 <= line <= len(lines) and _is_public_client_key_line(lines[line - 1]):
+    if 1 <= line <= len(lines) and (
+        _is_public_client_key_line(lines[line - 1])
+        or _is_snake_case_identifier_key_line(lines[line - 1])
+    ):
         return True
     rel_low = relative.lower().replace("\\", "/")
     parts = [p.lower() for p in Path(relative).parts]
@@ -655,6 +678,7 @@ def parse_trivy(raw, files, match_component, *, repo_dir: Optional[Path] = None)
             ref_url = str(vuln.get("PrimaryURL") or f"https://avd.aquasec.com/nvd/{cve.lower()}")
             advisories.append({
                 "cve": cve,
+                "cwe_ids": [str(c).strip() for c in (vuln.get("CweIDs") or []) if str(c).strip()],
                 "severity": sev.upper(),
                 "package_name": pkg,
                 "ecosystem": ecosystem,

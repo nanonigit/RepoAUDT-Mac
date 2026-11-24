@@ -66,8 +66,8 @@ TECH_SPECS = {
     "db-query": {
         "title": "Database Query & Transaction Execution",
         "category": "Database Layer",
-        "tech": "PostgreSQL 16.3, Knex.js, AWS RDS Multi-AZ",
-        "desc": "Knex.jsクエリビルダーを介してAmazon RDS PostgreSQL 16.3クラスターに対してSQLクエリを発行します。",
+        "tech": "Database / Persistence Layer（詳細バージョン未検出）",
+        "desc": "検出されたデータベース / 永続化レイヤーに対してクエリを実行します。",
         "steps": [
             "KnexコネクションプールからのDB接続ハンドルの取得（最大20並列）",
             "READ COMMITTED分離レベルでのトランザクション実行（BEGIN〜COMMIT/ROLLBACK）",
@@ -276,11 +276,7 @@ def collect_all_data():
                             "databases": [],
                             "ai_sdks": [],
                             "auth": [],
-                            "runtime": {
-                                "node": "Node.js 20.x LTS",
-                                "postgres": "PostgreSQL 16.3 (RDS Multi-AZ)",
-                                "redis": "Redis 7.2 (ElastiCache)"
-                            },
+                            "runtime": {},
                             "security_advisories": []
                         },
                         "github_url": f"https://github.com/example-org/{repo_dir.name}",
@@ -6961,13 +6957,19 @@ def build_portal_html(data, is_shareable=False):
       const githubLink = /^https:\/\/github\.com\//.test(source)
         ? `<a href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer" class="gh-link-btn">GitHub ↗</a>` : '';
       const subView = getEffectiveArchSubView(item);
+      const heroMetaOpen = (typeof safeStorageGet === 'function' && safeStorageGet('repoaudt_hero_meta_open') === '1');
       hero.innerHTML = `
         <div class="hero-left-info">
-          <h2 class="hero-repo-title">${escapeHtml(item.repo)}</h2>
-          <div class="hero-repo-desc">${escapeHtml(localizeBackendText(item.description || ''))}</div>
-          <div class="workspace-commit">${en ? 'Saved commit' : '解析対象コミット'} <code>${escapeHtml(item.commit_hash || (en ? 'Not recorded' : '未記録'))}</code></div>
-          <div class="workspace-commit" data-audit-repository-status></div>
-          ${currentViewMode === 'coderabbit' ? pullRequestControl(item) : ''}
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <h2 class="hero-repo-title" style="margin:0;">${escapeHtml(item.repo)}</h2>
+            <button type="button" id="toggle-hero-meta-btn" class="table-view-btn" style="font-size:0.72rem;padding:2px 8px;" onclick="(function(btn){const b=document.getElementById('hero-meta-body');if(!b)return;const open=b.style.display==='none';b.style.display=open?'block':'none';btn.textContent=open?'${en ? '▼ Hide Details' : '▼ 詳細を畳む'}':'${en ? '▶ Commit & PR Details' : '▶ コミット・PR詳細'}';if(typeof safeStorageSet==='function')safeStorageSet('repoaudt_hero_meta_open',open?'1':'0');})(this)">${heroMetaOpen ? (en ? '▼ Hide Details' : '▼ 詳細を畳む') : (en ? '▶ Commit & PR Details' : '▶ コミット・PR詳細')}</button>
+          </div>
+          <div id="hero-meta-body" style="display:${heroMetaOpen ? 'block' : 'none'};margin-top:6px;">
+            <div class="hero-repo-desc">${escapeHtml(localizeBackendText(item.description || ''))}</div>
+            <div class="workspace-commit">${en ? 'Saved commit' : '解析対象コミット'} <code>${escapeHtml(item.commit_hash || (en ? 'Not recorded' : '未記録'))}</code></div>
+            <div class="workspace-commit" data-audit-repository-status></div>
+            ${currentViewMode === 'coderabbit' ? pullRequestControl(item) : ''}
+          </div>
         </div>
         <div class="hero-right-controls">
           <span class="workspace-findings">${en ? `${count} findings` : `指摘 ${count}件`}</span>
@@ -7265,8 +7267,8 @@ def build_portal_html(data, is_shareable=False):
               ];
             } else if (lowerPath.includes('db') || lowerTitle.includes('database') || lowerTitle.includes('knex')) {
               dynCategory = "Database & Persistence Layer";
-              dynTech = "PostgreSQL 16.3 / Knex.js";
-              dynResp = "PostgreSQL 16.3（RDS Multi-AZ）への接続プール管理、プリペアドステートメントによるSQLインジェクション防止、完全ACIDトランザクション制御を提供します。";
+              dynTech = "Database / Persistence Layer（詳細バージョン未検出）";
+              dynResp = "データベース接続プール管理、プリペアドステートメントによるSQLインジェクション防止、トランザクション制御を提供します。";
               dynSteps = [
                 "Knexコネクションプール（最大20接続）からDBクライアントを安全に取得",
                 "knex.transaction() を用いた複数テーブルの一括アトミック更新（失敗時自動ROLLBACK）",
@@ -7295,9 +7297,9 @@ def build_portal_html(data, is_shareable=False):
               tables: [],
               env_vars: [],
               deploy: {
-                "platform": "AWS ECS / Vercel",
-                "db_version": "PostgreSQL 16.3 (RDS Multi-AZ)",
-                "redis_version": "Redis 7.2 (ElastiCache)",
+                "platform": "Detected Runtime",
+                "db_version": (repoItem?.deps?.databases?.[0]) ? `${repoItem.deps.databases[0].name} ${repoItem.deps.databases[0].version || ''}`.trim() : "未検出（N/A）",
+                "redis_version": "未検出（N/A）",
                 "ci_cd": "GitHub Actions"
               },
               integrations: [],
@@ -7910,28 +7912,6 @@ def build_portal_html(data, is_shareable=False):
           }).join('') : `<div class="desc-text" style="color: #64748b;">${isEn ? 'No explicit framework definitions found.' : 'フレームワークの明示的定義はありません。'}</div>`}
 
           <div class="section-title" style="margin-top: 14px;">${isEn ? '🗄️ Database & Driver Versions' : '🗄️ データベース & ドライバ バージョン'}</div>
-          <div class="dep-version-card">
-            <div class="dep-name-col">
-              <span class="dep-pkg-name">PostgreSQL Server</span>
-              <span class="dep-pkg-desc">${isEn ? 'AWS RDS Multi-AZ Cluster (Official LTS Support)' : 'AWS RDS Multi-AZ クラスター (公式LTSサポート)'}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span class="dep-version-badge">16.3</span>
-              <span class="dep-status-tag dep-status-latest">${isEn ? 'Safe (Official LTS)' : '安全 (公式LTS)'}</span>
-              <a href="https://www.postgresql.org/support/security/" target="_blank" class="sec-link-btn" title="PostgreSQL Security">${isEn ? 'Docs ↗' : '公式 ↗'}</a>
-            </div>
-          </div>
-          <div class="dep-version-card">
-            <div class="dep-name-col">
-              <span class="dep-pkg-name">Redis Cache & Queue</span>
-              <span class="dep-pkg-desc">${isEn ? 'AWS ElastiCache Redis (Managed Engine)' : 'AWS ElastiCache Redis (マネージド推奨エンジン)'}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span class="dep-version-badge">7.2.4</span>
-              <span class="dep-status-tag dep-status-latest">${isEn ? 'Safe (AWS Recommended)' : '安全 (AWS推奨)'}</span>
-              <a href="https://github.com/redis/redis/security/advisories" target="_blank" class="sec-link-btn" title="Redis Security Advisories">${isEn ? 'Docs ↗' : '公式 ↗'}</a>
-            </div>
-          </div>
           ${(deps.databases && deps.databases.length > 0) ? deps.databases.map(db => `
             <div class="dep-version-card">
               <div class="dep-name-col">
@@ -7946,7 +7926,7 @@ def build_portal_html(data, is_shareable=False):
                 ` : ''}
               </div>
             </div>
-          `).join('') : ''}
+          `).join('') : `<div class="desc-text" style="color: #64748b;">${isEn ? 'No explicit database definitions detected.' : 'データベース構成は静的解析で検出されませんでした。'}</div>`}
 
           ${(deps.ai_sdks && deps.ai_sdks.length > 0) ? `
             <div class="section-title" style="margin-top: 14px;">${isEn ? '🤖 AI / LLM SDK Versions' : '🤖 AI / LLM SDK バージョン'}</div>
@@ -7994,7 +7974,7 @@ def build_portal_html(data, is_shareable=False):
             </div>
             <div class="deploy-row">
               <span class="deploy-label">${isEn ? 'Database Version' : 'データベース バージョン'}</span>
-              <span class="deploy-val" style="color: #34d399;">PostgreSQL 16.3 (RDS Multi-AZ)</span>
+              <span class="deploy-val" style="color: #34d399;">${escapeHtml(dep.db_version || ((repoItem?.deps?.databases?.[0]) ? `${repoItem.deps.databases[0].name} ${repoItem.deps.databases[0].version || ''}`.trim() : (isEn ? 'Not detected' : '未検出（N/A）')))}</span>
             </div>
             <div class="deploy-row">
               <span class="deploy-label">${isEn ? 'Cache / Message Queue' : 'キャッシュ / キュー'}</span>
@@ -8638,12 +8618,7 @@ def build_portal_html(data, is_shareable=False):
       };
       const inferTier = it => {
         if (it.priority_tier) return String(it.priority_tier).toUpperCase();
-        const title = String(it.title || '');
-        if (it.is_malware || it.category === 'malware' || it.category === 'secrets' || title.includes('シークレット設定ファイル漏洩') || title.includes('シークレット漏洩検知')) return 'P0';
-        const s = String(it.severity || 'medium').toLowerCase();
-        if (s === 'critical' || s === 'high') return 'P1';
-        if (s === 'medium' || s === 'warning') return 'P2';
-        return 'P3';
+        return 'P2';
       };
       const repoAuditRawDate = repo.analyzed_at || repo.updatedAt || repo.commit_date || '';
       const enrichedIssues = rawIssues.map((it, idx) => ({
@@ -8946,6 +8921,8 @@ def build_portal_html(data, is_shareable=False):
               const findingRawDate = issue.detected_at || repoAuditRawDate;
               const findingShortDate = formatFindingDate(findingRawDate, false);
               const tierTag = `<span class="issue-severity ${issue._tier === 'P0' || issue._tier === 'P1' ? 'danger' : issue._tier === 'P2' ? 'warning' : 'info'}" style="font-weight:700;">${escapeHtml(issue._tier)}</span>`;
+              const confLabel = issue.confidence ? `<span class="issue-severity neutral" title="SSVC Confidence">Confidence: ${escapeHtml(String(issue.confidence).charAt(0).toUpperCase() + String(issue.confidence).slice(1))}</span>` : '';
+              const evChips = Array.isArray(issue.priority_evidence) ? issue.priority_evidence.slice(0, 3).map(ev => `<span class="issue-severity neutral" style="font-size:0.68rem;">${escapeHtml(String(ev))}</span>`).join('') : '';
               const catTag = `<span class="issue-severity neutral">${escapeHtml(issue._cat)}</span>`;
               const kevTag = issue.in_cisa_kev ? `<span class="issue-severity danger" style="font-weight:700;">🔥 KEV</span>` : '';
               const epssTag = (typeof issue.epss_score === 'number' && issue.epss_score >= 0.05) ? `<span class="issue-severity warning">EPSS ${(issue.epss_score * 100).toFixed(0)}%</span>` : '';
@@ -8959,9 +8936,9 @@ def build_portal_html(data, is_shareable=False):
               const fpAttr = encodeURIComponent(String(issue._fp));
               return `<details class="audit-issue">
                 <summary>
-                  ${tierTag}
+                  ${tierTag}${confLabel}
                   <span class="issue-severity ${tone}"><span aria-hidden="true">${tone === 'danger' ? '⛔' : tone === 'warning' ? '△' : tone === 'info' ? 'ⓘ' : '—'}</span> ${escapeHtml(severity.toUpperCase())}</span>
-                  ${catTag}${kevTag}${epssTag}${newTag}${reachTag}${updTag}
+                  ${catTag}${kevTag}${epssTag}${newTag}${reachTag}${updTag}${evChips}
                   <div class="issue-heading">
                     <div class="issue-title">${escapeHtml((en && issue.title_en) || issue.title || (en ? 'Review finding' : '確認事項'))}</div>
                     <div class="issue-path">${escapeHtml(file || (en ? 'Location not recorded' : '場所未記録'))}${findingShortDate ? ` · <span title="${escapeHtml(String(findingRawDate))}">📅 ${escapeHtml(findingShortDate)}</span>` : ''}${issue.priority_reason ? ` · ${escapeHtml(issue.priority_reason)}` : ''}</div>
@@ -9011,9 +8988,11 @@ def build_portal_html(data, is_shareable=False):
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
                 <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                   <span class="issue-severity ${dIss._tier === 'P0' || dIss._tier === 'P1' ? 'danger' : dIss._tier === 'P2' ? 'warning' : 'info'}" style="font-weight: 700;">${escapeHtml(dIss._tier)}</span>
+                  ${dIss.confidence ? `<span class="issue-severity neutral">Confidence: ${escapeHtml(String(dIss.confidence).charAt(0).toUpperCase() + String(dIss.confidence).slice(1))}</span>` : ''}
                   <span class="issue-severity neutral">${escapeHtml(dIss._cat)}</span>
                   ${dIss.in_cisa_kev ? `<span class="issue-severity danger">🔥 KEV</span>` : ''}
                   ${dIss.reachability ? `<span class="issue-severity neutral">${escapeHtml(dIss.reachability)}</span>` : ''}
+                  ${Array.isArray(dIss.priority_evidence) ? dIss.priority_evidence.map(ev => `<span class="issue-severity neutral" style="font-size:0.68rem;">${escapeHtml(String(ev))}</span>`).join('') : ''}
                 </div>
                 <button type="button" id="audit-drawer-close" class="table-view-btn" style="font-size: 0.82rem;">✕ ${en ? 'Close' : '閉じる'}</button>
               </div>
@@ -12062,7 +12041,7 @@ def build_portal_html(data, is_shareable=False):
             ];
           } else if (lowerPath.includes('db') || lowerName.includes('knex') || lowerName.includes('postgresql')) {
             dynCategory = "Database Layer";
-            dynTech = "PostgreSQL 16.3 / Knex.js";
+            dynTech = "Database / Persistence Layer（詳細バージョン未検出）";
             dynResp = "ACIDトランザクションの開始とコミット、企業・求人・面接セッションデータの永続化、インデックス最適化クエリの発行を担当します。";
             dynSteps = [
               "KnexコネクションプールからのDB接続ハンドルの取得",

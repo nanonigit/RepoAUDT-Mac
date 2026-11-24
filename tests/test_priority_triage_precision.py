@@ -40,7 +40,7 @@ class TestPriorityTriagePrecision(unittest.TestCase):
     def test_secrets_and_env_production_are_p0_and_sort_first(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / ".env.production").write_text("DATABASE_URL=postgres://u:p@host/db\n", encoding="utf-8")
+            (root / ".env.production").write_text("DATABASE_URL=postgres://admin:RealProdPass123@db.internal/prod\n", encoding="utf-8")
             (root / "cfg.py").write_text(
                 "AWS_KEY = 'AKIAQWERTYUIOPASDF12'\nOPENAI_KEY = 'sk-proj-aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789'\n",
                 encoding="utf-8",

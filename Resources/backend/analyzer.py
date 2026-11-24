@@ -825,12 +825,15 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
             "desc": str(adv.get("summary") or "").strip(),
             "package_name": pkg_name,
             "cve": cve_label,
+            "cwe_ids": list(adv.get("cwe_ids") or []),
+            "dep_scope": adv.get("dep_scope"),
             "epss_score": adv.get("epss_score"),
             "in_cisa_kev": bool(adv.get("in_cisa_kev") or adv.get("is_kev")),
             "category": "sca",
         }
         adv_tier, adv_reason = classify_priority_tier(adv_probe)
         adv_kev = bool(adv_probe.get("in_cisa_kev"))
+        adv_cwes = list(adv.get("cwe_ids") or [])
 
         if key not in groups:
             order.append(key)
@@ -842,6 +845,9 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
                 "severity": sev,
                 "best_tier": adv_tier,
                 "best_reason": adv_reason,
+                "best_evidence": list(adv_probe.get("priority_evidence") or []),
+                "best_confidence": str(adv_probe.get("confidence") or "medium"),
+                "cwe_ids": adv_cwes,
                 "in_cisa_kev": adv_kev,
                 "cves": [cve_label] if cve_label else [],
                 "fixed_version": adv_safe,
@@ -857,6 +863,11 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
             if TIER_ORDER.get(adv_tier, 99) < TIER_ORDER.get(g["best_tier"], 99):
                 g["best_tier"] = adv_tier
                 g["best_reason"] = adv_reason
+                g["best_evidence"] = list(adv_probe.get("priority_evidence") or [])
+                g["best_confidence"] = str(adv_probe.get("confidence") or "medium")
+            for cw in adv_cwes:
+                if cw not in g["cwe_ids"]:
+                    g["cwe_ids"].append(cw)
             if adv_kev:
                 g["in_cisa_kev"] = True
             if cve_label and cve_label not in g["cves"]:
@@ -906,6 +917,9 @@ def group_advisories_by_package(advisories: List[Dict[str, Any]]) -> List[Dict[s
             "severity": g["severity"],
             "priority_tier": g["best_tier"],
             "priority_reason": g["best_reason"],
+            "priority_evidence": g.get("best_evidence") or [],
+            "confidence": g.get("best_confidence") or "medium",
+            "cwe_ids": g.get("cwe_ids") or [],
             "aggregated": len(cves) > 1,
             "category": "sca",
             "title": title,

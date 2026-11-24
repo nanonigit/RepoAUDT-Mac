@@ -698,6 +698,36 @@ def merge_secret_and_gitleaks_findings(items: List[Dict[str, Any]]) -> List[Dict
     return [it for idx, it in enumerate(items) if idx not in gitleaks_indices]
 
 
+_ENV_SENSITIVE_KEY_RE = re.compile(
+    r"(?:PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|PRIVATE_KEY|ACCESS_KEY|CLIENT_SECRET|AUTH|CREDENTIAL)",
+    re.IGNORECASE,
+)
+_ENV_CONN_WITH_CREDS_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^:\s/]+:([^@\s]+)@")
+_ENV_KNOWN_KEY_RE = re.compile(
+    r"(?:AKIA[0-9A-Z]{16}|sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[bp]-[A-Za-z0-9-]{10,}|-----BEGIN\s+[A-Z0-9 ]*PRIVATE KEY-----)"
+)
+
+
+def _env_file_contains_sensitive_secrets(content: str) -> bool:
+    """Return True if .env content contains real credentials, connection passwords, or known key formats."""
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if _ENV_KNOWN_KEY_RE.search(line):
+            return True
+        m_conn = _ENV_CONN_WITH_CREDS_RE.search(line)
+        if m_conn and not _is_placeholder_secret_line(line, m_conn.group(1)):
+            return True
+        if "=" in line:
+            k_part, _, v_part = line.partition("=")
+            key_name = k_part.strip().removeprefix("export ").strip()
+            val = v_part.strip().strip('"').strip("'")
+            if _ENV_SENSITIVE_KEY_RE.search(key_name) and val and not _is_placeholder_secret_line(line, val):
+                return True
+    return False
+
+
 def scan_secrets_and_credentials(
     repo_dir: Path,
     match_comp: Any,
@@ -741,26 +771,43 @@ def scan_secrets_and_credentials(
             ):
                 continue
 
-            # Special check: committed .env or .env.local file
-            if file_path.name in (".env", ".env.local", ".env.production", ".env.stage", "secrets.yml", "credentials.json"):
-                target_node = match_comp(rel_path)
-                findings.append({
-                    "severity": "critical",
-                    "priority_tier": "P0",
-                    "priority_reason": "実シークレット漏洩 / 認証ファイル露出（即時無効化が必要）",
-                    "category": "secrets",
-                    "title": f"🚨 [シークレット設定ファイル漏洩] `{file_path.name}` がリポジトリにコミットされています",
-                    "file": f"{rel_path}:1 (Target: {target_node})",
-                    "target_node": target_node,
-                    "desc": f"`{rel_path}` は本番または検証用の認証情報・APIキーが含まれるシークレット設定ファイルです。Gitリポジトリへのコミットは不正侵入の直接要因となります。直ちにGit管理対象から除外（`git rm --cached`）し、`.gitignore` に追加してください。",
-                    "diff": f"- (リポジトリ内に保持: {file_path.name})\n+ (.gitignore に追加してローカルまたはシークレットマネージャーで管理)",
-                    "fix_cmd": f"git rm --cached {rel_path} && echo '{rel_path}' >> .gitignore",
-                })
-
             try:
                 content = file_path.read_text(encoding="utf-8", errors="ignore")
             except Exception:
                 continue
+
+            # Special check: committed .env or secret config file (2-tier based on contents)
+            is_env_file = file_path.name == ".env" or file_path.name.startswith(".env.")
+            is_secret_cfg = file_path.name in ("secrets.yml", "credentials.json")
+            if is_env_file or is_secret_cfg:
+                target_node = match_comp(rel_path)
+                has_secrets = is_secret_cfg or _env_file_contains_sensitive_secrets(content)
+                if has_secrets:
+                    findings.append({
+                        "severity": "critical",
+                        "priority_tier": "P0",
+                        "priority_reason": "実シークレット漏洩 / 認証ファイル露出（即時無効化が必要）",
+                        "category": "secrets",
+                        "title": f"🚨 [シークレット設定ファイル漏洩] `{file_path.name}` に認証情報が含まれたままコミットされています",
+                        "file": f"{rel_path}:1 (Target: {target_node})",
+                        "target_node": target_node,
+                        "desc": f"`{rel_path}` に認証情報・APIキー・接続パスワードが含まれた状態で Git 管理下に置かれています。直ちに該当認証情報を無効化（Revoke/Rotate）し、`git rm --cached` で除外して `.gitignore` に追加してください。",
+                        "diff": f"- (認証情報を含む設定ファイル: {file_path.name})\n+ (.gitignore に追加してシークレットマネージャーまたは環境変数で管理)",
+                        "fix_cmd": f"git rm --cached {rel_path} && echo '{rel_path}' >> .gitignore",
+                    })
+                else:
+                    findings.append({
+                        "severity": "medium",
+                        "priority_tier": "P2",
+                        "priority_reason": "環境設定ファイルのGit管理（機密値未検出・.gitignore追加推奨）",
+                        "category": "config",
+                        "title": f"⚠️ [環境設定ファイルコミット] `{file_path.name}` が Git 管理下にあります（機密値は未検出・.gitignore 追加推奨）",
+                        "file": f"{rel_path}:1 (Target: {target_node})",
+                        "target_node": target_node,
+                        "desc": f"`{rel_path}` がリポジトリにコミットされています。現時点でパスワードや API キーは検出されませんでしたが、将来的な誤コミット防止のため `.env.example` へのリネームと `.gitignore` 追加を推奨します。",
+                        "diff": f"- (Git 管理下の環境設定: {file_path.name})\n+ (.env.example へリネームし、{file_path.name} を .gitignore に追加)",
+                        "fix_cmd": f"git rm --cached {rel_path} && echo '{rel_path}' >> .gitignore",
+                    })
 
             lines = content.splitlines()
             for line_no, line_str in enumerate(lines, start=1):

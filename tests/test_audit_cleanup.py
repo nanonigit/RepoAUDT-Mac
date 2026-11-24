@@ -50,7 +50,34 @@ class TestAuditCleanup(unittest.TestCase):
         html_text = html_path.read_text(encoding="utf-8")
         self.assertNotIn("Business data model stored in PostgreSQL 16.3 / AWS RDS Multi-AZ.", html_text)
         self.assertNotIn("PostgreSQL 16.3 / AWS RDS Multi-AZ 上に格納される業務データモデルです。", html_text)
+        self.assertNotIn("PostgreSQL 16.3", html_text)
+        self.assertNotIn("AWS RDS Multi-AZ", html_text)
         self.assertIn("このテーブルのスキーマ定義は静的解析で検出されませんでした（未抽出）", html_text)
+
+    def test_env_file_content_based_two_tier_classification(self) -> None:
+        import security_audit_engine
+        import triage_engine
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # 1. Non-sensitive .env -> P2 / medium
+            (root / ".env.local").write_text("BASE_URL=https://api.example.com\nPORT=3000\n", encoding="utf-8")
+            findings_clean = security_audit_engine.scan_secrets_and_credentials(root, lambda _p: "web")
+            self.assertEqual(len(findings_clean), 1)
+            self.assertEqual(findings_clean[0]["severity"], "medium")
+            self.assertEqual(findings_clean[0]["priority_tier"], "P2")
+            self.assertIn("環境設定ファイルコミット", findings_clean[0]["title"])
+            t_clean, _ = triage_engine.classify_priority_tier(findings_clean[0])
+            self.assertEqual(t_clean, "P2")
+
+            # 2. Sensitive .env -> P0 / critical
+            (root / ".env.local").write_text("DATABASE_URL=mysql://user:realpass@host/db\n", encoding="utf-8")
+            findings_secret = security_audit_engine.scan_secrets_and_credentials(root, lambda _p: "api")
+            env_hits = [f for f in findings_secret if "シークレット設定ファイル漏洩" in f["title"]]
+            self.assertEqual(len(env_hits), 1)
+            self.assertEqual(env_hits[0]["severity"], "critical")
+            self.assertEqual(env_hits[0]["priority_tier"], "P0")
+            self.assertNotIn("realpass", env_hits[0]["desc"])
 
     def test_delete_diagram_gcs_orphaned_tech_specs_table_schemas_and_org_parent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

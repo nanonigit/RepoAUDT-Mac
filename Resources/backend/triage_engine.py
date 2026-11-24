@@ -35,6 +35,13 @@ _P1_PHRASES = (
     "improper categorization in ispublic",
 )
 _P1_WORD_RE = re.compile(r"\b(?:rce|ssrf|sqli|xss)\b", re.IGNORECASE)
+_P1_CWE_ALWAYS = {
+    "CWE-77", "CWE-78", "CWE-94", "CWE-502",
+    "CWE-287", "CWE-306", "CWE-639", "CWE-863",
+    "CWE-918", "CWE-89", "CWE-22",
+}
+_P1_CWE_HIGH_CRIT = {"CWE-290", "CWE-1321"}
+_CWE_RE = re.compile(r"\b(CWE-\d{1,5})\b", re.IGNORECASE)
 _P3_LOW_IMPACT_PACKAGES = {"postcss", "source-map-js", "nanoid", "brace-expansion", "picomatch"}
 _CVE_RE = re.compile(r"\b(CVE-\d{4}-\d{4,7})\b", re.IGNORECASE)
 _PRERELEASE_VER_RE = re.compile(r"-(?:rc|alpha|beta|dev|canary|preview|next|pre)(?:[.\-\d]|$)", re.IGNORECASE)
@@ -195,8 +202,40 @@ def classify_update_type(item: Dict[str, Any]) -> Optional[str]:
     return "Safe Patch/Minor"
 
 
-def classify_priority_tier(item: Dict[str, Any], kev_set: Optional[Set[str]] = None) -> Tuple[str, str]:
-    """Assign (priority_tier, priority_reason) for P0-P3 automated triage."""
+def _extract_cwe_ids(item: Dict[str, Any]) -> List[str]:
+    cwes: List[str] = []
+    seen: Set[str] = set()
+    for raw in list(item.get("cwe_ids") or []):
+        c = str(raw).strip().upper()
+        if c and c not in seen:
+            seen.add(c)
+            cwes.append(c)
+    blob = f"{item.get('title') or ''} {item.get('desc') or ''} {item.get('summary') or ''}"
+    for m in _CWE_RE.finditer(blob):
+        c = m.group(1).upper()
+        if c not in seen:
+            seen.add(c)
+            cwes.append(c)
+    return cwes
+
+
+def _load_package_json_deps(repo_dir: Optional[Path]) -> Tuple[Set[str], Set[str]]:
+    if not repo_dir:
+        return set(), set()
+    pkg_json = Path(repo_dir) / "package.json"
+    if not pkg_json.is_file():
+        return set(), set()
+    try:
+        data = json.loads(pkg_json.read_text(encoding="utf-8", errors="ignore"))
+        prod = {str(k).lower() for k in (data.get("dependencies") or {}).keys()}
+        dev = {str(k).lower() for k in (data.get("devDependencies") or {}).keys()} - prod
+        return prod, dev
+    except Exception:
+        return set(), set()
+
+
+def classify_priority_ssvc(item: Dict[str, Any], kev_set: Optional[Set[str]] = None) -> Dict[str, Any]:
+    """Single Source of Truth SSVC-based deterministic P0-P3 classifier with evidence & confidence."""
     title = str(item.get("title") or "")
     low_title = title.lower()
     desc = str(item.get("desc") or "")
@@ -205,51 +244,110 @@ def classify_priority_tier(item: Dict[str, Any], kev_set: Optional[Set[str]] = N
     rule_id = str(item.get("rule_id") or "").lower()
     sev = str(item.get("severity") or "medium").lower()
     reachability = str(item.get("reachability") or "").lower()
+    dep_scope = str(item.get("dep_scope") or "").lower()
+    ver_status = str(
+        item.get("verification_status")
+        or ((item.get("secret_liveness") or {}).get("status") if isinstance(item.get("secret_liveness"), dict) else "")
+        or ""
+    ).lower()
 
+    evidence: List[str] = []
     cves = _extract_cves(item)
+    cwes = _extract_cwe_ids(item)
     in_kev = bool(item.get("in_cisa_kev")) or bool(kev_set and any(c in kev_set for c in cves))
     if in_kev:
         item["in_cisa_kev"] = True
+        evidence.append("CISA KEV")
 
-    # P0: Malicious packages (MAL-*) or real secret leaks / committed .env files
-    if item.get("is_malware") or str(item.get("category") or "").lower() == "malware" or "マルウェアパッケージ検出" in title:
-        return "P0", "OpenSSF Malicious Package (MAL-*) — 即時アンインストール・侵害調査が必要"
-    if (
-        str(item.get("category") or "").lower() == "secrets"
-        or "シークレット設定ファイル漏洩" in title
-        or "シークレット漏洩検知" in title
-        or scanner == "gitleaks"
-        or rule_id in ("aws-access-token", "openai-api-key", "private-key")
-    ):
-        return "P0", "実シークレット漏洩 / 認証ファイル露出（即時無効化が必要）"
-
-    # P1: KEV, high EPSS (>= 0.10), or high-impact RCE/Auth/SSRF/SQLi dependency CVEs
     epss = item.get("epss_score")
     try:
         epss_val = float(epss) if epss is not None else 0.0
     except (TypeError, ValueError):
         epss_val = 0.0
-
-    if in_kev:
-        return "P1", "CISA KEV 登録済み（実環境での悪用確認済みCVE）"
     if epss_val >= 0.10:
-        return "P1", f"EPSS 悪用確率が高い脆弱性 ({epss_val:.0%})"
+        evidence.append(f"EPSS {epss_val:.1%}")
 
-    # Preserve highest inherited priority on aggregated dependency findings
-    existing_tier = str(item.get("priority_tier") or "").upper()
-    if ("[依存関係脆弱性集約]" in title or item.get("aggregated")) and existing_tier in ("P0", "P1"):
-        if reachability not in ("unlikely", "mitigated"):
-            return existing_tier, str(item.get("priority_reason") or "集約CVE内の最高優先度を引き継ぎ")
+    if dep_scope == "prod":
+        evidence.append("Prod Dependency")
+    elif dep_scope == "dev":
+        evidence.append("devDependencies のみ")
+    elif dep_scope == "transitive":
+        evidence.append("Transitive Dependency")
 
-    has_p1_keyword = (
-        bool(_P1_WORD_RE.search(low_blob))
-        or any(kw in low_blob for kw in _P1_PHRASES)
-        or ("prototype pollution" in low_blob and sev in ("critical", "high"))
+    def _finish(tier: str, reason: str, confidence: str) -> Dict[str, Any]:
+        # Automatic 1-tier downgrade for devDependencies-only packages (unless CISA KEV)
+        if dep_scope == "dev" and not in_kev and tier in ("P1", "P2"):
+            tier = "P2" if tier == "P1" else "P3"
+            if "devDependencies のみ" not in reason:
+                reason = f"{reason}（devDependencies のみの為1段階降格）"
+        dedup_ev: List[str] = []
+        for ev in evidence:
+            if ev and ev not in dedup_ev:
+                dedup_ev.append(ev)
+        item["priority_tier"] = tier
+        item["priority_reason"] = reason
+        item["priority_evidence"] = dedup_ev
+        item["confidence"] = confidence
+        return {
+            "priority_tier": tier,
+            "priority_reason": reason,
+            "priority_evidence": dedup_ev,
+            "confidence": confidence,
+        }
+
+    # (A) P0: Malware, verified active secrets, provider-specific secrets, generic gitleaks
+    if item.get("is_malware") or str(item.get("category") or "").lower() == "malware" or "マルウェアパッケージ検出" in title:
+        evidence.append("OpenSSF MAL-*")
+        return _finish("P0", "OpenSSF Malicious Package (MAL-*) — 即時アンインストール・侵害調査が必要", "high")
+
+    if ver_status == "revoked":
+        evidence.append("Revoked Secret")
+        return _finish("P3", "失効済みキー（履歴削除のみ推奨）", "high")
+
+    if ver_status == "active":
+        evidence.append("Active Verified Secret")
+        return _finish("P0", "有効なシークレットキー（即時失効必須）", "high")
+
+    if "環境設定ファイルコミット" in title:
+        evidence.append("Non-Secret .env Config")
+        return _finish("P2", "環境設定ファイルのGit管理（機密値未検出・.gitignore追加推奨）", "high")
+
+    if scanner == "gitleaks" and rule_id == "generic-api-key":
+        evidence.extend(["Gitleaks generic-api-key", "Manual Verification Recommended"])
+        return _finish("P0", "汎用APIキー候補（プロバイダ固有形式ではないため要目視確認）", "medium")
+
+    if (
+        str(item.get("category") or "").lower() == "secrets"
+        or "シークレット設定ファイル漏洩" in title
+        or "シークレット漏洩検知" in title
+        or scanner == "gitleaks"
+        or rule_id in ("aws-access-token", "openai-api-key", "github-pat", "private-key", "slack-access-token")
+    ):
+        evidence.append("Provider-Specific Secret / Credential File")
+        return _finish("P0", "実シークレット漏洩 / 認証ファイル露出（即時無効化が必要）", "high")
+
+    # (B) P1: KEV, high EPSS, official dangerous CWE, critical dependency, run: shell injection
+    if in_kev:
+        return _finish("P1", "CISA KEV 登録済み（実環境での悪用確認済みCVE）", "high")
+
+    if epss_val >= 0.10 and sev in ("critical", "high"):
+        return _finish("P1", f"EPSS 悪用確率が高い脆弱性 ({epss_val:.0%})", "high")
+
+    matched_cwes = [c for c in cwes if c in _P1_CWE_ALWAYS or (c in _P1_CWE_HIGH_CRIT and sev in ("critical", "high"))]
+    if matched_cwes and reachability not in ("unlikely", "mitigated"):
+        evidence.extend(matched_cwes)
+        return _finish("P1", f"重大 CWE 該当 ({', '.join(matched_cwes[:3])})", "high")
+
+    if reachability in ("unlikely", "mitigated"):
+        evidence.append(f"Reachability: {reachability}")
+        return _finish("P3", f"到達可能性が低い/緩和済み ({reachability})", "high")
+
+    is_run_shell_inj = rule_id == "run-shell-injection" or (
+        scanner in ("zizmor", "actionlint") and "run:" in low_blob and "injection" in low_blob
     )
-    if reachability not in ("unlikely", "mitigated") and has_p1_keyword:
-        if any(pkg in low_title for pkg in _P3_LOW_IMPACT_PACKAGES) and not _P1_WORD_RE.search(low_blob):
-            return "P3", "ビルドツール/間接依存の軽微な影響"
-        return "P1", "RCE・認証/認可バイパス・SSRF等の重大脆弱性"
+    if is_run_shell_inj:
+        evidence.append("GitHub Actions run: Shell Injection")
+        return _finish("P1", "GitHub Actions run: ブロック内のシェルインジェクション", "high")
 
     is_dependency_vuln = bool(
         item.get("package_name")
@@ -258,26 +356,57 @@ def classify_priority_tier(item: Dict[str, Any], kev_set: Optional[Set[str]] = N
         or "[依存関係脆弱性集約]" in title
         or str(item.get("category") or "").lower() == "sca"
     )
-    if is_dependency_vuln and sev == "critical" and reachability not in ("unlikely", "mitigated"):
-        return "P1", "CRITICAL 重要度の依存関係脆弱性"
+    if is_dependency_vuln and sev == "critical":
+        evidence.append("CRITICAL Severity Dependency")
+        return _finish("P1", "CRITICAL 重要度の依存関係脆弱性", "high")
 
-    # P3: Build/dev-tool minor DoS, zizmor unpinned-uses, unlikely/mitigated, low/info
-    if reachability in ("unlikely", "mitigated"):
-        return "P3", f"到達可能性が低い/緩和済み ({reachability})"
+    # Preserve highest inherited P1 on aggregated dependency findings
+    existing_tier = str(item.get("priority_tier") or "").upper()
+    if ("[依存関係脆弱性集約]" in title or item.get("aggregated")) and existing_tier == "P1":
+        evidence.append("Aggregated P1 Signal")
+        return _finish("P1", str(item.get("priority_reason") or "集約CVE内の最高優先度を引き継ぎ"), "high")
+
+    has_p1_keyword = (
+        bool(_P1_WORD_RE.search(low_blob))
+        or any(kw in low_blob for kw in _P1_PHRASES)
+        or ("prototype pollution" in low_blob and sev in ("critical", "high"))
+    )
+    if has_p1_keyword:
+        if any(pkg in low_title for pkg in _P3_LOW_IMPACT_PACKAGES) and not _P1_WORD_RE.search(low_blob):
+            evidence.append("Build/Dev-Tool Minor Impact")
+            return _finish("P3", "ビルドツール/間接依存の軽微な影響", "medium")
+        evidence.append("High-Impact Exploit Keyword")
+        return _finish("P1", "RCE・認証/認可バイパス・SSRF等の重大脆弱性", "medium")
+
+    # (D) P3 / P2
     if rule_id in ("unpinned-uses", "excessive-permissions"):
-        return "P3", "CI/CD ガードレール強化（計画的対応）"
-    if any(pkg in low_title for pkg in _P3_LOW_IMPACT_PACKAGES) and "remote code execution" not in low_blob:
-        return "P3", "ビルドツール/間接依存の軽微なDoS"
+        evidence.append(f"zizmor: {rule_id}")
+        return _finish("P3", "CI/CD ガードレール強化（計画的対応）", "high")
+    if any(pkg in low_title for pkg in _P3_LOW_IMPACT_PACKAGES):
+        evidence.append("Build/Dev-Tool DoS")
+        return _finish("P3", "ビルドツール/間接依存の軽微なDoS", "high")
     if sev in ("low", "info"):
-        return "P3", "低リスク / 情報レベルの改善推奨"
+        return _finish("P3", "低リスク / 情報レベルの改善推奨", "medium")
 
-    # P2: CI/CD template-injection / dangerous-triggers, IaC, medium/high remaining
     if scanner in ("zizmor", "actionlint") or rule_id in ("template-injection", "dangerous-triggers"):
-        return "P2", "CI/CD ワークフローのセキュリティ強化"
-    if "trivy" in low_title or scanner == "trivy":
-        if ".tf" in low_blob or ".yaml" in low_blob or ".yml" in low_blob or "dockerfile" in low_blob:
-            return "P2", "IaC / コンテナ設定のセキュリティ強化"
-    return "P2", "計画的なアップデート・修正推奨"
+        evidence.append("CI/CD Hardening")
+        return _finish("P2", "CI/CD ワークフローのセキュリティ強化", "high")
+    if "trivy" in low_title or scanner == "trivy" or any(k in low_blob for k in (".tf", "terraform", "cloudformation", "dockerfile")):
+        evidence.append("IaC / Container")
+        return _finish("P2", "IaC / コンテナ設定のセキュリティ強化", "high")
+    if "eol" in low_blob or str(item.get("category") or "").lower() == "eol":
+        evidence.append("EOL Runtime/Framework")
+        return _finish("P2", "サポート終了（EOL）ランタイム・フレームワークの更新推奨", "high")
+
+    if not evidence:
+        evidence.append(f"Severity: {sev.upper()}")
+    return _finish("P2", "計画的なアップデート・修正推奨", "medium")
+
+
+def classify_priority_tier(item: Dict[str, Any], kev_set: Optional[Set[str]] = None) -> Tuple[str, str]:
+    """Assign (priority_tier, priority_reason) for P0-P3 automated triage via SSVC engine."""
+    res = classify_priority_ssvc(item, kev_set=kev_set)
+    return res["priority_tier"], res["priority_reason"]
 
 
 def _parse_ver(raw: str) -> Optional[Tuple[int, ...]]:
@@ -355,6 +484,7 @@ def triage_and_validate_findings(
 ) -> List[Dict[str, Any]]:
     """Run reachability annotation, P0-P3 triage, output validation, fingerprinting, and sorting."""
     is_linux = detect_linux_container_repo(repo_dir)
+    prod_deps, dev_deps = _load_package_json_deps(repo_dir)
     prev_fps = set(previous_fingerprints or ())
     supp = suppressed_map or {}
     has_prev = bool(prev_fps)
@@ -364,10 +494,16 @@ def triage_and_validate_findings(
         if not isinstance(raw_item, dict):
             continue
         item = dict(raw_item)
+        pkg_name = str(item.get("package_name") or item.get("pkg") or "").strip().lower()
+        if pkg_name and not item.get("dep_scope") and (prod_deps or dev_deps):
+            if pkg_name in prod_deps:
+                item["dep_scope"] = "prod"
+            elif pkg_name in dev_deps:
+                item["dep_scope"] = "dev"
+            else:
+                item["dep_scope"] = "transitive"
         annotate_windows_cve_reachability(item, is_linux)
-        tier, reason = classify_priority_tier(item, kev_set=kev_set)
-        item["priority_tier"] = tier
-        item["priority_reason"] = reason
+        classify_priority_ssvc(item, kev_set=kev_set)
         item["category"] = item.get("category") or classify_category(item)
         validate_and_sanitize_finding(item)
         upd_type = classify_update_type(item)
@@ -593,8 +729,10 @@ def build_pdf_audit_html(diagrams: List[Dict[str, Any]], *, lang: str = "ja") ->
             f"""<div class="finding-card">
               <div class="finding-head">
                 <span class="badge badge-{escape(str(it.get('priority_tier') or 'P2').lower())}">{escape(str(it.get('priority_tier') or 'P2'))}</span>
+                <span class="meta">(Confidence: {escape(str(it.get('confidence') or 'medium').capitalize())})</span>
                 <strong>{escape(_sanitize_slack_text(str(it.get('title') or '')))}</strong>
               </div>
+              {f"<div class='meta'>Evidence: {' · '.join(escape(str(e)) for e in (it.get('priority_evidence') or []))}</div>" if it.get('priority_evidence') else ""}
               <div class="meta">{escape(str(it.get('file') or ''))}</div>
               <p>{escape(_sanitize_slack_text(str(it.get('desc') or it.get('comment') or '')))}</p>
               {f"<pre>{escape(_sanitize_slack_text(str(it.get('fix_cmd') or '')))}</pre>" if it.get('fix_cmd') else ""}

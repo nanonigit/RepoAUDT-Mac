@@ -1,0 +1,253 @@
+{
+  "triage_cases": [
+    {
+      "name": "waiphyo-account.csv AWS Key",
+      "item": {
+        "severity": "critical",
+        "category": "secrets",
+        "title": "🚨 [シークレット漏洩検知] AWS Access Key ID が平文でハードコードされています (waiphyo-account.csv:5)",
+        "file": "waiphyo-account.csv:5"
+      },
+      "expected_tier": "P0",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "AI_Interview_xcore/src/config.ts OpenAI Key",
+      "item": {
+        "severity": "critical",
+        "category": "secrets",
+        "title": "🚨 [シークレット漏洩検知] OpenAI API Key が平文でハードコードされています (config.ts:6)",
+        "file": "src/config.ts:6"
+      },
+      "expected_tier": "P0",
+      "expected_confidence": "high"
+    },
+    {
+      "name": ".env.production RDS credentials",
+      "item": {
+        "severity": "critical",
+        "category": "secrets",
+        "title": "🚨 [シークレット設定ファイル漏洩] `.env.production` に認証情報が含まれたままコミットされています",
+        "file": ".env.production:1"
+      },
+      "expected_tier": "P0",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "OSV MAL-* malware package",
+      "item": {
+        "severity": "critical",
+        "category": "malware",
+        "is_malware": true,
+        "package_name": "evil-pkg",
+        "title": "🚨 [マルウェアパッケージ検出] evil-pkg@1.0.0 (MAL-2026-9999)",
+        "file": "package-lock.json"
+      },
+      "expected_tier": "P0",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "Gitleaks generic-api-key only",
+      "item": {
+        "severity": "critical",
+        "scanner": "gitleaks",
+        "rule_id": "generic-api-key",
+        "title": "[gitleaks] generic-api-key",
+        "file": "src/helper.ts:12"
+      },
+      "expected_tier": "P0",
+      "expected_confidence": "medium"
+    },
+    {
+      "name": "next 16.2.0 CRITICAL CWE-22 + RCE prod",
+      "item": {
+        "severity": "critical",
+        "package_name": "next",
+        "dep_scope": "prod",
+        "cwe_ids": ["CWE-22", "CWE-94"],
+        "title": "next 16.2.0 vulnerability",
+        "desc": "Remote code execution and path traversal",
+        "category": "sca"
+      },
+      "expected_tier": "P1",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "@auth0/nextjs-auth0 OAuth CWE-287 prod",
+      "item": {
+        "severity": "high",
+        "package_name": "@auth0/nextjs-auth0",
+        "dep_scope": "prod",
+        "cwe_ids": ["CWE-287"],
+        "title": "@auth0/nextjs-auth0 OAuth query parameter injection",
+        "category": "sca"
+      },
+      "expected_tier": "P1",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "proxy-addr CRITICAL IP spoofing",
+      "item": {
+        "severity": "critical",
+        "package_name": "proxy-addr",
+        "dep_scope": "prod",
+        "cwe_ids": ["CWE-290"],
+        "title": "proxy-addr IP spoofing",
+        "category": "sca"
+      },
+      "expected_tier": "P1",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "@sentry/nextjs Middleware Bypass",
+      "item": {
+        "severity": "high",
+        "package_name": "@sentry/nextjs",
+        "dep_scope": "prod",
+        "cwe_ids": ["CWE-863"],
+        "title": "@sentry/nextjs middleware bypass",
+        "category": "sca"
+      },
+      "expected_tier": "P1",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "CISA KEV CVE",
+      "item": {
+        "severity": "high",
+        "package_name": "libxml2",
+        "in_cisa_kev": true,
+        "title": "CVE-2024-0001 libxml2",
+        "category": "sca"
+      },
+      "expected_tier": "P1",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "branch-merge-validation.yml run: shell injection",
+      "item": {
+        "severity": "high",
+        "scanner": "zizmor",
+        "rule_id": "run-shell-injection",
+        "title": "[zizmor] template-injection in run:",
+        "file": ".github/workflows/branch-merge-validation.yml:15"
+      },
+      "expected_tier": "P1",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "Admin-Portal/.env public URL only",
+      "item": {
+        "severity": "medium",
+        "category": "config",
+        "title": "⚠️ [環境設定ファイルコミット] `.env` が Git 管理下にあります（機密値は未検出・.gitignore 追加推奨）",
+        "file": ".env:1"
+      },
+      "expected_tier": "P2",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "maice-infra Terraform finding",
+      "item": {
+        "severity": "medium",
+        "scanner": "trivy",
+        "title": "[Trivy] S3 bucket encryption disabled",
+        "file": "modules/s3/main.tf:10"
+      },
+      "expected_tier": "P2",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "nextjs 13 EOL",
+      "item": {
+        "severity": "medium",
+        "category": "eol",
+        "title": "Next.js 13 is EOL",
+        "file": "package.json"
+      },
+      "expected_tier": "P2",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "@babel/core devDependencies-only downgrade P1->P2",
+      "item": {
+        "severity": "high",
+        "package_name": "@babel/core",
+        "dep_scope": "dev",
+        "cwe_ids": ["CWE-94"],
+        "title": "@babel/core arbitrary code execution",
+        "category": "sca"
+      },
+      "expected_tier": "P2",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "zod DoS",
+      "item": {
+        "severity": "medium",
+        "package_name": "zod",
+        "title": "zod uncontrolled resource consumption (DoS)",
+        "category": "sca"
+      },
+      "expected_tier": "P2",
+      "expected_confidence": "medium"
+    },
+    {
+      "name": "source-map-js transitive DoS",
+      "item": {
+        "severity": "medium",
+        "package_name": "source-map-js",
+        "title": "source-map-js Regular Expression DoS",
+        "category": "sca"
+      },
+      "expected_tier": "P3",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "nanoid transitive DoS",
+      "item": {
+        "severity": "medium",
+        "package_name": "nanoid",
+        "title": "nanoid DoS",
+        "category": "sca"
+      },
+      "expected_tier": "P3",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "postcss build-tool DoS",
+      "item": {
+        "severity": "medium",
+        "package_name": "postcss",
+        "title": "postcss line return parsing error",
+        "category": "sca"
+      },
+      "expected_tier": "P3",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "zizmor unpinned-uses",
+      "item": {
+        "severity": "low",
+        "scanner": "zizmor",
+        "rule_id": "unpinned-uses",
+        "title": "[zizmor] unpinned-uses",
+        "file": ".github/workflows/ci.yml:10"
+      },
+      "expected_tier": "P3",
+      "expected_confidence": "high"
+    },
+    {
+      "name": "zizmor excessive-permissions",
+      "item": {
+        "severity": "low",
+        "scanner": "zizmor",
+        "rule_id": "excessive-permissions",
+        "title": "[zizmor] excessive-permissions",
+        "file": ".github/workflows/ci.yml:4"
+      },
+      "expected_tier": "P3",
+      "expected_confidence": "high"
+    }
+  ]
+}

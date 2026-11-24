@@ -799,7 +799,7 @@ struct MainContentView: View {
 
     private var dashboard: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .center, spacing: 12) {
                     Text("RepoAUDT Mac")
                         .font(.title2.bold())
@@ -894,20 +894,23 @@ struct MainContentView: View {
                 }
                 let allRepos = coordinator.repositories
                 GroupBox {
-                    HStack(spacing: 20) {
-                        Image(systemName: "checkmark.shield").font(.system(size: 32)).foregroundStyle(SemanticColors.role("actionText"))
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(english ? "Start with a GitHub URL" : "GitHub URL から解析を始める")
-                                .font(.headline)
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.shield").font(.system(size: 20)).foregroundStyle(SemanticColors.role("actionText"))
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 8) {
+                                Text(english ? "Start with a GitHub URL" : "GitHub URL から解析を始める")
+                                    .font(.subheadline.weight(.semibold))
+                                if !listRefreshNote.isEmpty {
+                                    Text(listRefreshNote)
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(SemanticColors.role("actionText"))
+                                }
+                            }
                             Text(english ? "Inspect findings, code structure and execution flows in one workspace." :
                                     "監査結果・コードの構成・実行フローをひとつの場所で確認できます。")
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if !listRefreshNote.isEmpty {
-                                Text(listRefreshNote)
-                                    .font(.caption.monospaced())
-                                    .foregroundStyle(SemanticColors.role("actionText"))
-                            }
+                                .lineLimit(1)
                         }
                         Spacer(minLength: 0)
                         HStack(spacing: 10) {
@@ -942,7 +945,8 @@ struct MainContentView: View {
                             }
                         }
                     }
-                    .padding(18)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                 }
 
                 if !allRepos.isEmpty {
@@ -2462,8 +2466,11 @@ struct MainContentView: View {
                     ))
 
                     repoLines.append("")
-                    repoLines.append("### \(idx + 1). \(tierPrefix)[\(sev)]\(kevTag)\(newTag) \(title)")
-                    if !reason.isEmpty { repoLines.append("- **Priority Reason**: \(reason)") }
+                    let conf = ((item["confidence"] as? String) ?? "medium").capitalized
+                    let evList = (item["priority_evidence"] as? [String]) ?? []
+                    let evStr = evList.isEmpty ? "" : " · Evidence: " + evList.joined(separator: ", ")
+                    repoLines.append("### \(idx + 1). \(tierPrefix)(Confidence: \(conf)) [\(sev)]\(kevTag)\(newTag) \(title)")
+                    if !reason.isEmpty { repoLines.append("- **Priority Reason**: \(reason)\(evStr)") }
                     if !reachability.isEmpty { repoLines.append("- **Reachability**: `\(reachability)`") }
                     if !file.isEmpty { repoLines.append("- **File**: `\(file)`") }
                     if !officialSource.isEmpty { repoLines.append("- **Reference**: \(officialSource)") }
