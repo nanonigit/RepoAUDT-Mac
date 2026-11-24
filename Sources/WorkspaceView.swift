@@ -918,6 +918,41 @@ struct MainContentView: View {
                     )
                 }
 
+                let p0Total = aspmRepos.reduce(0) { $0 + $1.p0 }
+                let p1Total = aspmRepos.reduce(0) { $0 + $1.p1 }
+                let p2Total = aspmRepos.reduce(0) { $0 + $1.p2 }
+                let p3Total = aspmRepos.reduce(0) { $0 + $1.p3 }
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                    summaryMetricCard(
+                        title: english ? "P0 Critical (Immediate)" : "P0 緊急対応",
+                        value: "\(p0Total)",
+                        subtitle: english ? "Secrets / Malware" : "シークレット漏洩 / マルウェア",
+                        symbol: "flame.fill",
+                        tint: SemanticColors.role("dangerText")
+                    )
+                    summaryMetricCard(
+                        title: english ? "P1 High (This Week)" : "P1 最優先",
+                        value: "\(p1Total)",
+                        subtitle: english ? "KEV / RCE / Auth Bypass" : "KEV / RCE / 認証バイパス",
+                        symbol: "exclamationmark.triangle.fill",
+                        tint: SemanticColors.role("warningText")
+                    )
+                    summaryMetricCard(
+                        title: english ? "P2 Planned" : "P2 計画対応",
+                        value: "\(p2Total)",
+                        subtitle: english ? "CI/CD / IaC / License" : "CI/CD / IaC / ライセンス",
+                        symbol: "wrench.and.screwdriver.fill",
+                        tint: SemanticColors.role("actionText")
+                    )
+                    summaryMetricCard(
+                        title: english ? "P3 Backlog" : "P3 低優先",
+                        value: "\(p3Total)",
+                        subtitle: english ? "Dev tools / Revoked" : "開発ツール / 失効済み等",
+                        symbol: "tray.full.fill",
+                        tint: SemanticColors.role("infoText")
+                    )
+                }
+
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 10) {
                         Text(english ? "Top Priority Repositories" : "優先対応リポジトリ（危険度順）")
@@ -2092,7 +2127,7 @@ struct MainContentView: View {
                 }
             }
             let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm:ss"
+            formatter.dateFormat = "yyyy/MM/dd HH:mm:ss"
             let time = formatter.string(from: Date())
             if lastCompletedSyncAt == nil {
                 let fullFmt = DateFormatter()
@@ -2423,6 +2458,7 @@ struct MainContentView: View {
                     default: return "⬜"
                     }
                 }
+                let counts = d["counts"] as? [String: Any] ?? [:]
                 let compact = "Sec:\(icon("secrets")) SCA:\(icon("sca")) SAST:\(icon("sast")) CI:\(icon("cicd")) IaC:\(icon("iac")) GH:\(icon("posture"))"
                 return AspmRepoItem(
                     id: (d["id"] as? String) ?? UUID().uuidString,
@@ -2431,7 +2467,11 @@ struct MainContentView: View {
                     riskScore: (d["risk_score"] as? Int) ?? 0,
                     releaseGate: (d["release_gate"] as? String) ?? "PASS",
                     gateReasons: (d["gate_reasons"] as? [String]) ?? [],
-                    coverageCompact: compact
+                    coverageCompact: compact,
+                    p0: (counts["P0"] as? Int) ?? 0,
+                    p1: (counts["P1"] as? Int) ?? 0,
+                    p2: (counts["P2"] as? Int) ?? 0,
+                    p3: (counts["P3"] as? Int) ?? 0
                 )
             }
             await MainActor.run { aspmRepos = parsed }
@@ -2449,6 +2489,10 @@ private struct AspmRepoItem: Identifiable {
     let releaseGate: String
     let gateReasons: [String]
     let coverageCompact: String
+    let p0: Int
+    let p1: Int
+    let p2: Int
+    let p3: Int
 
     var gateEmoji: String {
         switch releaseGate {

@@ -791,7 +791,16 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
             qs = urllib.parse.parse_qs(parsed_url.query)
             job_id = (qs.get("job_id") or [""])[0].strip()
             with _SYNC_JOBS_LOCK:
-                job = _SYNC_JOBS.get(job_id)
+                if job_id:
+                    job = _SYNC_JOBS.get(job_id)
+                else:
+                    running = [j for j in _SYNC_JOBS.values() if j.get("status") == "running"]
+                    job = running[-1] if running else {
+                        "status": "running" if _SYNC_DAEMON.checking else "idle",
+                        "checking": bool(_SYNC_DAEMON.checking),
+                        "current_stage": "バックグラウンド監視 / 解析中" if _SYNC_DAEMON.checking else "",
+                        "eta_seconds": 0,
+                    }
             if not job:
                 self._send_json(404, {"error": "Sync job not found", "job_id": job_id})
                 return

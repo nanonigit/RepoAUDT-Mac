@@ -32,7 +32,7 @@ REPOS_CACHE_DIR = APP_SUPPORT_DIR / "repos"
 STATE_FILE = APP_SUPPORT_DIR / "analyzed_repos.json"
 HISTORY_FILE = APP_SUPPORT_DIR / "scan_history.json"
 MAX_SCAN_HISTORY = 90
-AUDIT_ENGINE_VERSION = "2026.11.24-1"
+AUDIT_ENGINE_VERSION = "2026.11.24-2"
 _STATE_LOCK = threading.Lock()
 _GITHUB_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
@@ -534,19 +534,12 @@ def sanitize_mermaid_label(text: str) -> str:
 
 
 def discover_repo_components(repo_dir: Path, repo_name: str) -> List[Dict[str, Any]]:
+    import arch_analyzer
+
     components: List[Dict[str, Any]] = []
-    ignore_dirs = {
-        ".git", "node_modules", "dist", "build", "__pycache__", ".next",
-        ".venv", "venv", "vendor", ".codex", ".idea", ".vscode"
-    }
+    ignore_dirs = arch_analyzer.NON_RUNTIME_DIRS
 
     swift_files = [p.relative_to(repo_dir) for p in repo_dir.rglob("*.swift") if not any(part in ignore_dirs for part in p.parts)]
-    ts_js_files = [
-        p.relative_to(repo_dir)
-        for p in list(repo_dir.rglob("*.ts")) + list(repo_dir.rglob("*.tsx")) + list(repo_dir.rglob("*.js")) + list(repo_dir.rglob("*.jsx"))
-        if not any(part in ignore_dirs for part in p.parts)
-    ]
-    py_files = [p.relative_to(repo_dir) for p in repo_dir.rglob("*.py") if not any(part in ignore_dirs for part in p.parts)]
 
     if swift_files:
         entry_files = [str(f) for f in swift_files if any(k in f.name.lower() for k in ["app", "main", "delegate"])] or [str(swift_files[0])]
@@ -649,196 +642,36 @@ def discover_repo_components(repo_dir: Path, repo_name: str) -> List[Dict[str, A
             })
         return components
 
-    top_dirs = [
-        d for d in sorted(repo_dir.iterdir())
-        if d.is_dir() and d.name not in ignore_dirs and not d.name.startswith(".")
-    ]
-    src_dir = repo_dir / "src"
-    scan_dirs = [d for d in sorted(src_dir.iterdir()) if d.is_dir() and d.name not in ignore_dirs] if src_dir.exists() else top_dirs
-
-    components.append({
-        "id": "ClientEntry",
-        "name": "Client / Entry Interface",
-        "path": "src/" if src_dir.exists() else (top_dirs[0].name + "/" if top_dirs else "README.md"),
-        "layer": "entry",
-        "category": "Entrypoint & Client Layer",
-        "tech": "HTTP / CLI / UI Interface",
-        "desc": f"{repo_name} へのリクエスト・ユーザー操作を受け付けるエントリポイント層です。",
-        "steps": [
-            "クライアントリクエストまたはCLI/UIイベントの受付",
-            "入力パラメータの構文チェックとルーティングディスパッチ",
-        ],
-        "files": [str(f) for f in (ts_js_files + py_files)[:4]] or ["README.md"],
-    })
-
-    for idx, d in enumerate(scan_dirs[:4]):
-        rel_path = str(d.relative_to(repo_dir)) + "/"
-        dir_files = [
-            str(p.relative_to(repo_dir))
-            for p in d.rglob("*")
-            if p.is_file() and not any(part in ignore_dirs for part in p.parts)
-        ][:6]
-        d_low = d.name.lower()
-        if any(k in d_low for k in ["route", "controller", "api", "handler", "page", "view", "component", "webui"]):
-            layer = "ui"
-            cat = "Routing & Presentation Module"
-        elif any(k in d_low for k in ["db", "model", "schema", "migration", "store", "data", "repo"]):
-            layer = "data"
-            cat = "Data Access & Persistence Layer"
-        else:
-            layer = "service"
-            cat = "Core Business & Service Module"
-
-        components.append({
-            "id": f"Mod_{idx}_{re.sub(r'[^a-zA-Z0-9]', '', d.name) or idx}",
-            "name": f"{d.name} Module",
-            "path": rel_path,
-            "layer": layer,
-            "category": cat,
-            "tech": "Core Module",
-            "desc": f"`{rel_path}` 配下のモジュール群（{len(dir_files)}ファイル他）を統括し、ドメイン処理とデータ連携を実行します。",
-            "steps": [
-                f"`{rel_path}` 内のエントリ関数・クラスの呼び出し",
-                "ドメインバリデーションとビジネスロジックの実行",
-                "下位ストレージまたは外部APIへのデータ受け渡し",
-            ],
-            "files": dir_files or [rel_path],
-        })
-
-    if len(components) < 3:
-        components.append({
-            "id": "CoreService",
-            "name": "Core Service Logic",
-            "path": str((ts_js_files + py_files)[0]) if (ts_js_files + py_files) else "src/",
-            "layer": "service",
-            "category": "Core Execution Engine",
-            "tech": "Application Runtime",
-            "desc": f"{repo_name} の主要ビジネスロジックとデータ変換処理を実行するコアモジュールです。",
-            "steps": [
-                "入力データの解析・バリデーション",
-                "メインアルゴリズムおよび外部API連携の実行",
-                "出力データの整形と永続化",
-            ],
-            "files": [str(f) for f in (ts_js_files + py_files)[:6]] or ["README.md"],
-        })
-        components.append({
-            "id": "StorageExternal",
-            "name": "Storage & External APIs",
-            "path": "package.json" if (repo_dir / "package.json").exists() else "requirements.txt",
-            "layer": "data",
-            "category": "Persistence & External Integration",
-            "tech": "Database / REST API / FileSystem",
-            "desc": "データベース永続化および外部クラウド・APIサービスとの通信を担う統合レイヤーです。",
-            "steps": [
-                "外部エンドポイントまたはローカルストレージへの接続確立",
-                "クエリ・トランザクション実行とレスポンス検証",
-            ],
-            "files": ["README.md"],
-        })
-
-    return components
+    return arch_analyzer.analyze_repo_architecture(repo_dir, repo_name)["components"]
 
 
-def build_mermaid_flowchart(components: List[Dict[str, Any]]) -> str:
-    lines = ["flowchart LR"]
-    for comp in components:
-        cid = comp["id"]
-        name = sanitize_mermaid_label(comp["name"])
-        path = sanitize_mermaid_label(comp["path"])
-        lines.append(f'  {cid}["{name}<br/>{path}"]')
+def build_mermaid_flowchart(
+    components: List[Dict[str, Any]],
+    edges: Optional[List[tuple]] = None,
+) -> str:
+    import arch_analyzer
 
-    for i in range(len(components) - 1):
-        src = components[i]["id"]
-        dst = components[i + 1]["id"]
-        dst_layer = components[i + 1].get("layer", "")
-        if dst_layer == "ui":
-            edge_label = "Render / Dispatch"
-        elif dst_layer == "service":
-            edge_label = "Execute Logic"
-        elif dst_layer == "data":
-            edge_label = "Persist / Query"
-        elif dst_layer == "infra":
-            edge_label = "Package & Sign"
-        else:
-            edge_label = "Invoke"
-        lines.append(f"  {src} -->|{edge_label}| {dst}")
-
-    for comp in components:
-        cid = comp["id"]
-        layer = comp.get("layer", "service")
-        if layer == "entry":
-            lines.append(f"  style {cid} fill:#1e3a8a,stroke:#60a5fa,stroke-width:2px,color:#fff")
-        elif layer == "ui":
-            lines.append(f"  style {cid} fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#fff")
-        elif layer == "service":
-            lines.append(f"  style {cid} fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#fff")
-        elif layer == "data":
-            lines.append(f"  style {cid} fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#fff")
-        else:
-            lines.append(f"  style {cid} fill:#1f2937,stroke:#9ca3af,stroke-width:2px,color:#fff")
-
-    return "\n".join(lines)
+    if edges is None and any(c.get("id") == "EntryApp" for c in components):
+        edges = [
+            (components[i]["id"], components[i + 1]["id"], "Invoke")
+            for i in range(len(components) - 1)
+        ]
+    return arch_analyzer.render_mermaid_flowchart(components, edges=edges)
 
 
-def build_mermaid_sequences(repo_name: str, components: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    c_names = [sanitize_mermaid_label(c["name"]) for c in components[:4]]
-    while len(c_names) < 3:
-        c_names.append("External System")
-
-    seq1 = f"""sequenceDiagram
-    autonumber
-    actor User as 👤 User / Client
-    participant A as {c_names[0]}
-    participant B as {c_names[1]}
-    participant C as {c_names[2]}
-    User->>A: アクション実行 / リクエスト送信
-    activate A
-    A->>B: 入力検証 & イベントディスパッチ
-    activate B
-    B->>C: コアロジック実行 & データ永続化/取得
-    activate C
-    C-->>B: 構造化データ / 実行結果返却
-    deactivate C
-    B-->>A: 状態更新 & UIレンダリング完了
-    deactivate B
-    A-->>User: 完了フィードバック表示
-    deactivate A"""
-
-    seq2 = f"""sequenceDiagram
-    autonumber
-    participant B as {c_names[1]}
-    participant C as {c_names[2]}
-    participant Ext as 🌐 External API / OS Service
-    B->>C: 非同期バックグラウンドジョブ開始
-    activate C
-    C->>Ext: 外部リソース / システムAPI呼び出し
-    alt 正常レスポンス (200 OK)
-        Ext-->>C: ペイロード返却
-        C-->>B: キャッシュ更新 & 正常ステータス反映
-    else タイムアウト / エラー発生
-        Ext-->>C: エラーシグナル / Timeout
-        C-->>B: フォールバック処理 & アラート記録
-    end
-    deactivate C"""
-
-    return [
-        {
-            "id": f"seq-{re.sub(r'[^a-zA-Z0-9]', '', repo_name).lower()}-main",
-            "short_title": f"{repo_name} メイン実行パイプライン",
-            "title": f"{repo_name} メイン実行パイプライン",
-            "desc": f"{repo_name} におけるユーザー操作からコアモジュール・データ層までの標準実行シーケンスです。",
-            "diagram": seq1,
-            "mermaid": seq1,
-        },
-        {
-            "id": f"seq-{re.sub(r'[^a-zA-Z0-9]', '', repo_name).lower()}-async",
-            "short_title": "非同期データ同期・エラーハンドリングフロー",
-            "title": "非同期データ同期・エラーハンドリングフロー",
-            "desc": "外部API・OSサービス連携時の非同期通信と異常系リカバリのシーケンスです。",
-            "diagram": seq2,
-            "mermaid": seq2,
-        },
-    ]
+def build_mermaid_sequences(
+    repo_name: str,
+    components: List[Dict[str, Any]],
+    *,
+    repo_dir: Optional[Path] = None,
+    sequences_override: Optional[List[Dict[str, str]]] = None,
+) -> List[Dict[str, str]]:
+    if sequences_override is not None:
+        return sequences_override
+    if repo_dir is not None:
+        import arch_analyzer
+        return arch_analyzer.analyze_repo_architecture(repo_dir, repo_name)["sequences"]
+    return []
 
 
 def build_advisory_remediation(adv: Dict[str, Any]) -> Dict[str, str]:
@@ -1244,9 +1077,9 @@ def run_coderabbit_static_audit(
     walkthrough = [
         {
             "title": c["name"],
-            "desc": c["desc"],
-            "path": c["path"],
-            "summary": f"{c['name']}: {c['desc']}",
+            "desc": c.get("desc", ""),
+            "path": c.get("path", ""),
+            "summary": f"{c['name']}: {c.get('desc', '')}",
         }
         for c in components
     ]
@@ -1274,9 +1107,30 @@ def run_coderabbit_static_audit(
     for f_item in findings:
         f_item.setdefault("comment", f_item.get("desc", ""))
 
+    from triage_engine import classify_priority_tier
+
+    p_counts = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
+    seen_score_keys: set[str] = set()
+    for act in list(action_items) + list(deps.get("sast_findings") or []):
+        if not isinstance(act, dict):
+            continue
+        if not act.get("priority_tier"):
+            t, r = classify_priority_tier(act)
+            act["priority_tier"] = t
+            act["priority_reason"] = r
+        skey = f"{act.get('title', '')}|{act.get('file', '')}"
+        if skey in seen_score_keys:
+            continue
+        seen_score_keys.add(skey)
+        tier_u = str(act.get("priority_tier") or "P2").upper()
+        if tier_u in p_counts:
+            p_counts[tier_u] += 1
+
     has_high_or_med = any(a.get("severity") in ("high", "medium", "critical") for a in action_items)
-    score = max(72, 98 - (len(action_items) * 6))
-    status = "ACTION_REQUIRED" if has_high_or_med else "CLEAN"
+    score = max(0, 100 - (p_counts["P0"] * 35 + p_counts["P1"] * 12 + p_counts["P2"] * 4 + p_counts["P3"] * 1))
+    sec_score = max(0, 100 - (p_counts["P0"] * 40 + p_counts["P1"] * 15 + p_counts["P2"] * 5))
+    rel_score = max(0, 100 - (warn_cnt * 6 + p_counts["P2"] * 3))
+    status = "ACTION_REQUIRED" if (has_high_or_med or p_counts["P0"] > 0 or p_counts["P1"] > 0) else "CLEAN"
 
     return {
         "score": score,
@@ -1294,10 +1148,10 @@ def run_coderabbit_static_audit(
             "warning": warn_cnt,
             "info": info_cnt,
             "files_reviewed": max(1, files_reviewed),
-            "Security": max(75, 100 - len(deps.get("security_advisories", [])) * 15),
-            "Reliability": max(78, 96 - len(action_items) * 5),
-            "Maintainability": 90,
-            "Performance": 92,
+            "Security": sec_score,
+            "Reliability": rel_score,
+            "Maintainability": None,
+            "Performance": None,
         },
         "walkthrough": walkthrough,
         "action_items": action_items,
@@ -1498,8 +1352,14 @@ def analyze_checkout(
         if adv.get("cve") not in existing_cves:
             deps.setdefault("security_advisories", []).append(adv)
 
-    mermaid_code = build_mermaid_flowchart(components)
-    sequences = build_mermaid_sequences(repo, components)
+    import arch_analyzer
+    if any(c.get("id") == "EntryApp" for c in components):
+        mermaid_code = build_mermaid_flowchart(components)
+        sequences = []
+    else:
+        arch_info = arch_analyzer.analyze_repo_architecture(repo_dir, repo)
+        mermaid_code = build_mermaid_flowchart(arch_info["components"] or components, edges=arch_info["edges"])
+        sequences = build_mermaid_sequences(repo, arch_info["components"] or components, sequences_override=arch_info["sequences"])
     coderabbit = run_coderabbit_static_audit(repo_dir, repo, components, deps)
 
     # Merge PHP / Node.js / OWASP SAST findings
@@ -1681,8 +1541,8 @@ def build_lightweight_repo_entry(owner: str, rmeta: Dict[str, Any], category_lab
         },
     ]
 
-    mermaid_code = build_mermaid_flowchart(components)
-    sequences = build_mermaid_sequences(repo, components)
+    mermaid_code = build_mermaid_flowchart(components, edges=[])
+    sequences = build_mermaid_sequences(repo, components, sequences_override=[])
 
     # Unscanned lightweight entries must not fabricate dummy audit findings or broken diffs.
     action_items: List[Dict[str, Any]] = []
@@ -1840,35 +1700,17 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
         }
         eco_lines.append(f"  style {nid} fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#fff")
 
-    # Build Ecosystem Sequence Diagram
-    top_rnames = [sanitize_mermaid_label(r["name"]) for r in repos_meta[:3]]
-    while len(top_rnames) < 3:
-        top_rnames.append("CoreService")
-
-    eco_seq = f"""sequenceDiagram
-    autonumber
-    actor Dev as 👤 Developer / User
-    participant Hub as 🏢 {owner} GitHub Org
-    participant R1 as 📦 {top_rnames[0]}
-    participant R2 as 📦 {top_rnames[1]}
-    participant R3 as 📦 {top_rnames[2]}
-    Dev->>Hub: Push / PR / Release 実行
-    activate Hub
-    Hub->>R1: CI/CD & CodeRabbit AI 監査トリガー
-    activate R1
-    R1->>R2: API / モジュール連携・データ同期
-    activate R2
-    R2->>R3: 状態永続化 / バックエンド処理
-    R3-->>R2: 処理完了 ACK
-    deactivate R2
-    R1-->>Hub: ビルド・監査レポート返却
-    deactivate R1
-    Hub-->>Dev: エコシステム全体の稼働ステータス更新
-    deactivate Hub"""
-
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     latest_pushed = repos_meta[0].get("pushedAt") or now_iso
     earliest_created = repos_meta[-1].get("createdAt") or now_iso
+
+    child_scores = [int((cd.get("coderabbit") or {}).get("score") or 0) for cd in child_diagrams if isinstance(cd.get("coderabbit"), dict)]
+    child_sec_scores = [int(((cd.get("coderabbit") or {}).get("stats") or {}).get("Security") or 0) for cd in child_diagrams if isinstance(cd.get("coderabbit"), dict)]
+    child_rel_scores = [int(((cd.get("coderabbit") or {}).get("stats") or {}).get("Reliability") or 0) for cd in child_diagrams if isinstance(cd.get("coderabbit"), dict)]
+    total_files_reviewed = sum(int(((cd.get("coderabbit") or {}).get("stats") or {}).get("files_reviewed") or 0) for cd in child_diagrams if isinstance(cd.get("coderabbit"), dict))
+    avg_score = int(round(sum(child_scores) / len(child_scores))) if child_scores else 0
+    avg_sec = int(round(sum(child_sec_scores) / len(child_sec_scores))) if child_sec_scores else 0
+    avg_rel = int(round(sum(child_rel_scores) / len(child_rel_scores))) if child_rel_scores else 0
 
     eco_diagram = {
         "id": f"gh-org-{owner}-ecosystem".lower(),
@@ -1901,29 +1743,20 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
             "security_advisories": [],
         },
         "github_url": f"https://github.com/{owner}",
-        "sequences": [
-            {
-                "id": f"seq-org-{owner.lower()}-ecosystem",
-                "short_title": f"{owner} エコシステム全体連携シーケンス",
-                "title": f"{owner} エコシステム全体連携シーケンス",
-                "desc": f"{owner} 配下の主要リポジトリ（{', '.join(top_rnames)}）間の連携と監査パイプラインです。",
-                "diagram": eco_seq,
-                "mermaid": eco_seq,
-            }
-        ],
+        "sequences": [],
         "coderabbit": {
-            "score": max(75, 96 - len(eco_action_items) * 5),
+            "score": avg_score,
             "status": "ACTION_REQUIRED" if eco_action_items else "CLEAN",
             "summary": f"親階層 `https://github.com/{owner}` から全 {len(repos_meta)} リポジトリを一括検出し、エコシステム全体の構成図および各リポジトリの CodeRabbit 監査を統合しました。",
             "stats": {
                 "critical": sum(1 for a in eco_action_items if str(a.get("severity", "")).lower() in ("critical", "high")),
                 "warning": sum(1 for a in eco_action_items if str(a.get("severity", "")).lower() in ("warning", "medium")),
-                "info": max(1, len(repos_meta)),
-                "files_reviewed": len(repos_meta) * 12,
-                "Security": 92,
-                "Reliability": 88,
-                "Maintainability": 90,
-                "Performance": 91,
+                "info": len(repos_meta),
+                "files_reviewed": total_files_reviewed,
+                "Security": avg_sec,
+                "Reliability": avg_rel,
+                "Maintainability": None,
+                "Performance": None,
             },
             "walkthrough": [
                 {
@@ -2063,6 +1896,103 @@ def _repair_legacy_remediation_fields(item: Dict[str, Any]) -> bool:
     return changed
 
 
+def _ensure_all_action_items_triaged(diagram: Dict[str, Any]) -> bool:
+    """Guarantee every item in coderabbit.action_items and findings has priority_tier and priority_reason."""
+    cr = diagram.get("coderabbit") if isinstance(diagram, dict) else None
+    if not isinstance(cr, dict):
+        return False
+    from triage_engine import classify_priority_tier
+
+    changed = False
+    for lst_key in ("action_items", "findings"):
+        for item in cr.get(lst_key) or []:
+            if not isinstance(item, dict):
+                continue
+            if not item.get("priority_tier") or not item.get("priority_reason"):
+                t, r = classify_priority_tier(item)
+                if not item.get("priority_tier"):
+                    item["priority_tier"] = t
+                    changed = True
+                if not item.get("priority_reason"):
+                    item["priority_reason"] = r
+                    changed = True
+    return changed
+
+
+def _cleanup_orphaned_state(state: Dict[str, Any], *, prune_empty_org_roots: bool = True) -> bool:
+    """Prune orphaned gh-org-*-ecosystem diagrams and unreferenced techSpecs / tableSchemas."""
+    changed = False
+    diagrams = state.get("diagrams")
+    if not isinstance(diagrams, list):
+        return False
+
+    child_owners: set[str] = set()
+    for d in diagrams:
+        if not isinstance(d, dict) or d.get("is_root"):
+            continue
+        url = str(d.get("github_url") or "").lower()
+        repo = str(d.get("repo") or "").lower()
+        if "github.com/" in url:
+            slug_part = url.split("github.com/", 1)[1].strip("/")
+            if "/" in slug_part:
+                child_owners.add(slug_part.split("/", 1)[0])
+        elif "/" in repo:
+            child_owners.add(repo.split("/", 1)[0])
+
+    kept_diagrams: List[Dict[str, Any]] = []
+    for d in diagrams:
+        if not isinstance(d, dict):
+            continue
+        did = str(d.get("id") or "").lower()
+        if prune_empty_org_roots and d.get("is_root") and did.startswith("gh-org-") and did.endswith("-ecosystem"):
+            owner_slug = did.removeprefix("gh-org-").removesuffix("-ecosystem")
+            if owner_slug not in child_owners:
+                changed = True
+                continue
+        kept_diagrams.append(d)
+    if len(kept_diagrams) != len(diagrams):
+        state["diagrams"] = kept_diagrams
+
+    # Collect referenced keys across active diagrams
+    active_blobs: List[str] = []
+    explicit_keys: set[str] = set()
+    for d in kept_diagrams:
+        active_blobs.append(str(d.get("diagram") or "").lower())
+        for k_field in ("repo", "repo_slug", "id"):
+            val = str(d.get(k_field) or "").strip().lower()
+            if val:
+                explicit_keys.add(val)
+        for list_field in ("tech_spec_keys", "table_schema_keys"):
+            for k in d.get(list_field) or []:
+                explicit_keys.add(str(k).strip().lower())
+        cr = d.get("coderabbit") if isinstance(d.get("coderabbit"), dict) else {}
+        for w in cr.get("walkthrough") or []:
+            if isinstance(w, dict):
+                for wf in ("title", "path"):
+                    if w.get(wf):
+                        explicit_keys.add(str(w[wf]).strip().lower())
+
+    combined_blob = "\n".join(active_blobs)
+
+    def _is_key_referenced(key: str) -> bool:
+        lk = str(key or "").strip().lower()
+        if not lk:
+            return False
+        if lk in explicit_keys:
+            return True
+        return lk in combined_blob
+
+    for store_key in ("techSpecs", "tableSchemas"):
+        store = state.get(store_key)
+        if isinstance(store, dict) and store:
+            surviving = {k: v for k, v in store.items() if _is_key_referenced(k)}
+            if len(surviving) != len(store):
+                state[store_key] = surviving
+                changed = True
+
+    return changed
+
+
 def _load_saved_analyses_unlocked() -> Dict[str, Any]:
     ensure_dirs()
     bak_file = STATE_FILE.with_suffix(STATE_FILE.suffix + ".bak")
@@ -2140,6 +2070,8 @@ def _load_saved_analyses_unlocked() -> Dict[str, Any]:
                     for f in cr.get("findings") or []:
                         if not f.get("comment"):
                             f["comment"] = f.get("desc") or ""
+                _ensure_all_action_items_triaged(d)
+            _cleanup_orphaned_state(data, prune_empty_org_roots=False)
             if candidate == bak_file:
                 try:
                     _write_json_atomic(STATE_FILE, data)
@@ -2388,9 +2320,13 @@ def save_analysis_result(result: Dict[str, Any], respect_deleted: bool = False) 
                         suppressed_map=suppressed_map,
                     )
 
+        for d in new_diagrams:
+            _ensure_all_action_items_triaged(d)
+
         state["diagrams"] = new_diagrams + existing
         state.setdefault("techSpecs", {}).update(result.get("techSpecs", {}))
         state.setdefault("tableSchemas", {}).update(result.get("tableSchemas", {}))
+        _cleanup_orphaned_state(state, prune_empty_org_roots=False)
         _write_json_atomic(STATE_FILE, state)
 
     for d in new_diagrams:
@@ -2546,6 +2482,7 @@ def delete_saved_diagram(diagram_id: Optional[str] = None, category: Optional[st
             state["diagrams"] = [d for d in state.get("diagrams", []) if d.get("category") != category]
 
         state["deleted_ids"] = list(deleted_set)
+        _cleanup_orphaned_state(state)
         _write_json_atomic(STATE_FILE, state)
         return state
 

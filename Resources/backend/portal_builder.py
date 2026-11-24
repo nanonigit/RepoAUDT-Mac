@@ -210,17 +210,17 @@ def get_repo_git_meta():
                         "createdAt": created_at.split()[0].replace("-", "/") if created_at else "2024/01/01",
                         "pushedAt": date_val.split()[0].replace("-", "/") if date_val else "2024/01/01"
                     }
-            except Exception as e:
+            except Exception:
                 meta[rname] = {
-                    "commit_hash": "e7719af",
-                    "commit_date": "2026-11-06",
-                    "commit_subject": "Initial commit",
-                    "commit_author": "Core Team",
+                    "commit_hash": "",
+                    "commit_date": "",
+                    "commit_subject": "",
+                    "commit_author": "",
                     "commit_body": [],
-                    "commit_stat": "Updated",
+                    "commit_stat": "",
                     "commit_files": [],
-                    "createdAt": "2024/01/01",
-                    "pushedAt": "2026/11/06"
+                    "createdAt": "",
+                    "pushedAt": ""
                 }
     return meta
 
@@ -228,67 +228,7 @@ def collect_all_data():
     repos_data = []
     git_meta = get_repo_git_meta()
 
-    # 1. Root workspace
-    root_omm = BASE_DIR / ".omm"
-    if root_omm.exists():
-        for p in sorted(root_omm.iterdir()):
-            if p.is_dir() and (p / "diagram.mmd").exists():
-                diag = (p / "diagram.mmd").read_text(encoding="utf-8")
-                desc = (p / "description.md").read_text(encoding="utf-8") if (p / "description.md").exists() else ""
-                
-                latest_push = max([m.get('pushedAt', '') for m in git_meta.values() if m.get('pushedAt')]) or '2026-11-06T12:00:00Z'
-                earliest_create = min([m.get('createdAt', '') for m in git_meta.values() if m.get('createdAt')]) or '2022-11-30T00:00:00Z'
-                
-                root_deps = {
-                    'frameworks': [
-                        {'name': 'Next.js', 'version': '15.3.6 (Core App)', 'status': 'latest', 'desc': '法人・受検者ポータルでNext.js 15採用'},
-                        {'name': 'Express', 'version': '5.1.0 (Core API)', 'status': 'latest', 'desc': 'バックエンド中核でExpress 5採用'}
-                    ],
-                    'databases': [
-                        {'name': 'PostgreSQL', 'version': '16.3 (RDS Multi-AZ)', 'type': 'Primary RDBMS', 'desc': '全業務データ保存'},
-                        {'name': 'Redis', 'version': '7.2 (ElastiCache)', 'type': 'Queue & Cache', 'desc': 'BullMQ分散キュー & セッション'}
-                    ],
-                    'ai_sdks': [
-                        {'name': '@google/genai', 'version': '^1.38.0', 'desc': 'Gemini 1.5 Pro / Flash 推論'},
-                        {'name': 'openai', 'version': '^6.7.0', 'desc': 'OpenAI API'}
-                    ],
-                    'auth': [
-                        {'name': 'Auth0 by Okta', 'version': 'Enterprise SSO', 'desc': '企業人事向けOAuth2 / JWT認証'}
-                    ],
-                    'runtime': {
-                        'node': 'Node.js 20.x LTS',
-                        'postgres': 'PostgreSQL 16.3 (RDS Multi-AZ)',
-                        'redis': 'Redis 7.2 (ElastiCache)'
-                    },
-                    'security_advisories': []
-                }
-
-                repos_data.append({
-                    "id": f"root-{p.name}",
-                    "repo": "Workspace Ecosystem",
-                    "repo_slug": "example-org",
-                    "category": "Ecosystem",
-                    "perspective": p.name,
-                    "diagram": diag,
-                    "description": desc,
-                    "is_root": True,
-                    "createdAt": earliest_create,
-                    "updatedAt": latest_push,
-                    "pushedAt": latest_push,
-                    "commit_hash": "e7719af",
-                    "commit_date": "2026-11-06",
-                    "commit_subject": "全体エコシステム統括・最新インフラコミット",
-                    "commit_author": "Core Engineering Team",
-                    "commit_stat": "29 repositories integrated",
-                    "commit_body": ["All repository microservices, frontends, and AI components snapshot"],
-                    "commit_files": [],
-                    "deps": root_deps,
-                    "github_url": "https://github.com/example-org",
-                    "sequences": get_sequences_for_repo('example-org', 'Workspace Ecosystem'),
-                    "coderabbit": get_coderabbit_review_for_repo('example-org', 'Workspace Ecosystem', 'e7719af', root_deps.get('security_advisories', []))
-                })
-
-    # 2. Sub-repos
+    # Sub-repos
     for repo_dir in sorted(BASE_DIR.iterdir()):
         if not repo_dir.is_dir() or repo_dir.name.startswith("."):
             continue
@@ -6561,17 +6501,15 @@ def build_portal_html(data, is_shareable=False):
       const isEn = currentLang === 'en';
       const schema = tableSchemas[tableName] || {
         name: tableName,
-        logical_name: isEn ? 'Related Database Table' : '関連データベーステーブル',
-        desc: isEn ? 'Business data model stored in PostgreSQL 16.3 / AWS RDS Multi-AZ.' : 'PostgreSQL 16.3 / AWS RDS Multi-AZ 上に格納される業務データモデルです。',
-        pk: 'id (UUID)',
-        columns: [
-          { name: 'id', type: 'UUID', constraints: 'PK, NOT NULL', desc: isEn ? 'Unique Identifier' : '一意識別子' },
-          { name: 'created_at', type: 'TIMESTAMPTZ', constraints: 'DEFAULT NOW()', desc: isEn ? 'Created Timestamp' : '作成日時' },
-          { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: 'DEFAULT NOW()', desc: isEn ? 'Updated Timestamp' : '更新日時' }
-        ],
+        logical_name: isEn ? 'Schema Not Extracted' : 'スキーマ未抽出',
+        desc: isEn
+          ? 'Schema definition for this table was not detected by static analysis.'
+          : 'このテーブルのスキーマ定義は静的解析で検出されませんでした（未抽出）。',
+        pk: '-',
+        columns: [],
         relations: [],
-        indexes: ['PRIMARY KEY (id)'],
-        sample_query: `SELECT * FROM ${tableName} LIMIT 20;`
+        indexes: [],
+        sample_query: ''
       };
 
       document.getElementById('tm-table-name').textContent = schema.name;
@@ -10559,6 +10497,55 @@ def build_portal_html(data, is_shareable=False):
       }
     }
 
+    async function refreshGlobalSyncStatusBanner() {
+      try {
+        const resp = await fetch('/api/sync/status');
+        if (!resp.ok) return;
+        const job = await resp.json();
+        const isRunning = job && (job.status === 'running' || job.checking === true);
+        let pill = document.getElementById('global-live-sync-pill');
+        if (!pill && isRunning) {
+          pill = document.createElement('div');
+          pill.id = 'global-live-sync-pill';
+          pill.style.cssText = 'position:fixed;bottom:18px;left:18px;z-index:220;display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:rgba(15,23,42,0.94);border:1px solid #38bdf8;color:#e0f2fe;font-size:0.8rem;box-shadow:0 8px 24px rgba(0,0,0,0.45);';
+          document.body.appendChild(pill);
+        }
+        if (pill) {
+          if (!isRunning) {
+            pill.style.display = 'none';
+          } else {
+            const en = currentLang === 'en';
+            const repoName = job.current_repo ? `${job.current_repo}: ` : '';
+            const stage = job.current_stage || (en ? 'Downloading / Analyzing…' : 'ダウンロード・解析中…');
+            const prog = (job.total > 0) ? ` (${job.completed || 0}/${job.total})` : '';
+            const etaSec = Number(job.eta_seconds || 0);
+            const etaTxt = etaSec > 0
+              ? (etaSec >= 60 ? (en ? ` · ~${Math.floor(etaSec/60)}m ${etaSec%60}s left` : ` · 残り約 ${Math.floor(etaSec/60)}分${etaSec%60}秒`) : (en ? ` · ~${etaSec}s left` : ` · 残り約 ${etaSec}秒`))
+              : '';
+            pill.style.display = 'flex';
+            pill.innerHTML = `<span style="display:inline-block;animation:spin 1s linear infinite;">↻</span><span><strong>${escapeHtml(repoName)}</strong>${escapeHtml(stage)}${escapeHtml(prog)}${escapeHtml(etaTxt)}</span>`;
+          }
+        }
+        const seqBanner = document.getElementById('seq-live-sync-status');
+        if (seqBanner) {
+          if (isRunning) {
+            const etaSec = Number(job.eta_seconds || 0);
+            const etaTxt = etaSec > 0 ? `（残り約 ${etaSec}秒）` : '';
+            seqBanner.innerHTML = `<span style="display:inline-block;animation:spin 1s linear infinite;margin-right:6px;">↻</span>${escapeHtml(job.current_stage || 'ダウンロード・解析中…')}${escapeHtml(etaTxt)}`;
+          } else {
+            seqBanner.textContent = '';
+          }
+        }
+      } catch (_e) {}
+    }
+    if (!document.getElementById('repoaudt-spin-keyframes')) {
+      const st = document.createElement('style');
+      st.id = 'repoaudt-spin-keyframes';
+      st.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+      document.head.appendChild(st);
+    }
+    setInterval(refreshGlobalSyncStatusBanner, 3000);
+
     async function syncSavedAnalysesFromServer() {
       try {
         const resp = await fetch('/api/state');
@@ -11901,7 +11888,11 @@ def build_portal_html(data, is_shareable=False):
       const wtPanel = document.getElementById('sequence-walkthrough-panel');
       if (wtPanel) wtPanel.style.display = 'flex';
       if (seqs.length === 0) {
-        diagramWrapper.innerHTML = `<div style="color: #94a3b8; padding: 40px; text-align: center; font-size: 1rem;">${currentLang === 'en' ? 'Sequence diagrams are being prepared for this repository.' : 'このリポジトリのシーケンス図は準備中です。'}</div>`;
+        diagramWrapper.innerHTML = `<div id="seq-empty-state" style="color: #94a3b8; padding: 40px; text-align: center; font-size: 0.96rem; display: grid; gap: 10px; justify-items: center;">
+          <div>${currentLang === 'en' ? 'No execution flow was detected by static analysis (no HTTP routes or module-to-module calls found).' : '静的解析で実行フローを特定できませんでした（HTTPルートやモジュール間呼び出しが検出されませんでした）。'}</div>
+          <div id="seq-live-sync-status" style="font-size: 0.85rem; color: #38bdf8;"></div>
+        </div>`;
+        if (typeof refreshGlobalSyncStatusBanner === 'function') refreshGlobalSyncStatusBanner();
         return;
       }
 

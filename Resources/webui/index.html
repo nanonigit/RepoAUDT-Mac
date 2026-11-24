@@ -4720,7 +4720,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/24 06:47:34</strong>
+              <strong id="portal-sync-time">2026/11/24 07:22:38</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -6447,17 +6447,15 @@
       const isEn = currentLang === 'en';
       const schema = tableSchemas[tableName] || {
         name: tableName,
-        logical_name: isEn ? 'Related Database Table' : '関連データベーステーブル',
-        desc: isEn ? 'Business data model stored in PostgreSQL 16.3 / AWS RDS Multi-AZ.' : 'PostgreSQL 16.3 / AWS RDS Multi-AZ 上に格納される業務データモデルです。',
-        pk: 'id (UUID)',
-        columns: [
-          { name: 'id', type: 'UUID', constraints: 'PK, NOT NULL', desc: isEn ? 'Unique Identifier' : '一意識別子' },
-          { name: 'created_at', type: 'TIMESTAMPTZ', constraints: 'DEFAULT NOW()', desc: isEn ? 'Created Timestamp' : '作成日時' },
-          { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: 'DEFAULT NOW()', desc: isEn ? 'Updated Timestamp' : '更新日時' }
-        ],
+        logical_name: isEn ? 'Schema Not Extracted' : 'スキーマ未抽出',
+        desc: isEn
+          ? 'Schema definition for this table was not detected by static analysis.'
+          : 'このテーブルのスキーマ定義は静的解析で検出されませんでした（未抽出）。',
+        pk: '-',
+        columns: [],
         relations: [],
-        indexes: ['PRIMARY KEY (id)'],
-        sample_query: `SELECT * FROM ${tableName} LIMIT 20;`
+        indexes: [],
+        sample_query: ''
       };
 
       document.getElementById('tm-table-name').textContent = schema.name;
@@ -10448,6 +10446,55 @@
       }
     }
 
+    async function refreshGlobalSyncStatusBanner() {
+      try {
+        const resp = await fetch('/api/sync/status');
+        if (!resp.ok) return;
+        const job = await resp.json();
+        const isRunning = job && (job.status === 'running' || job.checking === true);
+        let pill = document.getElementById('global-live-sync-pill');
+        if (!pill && isRunning) {
+          pill = document.createElement('div');
+          pill.id = 'global-live-sync-pill';
+          pill.style.cssText = 'position:fixed;bottom:18px;left:18px;z-index:220;display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:rgba(15,23,42,0.94);border:1px solid #38bdf8;color:#e0f2fe;font-size:0.8rem;box-shadow:0 8px 24px rgba(0,0,0,0.45);';
+          document.body.appendChild(pill);
+        }
+        if (pill) {
+          if (!isRunning) {
+            pill.style.display = 'none';
+          } else {
+            const en = currentLang === 'en';
+            const repoName = job.current_repo ? `${job.current_repo}: ` : '';
+            const stage = job.current_stage || (en ? 'Downloading / Analyzing…' : 'ダウンロード・解析中…');
+            const prog = (job.total > 0) ? ` (${job.completed || 0}/${job.total})` : '';
+            const etaSec = Number(job.eta_seconds || 0);
+            const etaTxt = etaSec > 0
+              ? (etaSec >= 60 ? (en ? ` · ~${Math.floor(etaSec/60)}m ${etaSec%60}s left` : ` · 残り約 ${Math.floor(etaSec/60)}分${etaSec%60}秒`) : (en ? ` · ~${etaSec}s left` : ` · 残り約 ${etaSec}秒`))
+              : '';
+            pill.style.display = 'flex';
+            pill.innerHTML = `<span style="display:inline-block;animation:spin 1s linear infinite;">↻</span><span><strong>${escapeHtml(repoName)}</strong>${escapeHtml(stage)}${escapeHtml(prog)}${escapeHtml(etaTxt)}</span>`;
+          }
+        }
+        const seqBanner = document.getElementById('seq-live-sync-status');
+        if (seqBanner) {
+          if (isRunning) {
+            const etaSec = Number(job.eta_seconds || 0);
+            const etaTxt = etaSec > 0 ? `（残り約 ${etaSec}秒）` : '';
+            seqBanner.innerHTML = `<span style="display:inline-block;animation:spin 1s linear infinite;margin-right:6px;">↻</span>${escapeHtml(job.current_stage || 'ダウンロード・解析中…')}${escapeHtml(etaTxt)}`;
+          } else {
+            seqBanner.textContent = '';
+          }
+        }
+      } catch (_e) {}
+    }
+    if (!document.getElementById('repoaudt-spin-keyframes')) {
+      const st = document.createElement('style');
+      st.id = 'repoaudt-spin-keyframes';
+      st.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+      document.head.appendChild(st);
+    }
+    setInterval(refreshGlobalSyncStatusBanner, 3000);
+
     async function syncSavedAnalysesFromServer() {
       try {
         const resp = await fetch('/api/state');
@@ -11790,7 +11837,11 @@
       const wtPanel = document.getElementById('sequence-walkthrough-panel');
       if (wtPanel) wtPanel.style.display = 'flex';
       if (seqs.length === 0) {
-        diagramWrapper.innerHTML = `<div style="color: #94a3b8; padding: 40px; text-align: center; font-size: 1rem;">${currentLang === 'en' ? 'Sequence diagrams are being prepared for this repository.' : 'このリポジトリのシーケンス図は準備中です。'}</div>`;
+        diagramWrapper.innerHTML = `<div id="seq-empty-state" style="color: #94a3b8; padding: 40px; text-align: center; font-size: 0.96rem; display: grid; gap: 10px; justify-items: center;">
+          <div>${currentLang === 'en' ? 'No execution flow was detected by static analysis (no HTTP routes or module-to-module calls found).' : '静的解析で実行フローを特定できませんでした（HTTPルートやモジュール間呼び出しが検出されませんでした）。'}</div>
+          <div id="seq-live-sync-status" style="font-size: 0.85rem; color: #38bdf8;"></div>
+        </div>`;
+        if (typeof refreshGlobalSyncStatusBanner === 'function') refreshGlobalSyncStatusBanner();
         return;
       }
 
