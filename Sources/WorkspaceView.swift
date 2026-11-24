@@ -143,7 +143,7 @@ struct MainContentView: View {
     @State private var drilldownItems: [DrilldownFindingItem] = []
     @State private var loadingDrilldown = false
     @State private var showAspmLegend = false
-    @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "kpi,priority_repos,aspm,audit_scope"
+    @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "start_analysis,commit_monitor,monitor_updates,kpi,priority_repos,aspm,audit_scope"
     @AppStorage("dashboardCollapsedSections") private var dashboardCollapsedSectionsRaw = ""
     @State private var monitorChecking = false
     @State private var monitorLastCheckTime = ""
@@ -393,7 +393,7 @@ struct MainContentView: View {
                                           (aspm.p0 + aspm.p1 + aspm.p2 + aspm.p3) > 0 {
                                     HStack(spacing: 3) {
                                         if aspm.p0 > 0 {
-                                            sidebarTierPill(count: aspm.p0, color: SemanticColors.role("dangerText"))
+                                            sidebarTierPill(count: aspm.p0, color: Color(red: 0.88, green: 0.16, blue: 0.22), solid: true)
                                         }
                                         if aspm.p1 > 0 {
                                             sidebarTierPill(count: aspm.p1, color: .orange)
@@ -917,72 +917,6 @@ struct MainContentView: View {
                     }
                 }
                 let allRepos = coordinator.repositories
-                GroupBox {
-                    HStack(spacing: 12) {
-                        Image(systemName: "checkmark.shield").font(.system(size: 20)).foregroundStyle(SemanticColors.role("actionText"))
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 8) {
-                                Text(english ? "Start with a GitHub URL" : "GitHub URL から解析を始める")
-                                    .font(.subheadline.weight(.semibold))
-                                if !listRefreshNote.isEmpty {
-                                    Text(listRefreshNote)
-                                        .font(.caption.monospaced())
-                                        .foregroundStyle(SemanticColors.role("actionText"))
-                                }
-                            }
-                            Text(english ? "Inspect findings, code structure and execution flows in one workspace." :
-                                    "監査結果・コードの構成・実行フローをひとつの場所で確認できます。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
-                        HStack(spacing: 10) {
-                            if !allRepos.isEmpty {
-                                Button {
-                                    Task { await reloadAndAnalyzeRepositories() }
-                                } label: {
-                                    if refreshingList {
-                                        HStack(spacing: 6) {
-                                            ProgressView().controlSize(.small)
-                                            Text(english ? "Analyzing…" : "解析中…")
-                                        }
-                                    } else {
-                                        Label(english ? "Start Analysis" : "解析を開始", systemImage: "play.fill")
-                                    }
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(refreshingList || !backend.isReady)
-                            }
-                            if allRepos.isEmpty {
-                                Button(english ? "Add repository" : "リポジトリを追加") {
-                                    showPage(.audit)
-                                    coordinator.send("analyze")
-                                }
-                                .buttonStyle(.borderedProminent)
-                            } else {
-                                Button(english ? "Add repository" : "リポジトリを追加") {
-                                    showPage(.audit)
-                                    coordinator.send("analyze")
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                }
-
-                if !allRepos.isEmpty {
-                    commitMonitorBar()
-                    if !revocationChecks.isEmpty {
-                        revocationChecklistCard()
-                    }
-                    if !monitorUpdates.isEmpty {
-                        monitorUpdatesCard()
-                    }
-                }
-
                 if let progress = syncProgress {
                     liveSyncProgressCard(progress)
                 }
@@ -1001,6 +935,88 @@ struct MainContentView: View {
 
                 ForEach(orderedDashboardSections, id: \.self) { sectionId in
                     switch sectionId {
+                    case "start_analysis":
+                        dashboardSectionWrapper(id: "start_analysis", title: english ? "Start with a GitHub URL" : "GitHub URL から解析を始める") {
+                            EmptyView()
+                        } content: {
+                            GroupBox {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "checkmark.shield").font(.system(size: 20)).foregroundStyle(SemanticColors.role("actionText"))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        if !listRefreshNote.isEmpty {
+                                            Text(listRefreshNote)
+                                                .font(.caption.monospaced())
+                                                .foregroundStyle(SemanticColors.role("actionText"))
+                                        }
+                                        Text(english ? "Inspect findings, code structure and execution flows in one workspace." :
+                                                "監査結果・コードの構成・実行フローをひとつの場所で確認できます。")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer(minLength: 0)
+                                    HStack(spacing: 10) {
+                                        if !allRepos.isEmpty {
+                                            Button {
+                                                Task { await reloadAndAnalyzeRepositories() }
+                                            } label: {
+                                                if refreshingList {
+                                                    HStack(spacing: 6) {
+                                                        ProgressView().controlSize(.small)
+                                                        Text(english ? "Analyzing…" : "解析中…")
+                                                    }
+                                                } else {
+                                                    Label(english ? "Start Analysis" : "解析を開始", systemImage: "play.fill")
+                                                }
+                                            }
+                                            .buttonStyle(.borderedProminent)
+                                            .disabled(refreshingList || !backend.isReady)
+                                        }
+                                        if allRepos.isEmpty {
+                                            Button(english ? "Add repository" : "リポジトリを追加") {
+                                                showPage(.audit)
+                                                coordinator.send("analyze")
+                                            }
+                                            .buttonStyle(.borderedProminent)
+                                        } else {
+                                            Button(english ? "Add repository" : "リポジトリを追加") {
+                                                showPage(.audit)
+                                                coordinator.send("analyze")
+                                            }
+                                            .buttonStyle(.bordered)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                            }
+                        }
+
+                    case "commit_monitor":
+                        if !allRepos.isEmpty {
+                            dashboardSectionWrapper(id: "commit_monitor", title: english ? "New Commit Monitor" : "新着コミット監視") {
+                                EmptyView()
+                            } content: {
+                                commitMonitorBar()
+                            }
+                        }
+
+                    case "monitor_updates":
+                        if !allRepos.isEmpty && (!revocationChecks.isEmpty || !monitorUpdates.isEmpty) {
+                            dashboardSectionWrapper(id: "monitor_updates", title: english ? "New Commit Updates & Revocation" : "新着コミットで解消された監査結果・失効確認") {
+                                EmptyView()
+                            } content: {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    if !revocationChecks.isEmpty {
+                                        revocationChecklistCard()
+                                    }
+                                    if !monitorUpdates.isEmpty {
+                                        monitorUpdatesCard()
+                                    }
+                                }
+                            }
+                        }
+
                     case "kpi":
                         dashboardSectionWrapper(id: "kpi", title: english ? "Security KPI & Priority Summary" : "セキュリティKPI・優先度サマリー") {
                             EmptyView()
@@ -1326,7 +1342,7 @@ struct MainContentView: View {
     }
 
     private var orderedDashboardSections: [String] {
-        let defaults = ["kpi", "priority_repos", "aspm", "audit_scope"]
+        let defaults = ["start_analysis", "commit_monitor", "monitor_updates", "kpi", "priority_repos", "aspm", "audit_scope"]
         let parsed = dashboardSectionOrderRaw.split(separator: ",").map(String.init).filter { defaults.contains($0) }
         let missing = defaults.filter { !parsed.contains($0) }
         return parsed + missing
@@ -1445,13 +1461,13 @@ struct MainContentView: View {
         }
     }
 
-    private func sidebarTierPill(count: Int, color: Color) -> some View {
+    private func sidebarTierPill(count: Int, color: Color, solid: Bool = false) -> some View {
         Text("\(count)")
-            .font(.caption2.monospacedDigit().weight(.semibold))
-            .foregroundStyle(color)
+            .font(.caption2.monospacedDigit().weight(solid ? .bold : .semibold))
+            .foregroundStyle(solid ? .white : color)
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
-            .background(color.opacity(0.18), in: Capsule())
+            .background(solid ? color : color.opacity(0.18), in: Capsule())
     }
 
     private func summaryMetricCard(
