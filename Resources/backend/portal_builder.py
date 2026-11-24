@@ -6964,7 +6964,7 @@ def build_portal_html(data, is_shareable=False):
       const en = currentLang === 'en';
       const count = getRepoActionItems(item).length;
       const source = String(item.github_url || '');
-      const githubLink = /^https:\/\/github\.com\//.test(source)
+      const githubLink = /^https:\\/\\/github\\.com\\//.test(source)
         ? `<a href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer" class="gh-link-btn">GitHub ↗</a>` : '';
       const subView = getEffectiveArchSubView(item);
       const heroMetaOpen = (typeof safeStorageGet === 'function' && safeStorageGet('repoaudt_hero_meta_open') === '1');
@@ -8699,7 +8699,7 @@ def build_portal_html(data, is_shareable=False):
       const seenSpecs = new Set();
       scaActive.forEach(it => {
         const cmd = String(it.fix_cmd || '').trim();
-        const isPre = /-(?:rc|alpha|beta|dev|canary|preview|next|pre)(?:[.\-\d]|$)/i.test(cmd);
+        const isPre = /-(?:rc|alpha|beta|dev|canary|preview|next|pre)(?:[.\\-\\d]|$)/i.test(cmd);
         if (!cmd || isPre || cmd.includes('@latest') || it.update_type === 'Breaking Major') {
           majorReviewItems.push(it);
         } else if (it.update_type === 'Safe Patch/Minor') {

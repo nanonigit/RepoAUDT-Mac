@@ -2590,19 +2590,38 @@ def delete_saved_diagram(diagram_id: Optional[str] = None, category: Optional[st
 
 
 def reconcile_remediation_requests(state: Dict[str, Any]) -> bool:
-    """Reconcile requested remediations against current active findings to auto-detect fixes."""
+    """Reconcile requested remediations against current active findings to auto-detect fixes.
+
+    - Migrates tracked requests whose fingerprint format changed (e.g. adding :line)
+      when the same (repo, file, title) finding is still active, instead of falsely
+      marking them resolved.
+    - Skips auto-resolution for repositories whose latest scan errored.
+    """
     raw_reqs = state.get("remediation_requests")
     if not isinstance(raw_reqs, dict) or not raw_reqs:
         return False
 
     from aspm_engine import _collect_active_findings
 
+    def _norm_file(val: Any) -> str:
+        return str(val or "").split(" (Target:", 1)[0].strip().lower()
+
+    def _norm_title(val: Any) -> str:
+        return re.sub(r"\s+", " ", str(val or "").strip().lower())
+
     active_fps: set[str] = set()
+    active_by_identity: Dict[Tuple[str, str, str], str] = {}
     repo_commits: Dict[str, str] = {}
+    errored_repos: set[str] = set()
+
     for d in state.get("diagrams", []):
         if not isinstance(d, dict) or d.get("is_root"):
             continue
         repo_name = str(d.get("repo") or "").strip()
+        if str(d.get("sync_status") or "").lower() == "error" or d.get("error"):
+            if repo_name:
+                errored_repos.add(repo_name)
+            continue
         if repo_name:
             rev = d.get("source_revision") if isinstance(d.get("source_revision"), dict) else {}
             sha = str(rev.get("commit_sha") or d.get("commit_hash") or "").strip()[:8]
@@ -2611,6 +2630,8 @@ def reconcile_remediation_requests(state: Dict[str, Any]) -> bool:
             fp = str(it.get("fingerprint") or "").strip()
             if fp:
                 active_fps.add(fp)
+                ident = (repo_name, _norm_file(it.get("file")), _norm_title(it.get("title")))
+                active_by_identity.setdefault(ident, fp)
 
     now_iso = datetime.now(timezone.utc).isoformat()
     changed = False
@@ -2625,13 +2646,33 @@ def reconcile_remediation_requests(state: Dict[str, Any]) -> bool:
                 rec["resolved_at"] = None
                 rec["resolved_commit"] = None
                 changed = True
-        else:
-            # Only mark resolved if the repository still exists in saved analyses
-            if status == "requested" and (not repo_name or repo_name in repo_commits):
-                rec["status"] = "resolved"
-                rec["resolved_at"] = now_iso
-                rec["resolved_commit"] = repo_commits.get(repo_name, "")
+            continue
+
+        # Fallback: migrate legacy fingerprint if the exact same finding is still active
+        ident = (repo_name, _norm_file(rec.get("file")), _norm_title(rec.get("title")))
+        migrated_fp = active_by_identity.get(ident)
+        if migrated_fp:
+            if migrated_fp != fp:
+                rec["fingerprint"] = migrated_fp
+                if status == "resolved":
+                    rec["status"] = "requested"
+                    rec["resolved_at"] = None
+                    rec["resolved_commit"] = None
+                raw_reqs[migrated_fp] = rec
+                raw_reqs.pop(fp, None)
                 changed = True
+            continue
+
+        # Never auto-resolve if the repo's latest scan failed
+        if repo_name and repo_name in errored_repos:
+            continue
+
+        # Only mark resolved if the repository still exists in saved analyses
+        if status == "requested" and (not repo_name or repo_name in repo_commits):
+            rec["status"] = "resolved"
+            rec["resolved_at"] = now_iso
+            rec["resolved_commit"] = repo_commits.get(repo_name, "")
+            changed = True
     return changed
 
 

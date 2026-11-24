@@ -3240,9 +3240,10 @@ struct MainContentView: View {
                     }
                     let title = item["title"] as? String ?? ""
                     let file = item["file"] as? String ?? ""
+                    let shortFileKey = file.components(separatedBy: " (Target:").first ?? file
                     let cve = item["cve"] as? String ?? ""
                     let fp = (item["fingerprint"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    let key = fp.isEmpty ? "\(title)|\(file)|\(cve)" : fp
+                    let key = fp.isEmpty ? "\(title)|\(shortFileKey)|\(cve)" : "\(fp)|\(shortFileKey)"
                     if seenKeys.contains(key) { continue }
                     seenKeys.insert(key)
                     highItems.append(item)
@@ -3658,8 +3659,8 @@ struct MainContentView: View {
                         file: fileStr,
                         reason: (it["priority_reason"] as? String) ?? "",
                         fingerprint: (it["fingerprint"] as? String) ?? "",
-                        description: (it["description"] as? String) ?? "",
-                        fixCommand: (it["fix_command"] as? String) ?? ""
+                        description: (it["desc"] as? String) ?? (it["description"] as? String) ?? "",
+                        fixCommand: (it["fix_cmd"] as? String) ?? (it["fix_command"] as? String) ?? ""
                     )
                     collected.append((finding, kRank, cRank, sRank, epssVal))
                 }

@@ -209,6 +209,68 @@ class TestExtendedScanners(unittest.TestCase):
         fp9 = triage_engine.compute_finding_fingerprint("plusimpact/Job-Portal", item_line9)
         self.assertNotEqual(fp3, fp9)
 
+    def test_reconcile_migrates_legacy_fingerprint_and_skips_errored_repo(self) -> None:
+        from unittest import mock
+        import analyzer
+        with tempfile.TemporaryDirectory() as tmp:
+            state_file = Path(tmp) / "saved_analyses.json"
+            history_file = Path(tmp) / "scan_history.json"
+            with mock.patch.object(analyzer, "STATE_FILE", state_file), \
+                 mock.patch.object(analyzer, "HISTORY_FILE", history_file), \
+                 mock.patch.object(analyzer, "ensure_dirs"):
+                old_fp = "legacy1111222233"
+                new_fp = "newfp44445555666"
+                state = {
+                    "diagrams": [
+                        {
+                            "id": "repo-1",
+                            "repo": "acme/api",
+                            "commit_hash": "aaaa1111",
+                            "coderabbit": {
+                                "action_items": [
+                                    {
+                                        "fingerprint": new_fp,
+                                        "title": "AWS Access Key leaked",
+                                        "file": "src/cred.json:4 (Target: src)",
+                                        "priority_tier": "P0",
+                                        "severity": "critical",
+                                    }
+                                ]
+                            },
+                        },
+                        {
+                            "id": "repo-2",
+                            "repo": "acme/broken",
+                            "sync_status": "error",
+                            "coderabbit": {"action_items": []},
+                        },
+                    ],
+                    "remediation_requests": {
+                        old_fp: {
+                            "fingerprint": old_fp,
+                            "repo": "acme/api",
+                            "file": "src/cred.json:4",
+                            "title": "AWS Access Key leaked",
+                            "status": "requested",
+                        },
+                        "brokenfp12345678": {
+                            "fingerprint": "brokenfp12345678",
+                            "repo": "acme/broken",
+                            "file": "src/key.ts:1",
+                            "title": "Leaked key",
+                            "status": "requested",
+                        },
+                    },
+                }
+                changed = analyzer.reconcile_remediation_requests(state)
+                self.assertTrue(changed)
+                # Legacy fingerprint migrated -> still requested (NOT falsely resolved!)
+                self.assertNotIn(old_fp, state["remediation_requests"])
+                self.assertIn(new_fp, state["remediation_requests"])
+                self.assertEqual(state["remediation_requests"][new_fp]["status"], "requested")
+                # Errored repo -> NOT falsely resolved!
+                self.assertEqual(state["remediation_requests"]["brokenfp12345678"]["status"], "requested")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -43,7 +43,9 @@ def _collect_active_findings(diagram: Dict[str, Any]) -> List[Dict[str, Any]]:
     for it in raw_items:
         if it.get("suppressed"):
             continue
-        key = str(it.get("fingerprint") or f"{it.get('title', '')}|{it.get('file', '')}|{it.get('cve', '')}")
+        file_short = str(it.get("file") or "").split(" (Target:", 1)[0].strip()
+        fp = str(it.get("fingerprint") or "").strip()
+        key = f"{fp}|{file_short}" if fp else f"{it.get('title', '')}|{file_short}|{it.get('cve', '')}"
         if key in seen:
             continue
         seen.add(key)
