@@ -1414,26 +1414,26 @@ struct MainContentView: View {
                         } content: {
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                                 auditScopeItem(
-                                    title: english ? "Dependencies, Malware & OSS Licenses (OSV + Trivy)" : "依存関係・マルウェア・OSSライセンス（OSV + Trivy）",
+                                    title: english ? "Dependencies, Malware & Supply-Chain (OSV + Trivy)" : "依存関係・マルウェア・サプライチェーン（OSV + Trivy）",
                                     summary: english
-                                        ? "Detects CVEs (KEV/EPSS), MAL-* malicious packages, EOL runtimes, AGPL/GPL licenses, and exports CycloneDX SBOMs."
-                                        : "既知 CVE（KEV/EPSS）、MAL-* マルウェア、ランタイム EOL、AGPL/GPL ライセンスを検出し、CycloneDX SBOM を出力します。",
+                                        ? "Detects CVEs (KEV/EPSS), MAL-* malware, suspicious npm install scripts, EOL runtimes, AGPL/GPL licenses, and exports CycloneDX SBOMs."
+                                        : "既知 CVE（KEV/EPSS）、MAL-* マルウェア、不審な preinstall/postinstall、ランタイム EOL、AGPL/GPL ライセンスを検出し、CycloneDX SBOM を出力します。",
                                     symbol: "shippingbox.fill",
                                     tint: SemanticColors.role("dangerText")
                                 )
                                 auditScopeItem(
-                                    title: english ? "Source SAST & IaC (Semgrep + Ruff + Trivy)" : "ソースコード・IaC 静的解析（Semgrep + Ruff + Trivy）",
+                                    title: english ? "SAST, Web Config & IaC (Semgrep + Ruff + Trivy + Hadolint)" : "ソースコード・Web設定・IaC（Semgrep + Ruff + Trivy + Hadolint）",
                                     summary: english
-                                        ? "Data-flow analysis for SQLi/XSS, Terraform/Dockerfile misconfigs, and structured Why/How/Verify AI fix proposals."
-                                        : "SQLi/XSS 等のデータフロー解析、Terraform/Dockerfile 設定ミス検出、Why/How/Verify 構造化パッチ提案を行います。",
+                                        ? "Audits SQLi/XSS, risky CORS & Next.js config, Terraform & Dockerfile (Hadolint), plus structured Why/How/Verify AI patches."
+                                        : "SQLi/XSS・危険な CORS・Next.js 設定ミス、Terraform / Dockerfile（Hadolint）設定監査、Why/How/Verify 構造化パッチ提案を行います。",
                                     symbol: "magnifyingglass.circle.fill",
                                     tint: SemanticColors.role("warningText")
                                 )
                                 auditScopeItem(
-                                    title: english ? "Secrets & Opt-in Liveness Check (Gitleaks)" : "シークレット検出＆生存確認（Gitleaks + Opt-in Verify）",
+                                    title: english ? "Secrets, Git History & Liveness (Gitleaks + TruffleHog)" : "シークレット・Git履歴＆生存確認（Gitleaks + TruffleHog）",
                                     summary: english
-                                        ? "Detects leaked API keys with masking and supports opt-in read-only Active/Revoked verification."
-                                        : "API キーや認証トークンの誤コミットをマスク検出し、手動オプトインで読み取り専用の有効/失効確認が行えます。",
+                                        ? "Scans HEAD, Git commit history, and keystores with 800+ masked detectors, plus opt-in read-only Active/Revoked verification."
+                                        : "最新ファイル＋Git コミット履歴・キーストア露出を 800+ 検出器でマスク検出し、手動オプトインで読み取り専用の有効/失効確認が行えます。",
                                     symbol: "key.fill",
                                     tint: SemanticColors.role("actionText")
                                 )

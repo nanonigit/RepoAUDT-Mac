@@ -432,8 +432,8 @@ struct SystemUpdateView: View {
                     Text(english ? "Runtime & App Update" : "実行環境の診断・アップデート")
                         .font(.title2.bold())
                     Text(english
-                         ? "Check Python, GitHub CLI, Copilot SDK, and update RepoAUDT Mac from GitHub."
-                         : "Python・GitHub CLI・Copilot SDK の状態確認と、GitHub からのアプリ更新を行います。")
+                         ? "Check Python, GitHub CLI, Copilot SDK, 7 CLI security scanners, and update RepoAUDT Mac from GitHub."
+                         : "Python・GitHub CLI・Copilot SDK・7 種の CLI セキュリティスキャナの状態確認と、GitHub からのアプリ更新を行います。")
                         .foregroundStyle(.secondary)
                 }
 

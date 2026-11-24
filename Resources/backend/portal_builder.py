@@ -8635,14 +8635,20 @@ def build_portal_html(data, is_shareable=False):
         return 1;
       };
       const inferCategory = it => {
+        const rawCat = String(it.category || '').trim().toLowerCase();
+        if (rawCat === 'secrets') return 'Secrets';
+        if (rawCat === 'cicd' || rawCat === 'ci/cd') return 'CI/CD';
+        if (rawCat === 'sca' || rawCat === 'dependencies (sca)' || rawCat === 'malware') return 'Dependencies (SCA)';
+        if (rawCat === 'iac') return 'IaC';
+        if (rawCat === 'sast') return 'SAST';
         if (it.category) return it.category;
         const t = String(it.title || '').toLowerCase();
         const sc = String(it.scanner || '').toLowerCase();
         const fl = String(it.file || '').toLowerCase();
-        if (t.includes('シークレット') || sc === 'gitleaks') return 'Secrets';
+        if (t.includes('シークレット') || sc === 'gitleaks' || sc === 'gitleaks-git' || sc === 'trufflehog') return 'Secrets';
         if (sc === 'zizmor' || sc === 'actionlint' || fl.includes('.github/workflows/')) return 'CI/CD';
         if (it.package_name || t.includes('[osv') || t.includes('[依存関係脆弱性集約]')) return 'Dependencies (SCA)';
-        if (sc === 'trivy' || fl.includes('.tf') || fl.includes('dockerfile')) return 'IaC';
+        if (sc === 'trivy' || sc === 'hadolint' || fl.includes('.tf') || fl.includes('dockerfile')) return 'IaC';
         return 'SAST';
       };
       const inferTier = it => {
