@@ -652,9 +652,17 @@ struct MainContentView: View {
                             Spacer()
                             Button(english ? "Open" : "開く") {
                                 let targetId = item.diagramId
+                                let payloadStr = (try? JSONSerialization.data(withJSONObject: [
+                                    "fingerprint": item.fingerprint,
+                                    "title": item.title,
+                                    "file": item.file
+                                ])).flatMap { String(data: $0, encoding: .utf8) } ?? item.fingerprint
                                 drilldownFilter = nil
                                 if !targetId.isEmpty {
                                     selection = ["repo:\(targetId)"]
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                                        coordinator.send("focus-finding", value: payloadStr)
+                                    }
                                 }
                             }
                             .buttonStyle(.bordered)
@@ -2835,7 +2843,8 @@ struct MainContentView: View {
                         tier: t,
                         title: titleStr,
                         file: fileStr,
-                        reason: (it["priority_reason"] as? String) ?? ""
+                        reason: (it["priority_reason"] as? String) ?? "",
+                        fingerprint: (it["fingerprint"] as? String) ?? ""
                     ))
                 }
             }
@@ -2867,6 +2876,7 @@ private struct DrilldownFindingItem: Identifiable {
     let title: String
     let file: String
     let reason: String
+    let fingerprint: String
 
     var tierColor: Color {
         switch tier {

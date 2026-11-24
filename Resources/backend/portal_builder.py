@@ -8805,6 +8805,13 @@ def build_portal_html(data, is_shareable=False):
             </div>`;
           })()}
 
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px;">
+            <button type="button" data-quick-tier="ALL" style="font-size:0.78rem;padding:4px 10px;border-radius:999px;cursor:pointer;border:1px solid ${!ts.tier ? '#38bdf8' : 'var(--workspace-border)'};background:${!ts.tier ? 'rgba(56,189,248,0.16)' : 'var(--workspace-surface)'};color:var(--workspace-text);font-weight:${!ts.tier ? '700' : '500'};">${en ? `All (${activePool.length})` : `すべて (${activePool.length})`}</button>
+            <button type="button" data-quick-tier="P0" style="font-size:0.78rem;padding:4px 10px;border-radius:999px;cursor:pointer;border:1px solid ${ts.tier==='P0' ? '#ef4444' : 'var(--workspace-border)'};background:${p0Cnt>0 ? (ts.tier==='P0' ? '#dc2626' : 'rgba(220,38,38,0.2)') : 'var(--workspace-surface)'};color:${p0Cnt>0 ? '#fff' : 'var(--workspace-muted)'};font-weight:700;">P0 (${p0Cnt})</button>
+            <button type="button" data-quick-tier="P1" style="font-size:0.78rem;padding:4px 10px;border-radius:999px;cursor:pointer;border:1px solid ${ts.tier==='P1' ? '#f97316' : 'var(--workspace-border)'};background:${p1Cnt>0 ? (ts.tier==='P1' ? 'rgba(249,115,22,0.32)' : 'rgba(249,115,22,0.14)') : 'var(--workspace-surface)'};color:${p1Cnt>0 ? '#fb923c' : 'var(--workspace-muted)'};font-weight:700;">P1 (${p1Cnt})</button>
+            <button type="button" data-quick-tier="P2" style="font-size:0.78rem;padding:4px 10px;border-radius:999px;cursor:pointer;border:1px solid ${ts.tier==='P2' ? '#eab308' : 'var(--workspace-border)'};background:${p2Cnt>0 ? (ts.tier==='P2' ? 'rgba(234,179,8,0.28)' : 'rgba(234,179,8,0.12)') : 'var(--workspace-surface)'};color:${p2Cnt>0 ? '#facc15' : 'var(--workspace-muted)'};font-weight:700;">P2 (${p2Cnt})</button>
+            <button type="button" data-quick-tier="P3" style="font-size:0.78rem;padding:4px 10px;border-radius:999px;cursor:pointer;border:1px solid ${ts.tier==='P3' ? '#38bdf8' : 'var(--workspace-border)'};background:${p3Cnt>0 ? (ts.tier==='P3' ? 'rgba(56,189,248,0.26)' : 'rgba(56,189,248,0.12)') : 'var(--workspace-surface)'};color:${p3Cnt>0 ? '#38bdf8' : 'var(--workspace-muted)'};font-weight:700;">P3 (${p3Cnt})</button>
+          </div>
           <details id="aspm-portfolio-panel" ${(ts.aspmOpen || (typeof safeStorageGet === 'function' && safeStorageGet('repoaudt_aspm_open') === '1')) ? 'open' : ''} style="margin-bottom: 12px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); padding: 10px 14px;">
             <summary style="cursor: pointer; font-weight: 700; font-size: 0.88rem;">📊 ${en ? 'ASPM Portfolio, Coverage Matrix & Risk Trend' : 'ASPM 組織ポートフォリオ（資産カバレッジ行列・リスク推移）'}</summary>
             <div id="aspm-portfolio-body" style="margin-top: 10px; font-size: 0.82rem; color: var(--workspace-muted);">${en ? 'Loading ASPM portfolio…' : 'ASPM ポートフォリオを読み込み中…'}</div>
@@ -8939,7 +8946,7 @@ def build_portal_html(data, is_shareable=False):
                 ? `<span class="issue-severity ${issue.update_type === 'Breaking Major' ? 'warning' : 'info'}">${escapeHtml(issue.update_type)}</span>`
                 : '';
               const fpAttr = encodeURIComponent(String(issue._fp));
-              return `<details class="audit-issue">
+              return `<details class="audit-issue" data-fp="${fpAttr}" ${ts.selectedFp === issue._fp ? 'open' : ''}>
                 <summary>
                   ${tierTag}${confLabel}
                   <span class="issue-severity ${tone}"><span aria-hidden="true">${tone === 'danger' ? '⛔' : tone === 'warning' ? '△' : tone === 'info' ? 'ⓘ' : '—'}</span> ${escapeHtml(severity.toUpperCase())}</span>
@@ -9066,6 +9073,43 @@ def build_portal_html(data, is_shareable=False):
             </aside>`;
           })() : ''}
         </section>`;
+      for (const qBtn of view.querySelectorAll('[data-quick-tier]')) {
+        qBtn.addEventListener('click', () => {
+          const qt = qBtn.dataset.quickTier || 'ALL';
+          if (qt === 'ALL') {
+            ts.tier = '';
+            ts.tab = 'all';
+          } else {
+            ts.tier = ts.tier === qt ? '' : qt;
+            ts.tab = 'all';
+          }
+          renderCodeRabbitView();
+        });
+      }
+      window.__repoaudtFocusFinding = payload => {
+        if (!payload) return;
+        const fp = String(payload.fingerprint || '').trim();
+        const titleQ = String(payload.title || '').trim();
+        const fileQ = String(payload.file || '').trim();
+        const match = enrichedIssues.find(it =>
+          (fp && String(it.fingerprint || '') === fp)
+          || (titleQ && String(it.title || '') === titleQ && (!fileQ || String(it.file || '').includes(fileQ)))
+        );
+        if (!match) return;
+        ts.tab = 'all';
+        ts.tier = '';
+        ts.category = '';
+        ts.reachableOnly = false;
+        ts.newOnly = false;
+        ts.search = '';
+        ts.selectedFp = match._fp;
+        renderCodeRabbitView();
+        const targetEl = view.querySelector(`.audit-issue[data-fp="${encodeURIComponent(String(match._fp))}"]`);
+        if (targetEl) {
+          targetEl.open = true;
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      };
       const sortSelect = view.querySelector('#finding-sort-select');
       const aspmPanelEl = view.querySelector('#aspm-portfolio-panel');
       if (aspmPanelEl) {

@@ -63,6 +63,14 @@ async function nativeWorkspaceCommand(command, value) {
       switchViewMode(mode);
       break;
     }
+    case 'focus-finding': {
+      let payload = {};
+      try { payload = JSON.parse(value || '{}'); } catch (_e) { payload = { fingerprint: String(value || '') }; }
+      if (typeof window.__repoaudtFocusFinding === 'function') {
+        window.__repoaudtFocusFinding(payload);
+      }
+      break;
+    }
   }
   publishNativeWorkspace();
 }
