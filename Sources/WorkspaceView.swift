@@ -165,7 +165,7 @@ struct MainContentView: View {
     @State private var threatFeedShowAll = false
     @State private var showRiskTrendReasons = false
     @State private var showAspmLegend = false
-    @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "commit_monitor,monitor_updates,kpi,threat_feed,risk_trend,priority_repos,aspm,audit_scope"
+    @AppStorage("dashboardSectionOrder") private var dashboardSectionOrderRaw = "remediation_tracker,commit_monitor,monitor_updates,kpi,threat_feed,risk_trend,priority_repos,aspm,audit_scope"
     @AppStorage("dashboardCollapsedSections") private var dashboardCollapsedSectionsRaw = ""
     @State private var monitorChecking = false
     @State private var monitorLastCheckTime = ""
@@ -1254,9 +1254,6 @@ struct MainContentView: View {
                 if let progress = syncProgress {
                     liveSyncProgressCard(progress)
                 }
-                if remediationRequestedCount > 0 || remediationResolvedCount > 0 {
-                    remediationTrackerSummaryBar()
-                }
 
                 let p0Total = aspmRepos.reduce(0) { $0 + $1.p0 }
                 let p1Total = aspmRepos.reduce(0) { $0 + $1.p1 }
@@ -1274,6 +1271,14 @@ struct MainContentView: View {
 
                 ForEach(orderedDashboardSections, id: \.self) { sectionId in
                     switch sectionId {
+                    case "remediation_tracker":
+                        if remediationRequestedCount > 0 || remediationResolvedCount > 0 {
+                            dashboardSectionWrapper(id: "remediation_tracker", title: english ? "Remediation Request Tracker" : "修正依頼トラッカー") {
+                                EmptyView()
+                            } content: {
+                                remediationTrackerSummaryBar()
+                            }
+                        }
                     case "commit_monitor":
                         if !allRepos.isEmpty {
                             dashboardSectionWrapper(id: "commit_monitor", title: english ? "New Commit Monitor" : "新着コミット監視") {
@@ -1659,7 +1664,7 @@ struct MainContentView: View {
     }
 
     private var orderedDashboardSections: [String] {
-        let defaults = ["commit_monitor", "monitor_updates", "kpi", "threat_feed", "risk_trend", "priority_repos", "aspm", "audit_scope"]
+        let defaults = ["remediation_tracker", "commit_monitor", "monitor_updates", "kpi", "threat_feed", "risk_trend", "priority_repos", "aspm", "audit_scope"]
         let parsed = dashboardSectionOrderRaw.split(separator: ",").map(String.init).filter { defaults.contains($0) }
         let missing = defaults.filter { !parsed.contains($0) }
         return parsed + missing
@@ -2958,16 +2963,6 @@ struct MainContentView: View {
                     Text("· \(etaLabel)")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                    if !isRunning {
-                        Button {
-                            syncProgress = nil
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help(english ? "Dismiss" : "閉じる")
-                    }
                 }
 
                 ProgressView(
@@ -3101,6 +3096,14 @@ struct MainContentView: View {
                     ? "Finished analyzing \(dashboardRepositories.count) repositories."
                     : "\(dashboardRepositories.count)件のリポジトリの解析が完了しました。"
             )
+            Task {
+                try? await Task.sleep(for: .seconds(6))
+                if syncProgress?.status == "completed" {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        syncProgress = nil
+                    }
+                }
+            }
         } catch {
             listRefreshNote = error.localizedDescription
         }
