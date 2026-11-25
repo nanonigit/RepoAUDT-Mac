@@ -162,6 +162,7 @@ struct MainContentView: View {
     @State private var expandedDrilldownGroups: Set<String> = []
     @State private var drilldownCopyNotice: String?
     @State private var remediationRequests: [String: RemediationRequestRecord] = [:]
+    @State private var pendingUnmarkItems: [DrilldownFindingItem] = []
     @State private var remediationRequestedCount = 0
     @State private var remediationResolvedCount = 0
     @State private var remediationOverdue3dCount = 0
@@ -656,17 +657,64 @@ struct MainContentView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 190)
 
-                        Button {
-                            copyDrilldownFixPrompt(for: groups)
+                        let unrequestedItems = drilldownItems.filter { remediationRequests[$0.fingerprint]?.status != "requested" }
+                        let unrequestedGroups = groupedDrilldownItems(unrequestedItems)
+                        Menu {
+                            Button {
+                                copyDrilldownFixPrompt(for: unrequestedGroups)
+                            } label: {
+                                Label(
+                                    english
+                                        ? "Copy Unrequested Only (\(unrequestedItems.count))"
+                                        : "未依頼のみ一括コピー (\(unrequestedItems.count)件)",
+                                    systemImage: "doc.on.doc"
+                                )
+                            }
+                            .disabled(unrequestedItems.isEmpty)
+
+                            Button {
+                                copyDrilldownFixPrompt(for: unrequestedGroups)
+                                Task { await toggleRemediationRequest(items: unrequestedItems, requested: true) }
+                            } label: {
+                                Label(
+                                    english
+                                        ? "Copy Unrequested & Mark Requested (\(unrequestedItems.count))"
+                                        : "未依頼をコピー＋依頼済みにする (\(unrequestedItems.count)件)",
+                                    systemImage: "paperplane.fill"
+                                )
+                            }
+                            .disabled(unrequestedItems.isEmpty)
+
+                            Divider()
+
+                            Button {
+                                copyDrilldownFixPrompt(for: groups)
+                            } label: {
+                                Label(
+                                    english
+                                        ? "Copy All Visible (\(filteredItems.count))"
+                                        : "表示中のすべてをコピー (\(filteredItems.count)件)",
+                                    systemImage: "doc.on.doc.fill"
+                                )
+                            }
+                            .disabled(groups.isEmpty)
                         } label: {
                             Label(
-                                english ? "Copy All Fix Requests" : "すべて修正依頼コピー",
+                                unrequestedItems.isEmpty
+                                    ? (english ? "Copy Fix Requests" : "修正依頼コピー")
+                                    : (english ? "Copy Unrequested (\(unrequestedItems.count))" : "未依頼コピー (\(unrequestedItems.count))"),
                                 systemImage: "doc.on.doc"
                             )
+                        } primaryAction: {
+                            if !unrequestedItems.isEmpty {
+                                copyDrilldownFixPrompt(for: unrequestedGroups)
+                            } else {
+                                copyDrilldownFixPrompt(for: groups)
+                            }
                         }
-                        .buttonStyle(.bordered)
+                        .menuStyle(.borderedButton)
                         .controlSize(.small)
-                        .disabled(groups.isEmpty)
+                        .disabled(groups.isEmpty && unrequestedItems.isEmpty)
                     }
                     Text(english ? "\(filteredItems.count) / \(drilldownItems.count)" : "\(filteredItems.count) / \(drilldownItems.count) 件")
                         .font(.caption.monospacedDigit())
@@ -773,7 +821,11 @@ struct MainContentView: View {
                                         .font(.caption.monospacedDigit())
                                         .foregroundStyle(.secondary)
                                         Button {
-                                            Task { await toggleRemediationRequest(items: group.items, requested: !allRequested) }
+                                            if allRequested {
+                                                pendingUnmarkItems = group.items
+                                            } else {
+                                                Task { await toggleRemediationRequest(items: group.items, requested: true) }
+                                            }
                                         } label: {
                                             Label(
                                                 allRequested
@@ -873,7 +925,11 @@ struct MainContentView: View {
                                                     }
                                                     Spacer()
                                                     Button {
-                                                        Task { await toggleRemediationRequest(items: [item], requested: !isReq) }
+                                                        if isReq {
+                                                            pendingUnmarkItems = [item]
+                                                        } else {
+                                                            Task { await toggleRemediationRequest(items: [item], requested: true) }
+                                                        }
                                                     } label: {
                                                         Image(systemName: isReq ? "checkmark.circle.fill" : "paperplane")
                                                             .foregroundStyle(isReq ? SemanticColors.role("infoText") : .secondary)
@@ -949,7 +1005,11 @@ struct MainContentView: View {
                             }
                             Spacer()
                             Button {
-                                Task { await toggleRemediationRequest(items: [item], requested: !isReq) }
+                                if isReq {
+                                    pendingUnmarkItems = [item]
+                                } else {
+                                    Task { await toggleRemediationRequest(items: [item], requested: true) }
+                                }
                             } label: {
                                 Image(systemName: isReq ? "checkmark.circle.fill" : "paperplane")
                                     .foregroundStyle(isReq ? SemanticColors.role("infoText") : .secondary)
@@ -968,6 +1028,34 @@ struct MainContentView: View {
             }
             .padding(20)
             .frame(minWidth: 820, minHeight: 520)
+            .confirmationDialog(
+                pendingUnmarkItems.count > 1
+                    ? (english
+                       ? "Unmark \(pendingUnmarkItems.count) requested findings?"
+                       : "\(pendingUnmarkItems.count) 件の「依頼済み」を解除しますか？")
+                    : (english
+                       ? "Unmark this finding as requested?"
+                       : "この指摘の「依頼済み」を解除しますか？"),
+                isPresented: Binding(
+                    get: { !pendingUnmarkItems.isEmpty },
+                    set: { if !$0 { pendingUnmarkItems = [] } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button(
+                    pendingUnmarkItems.count > 1
+                        ? (english ? "Unmark \(pendingUnmarkItems.count) Items" : "\(pendingUnmarkItems.count) 件を解除する")
+                        : (english ? "Unmark" : "解除する"),
+                    role: .destructive
+                ) {
+                    let targets = pendingUnmarkItems
+                    pendingUnmarkItems = []
+                    Task { await toggleRemediationRequest(items: targets, requested: false) }
+                }
+                Button(english ? "Cancel" : "キャンセル", role: .cancel) {
+                    pendingUnmarkItems = []
+                }
+            }
         }
         .sheet(isPresented: $showRemediationTrackerSheet) {
             remediationTrackerSheet()
