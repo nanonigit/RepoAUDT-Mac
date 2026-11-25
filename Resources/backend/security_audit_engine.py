@@ -27,7 +27,7 @@ from eol_checker import evaluate_runtime_eol, extract_repo_runtime_and_framework
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 def get_app_support_dir() -> Path:

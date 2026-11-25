@@ -14,6 +14,7 @@ import json
 import os
 import plistlib
 import re
+import shutil
 import concurrent.futures
 import subprocess
 import sys
@@ -25,7 +26,7 @@ import uuid
 from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 BACKEND_DIR = Path(__file__).resolve().parent
 WEBUI_DIR = BACKEND_DIR.parent / "webui"
