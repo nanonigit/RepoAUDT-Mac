@@ -4730,7 +4730,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/25 12:25:57</strong>
+              <strong id="portal-sync-time">2026/11/25 12:28:05</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -6768,11 +6768,13 @@
       const dock = document.getElementById('canvas-floating-dock');
       const btnCards = document.getElementById('subview-btn-cards');
       const btnDiag = document.getElementById('subview-btn-diagram');
+      const btnSeq = document.getElementById('subview-btn-seq');
       const isCards = mode === 'cards';
       if (overlay) overlay.style.display = isCards ? 'block' : 'none';
       if (dock) dock.style.display = isCards ? 'none' : 'flex';
-      if (btnCards) btnCards.classList.toggle('active', isCards);
-      if (btnDiag) btnDiag.classList.toggle('active', !isCards);
+      if (btnCards) { btnCards.classList.toggle('active', isCards); btnCards.setAttribute('aria-selected', String(isCards)); }
+      if (btnDiag) { btnDiag.classList.toggle('active', !isCards); btnDiag.setAttribute('aria-selected', String(!isCards)); }
+      if (btnSeq) { btnSeq.classList.remove('active'); btnSeq.setAttribute('aria-selected', 'false'); }
       if (!isCards && currentPanZoom) {
         setTimeout(() => {
           safeResizePanZoom();
@@ -6997,16 +6999,16 @@
         <div class="hero-right-controls">
           <div style="display:inline-flex;gap:4px;align-items:center;" role="group" aria-label="${en ? 'Repository view mode' : '表示切り替え'}">
             <button type="button" onclick="switchViewMode('coderabbit')" style="${modeBtnStyle(currentViewMode === 'coderabbit')}">🛡️ ${en ? 'Audit' : '監査結果'}</button>
-            <button type="button" onclick="switchViewMode('arch')" style="${modeBtnStyle(currentViewMode === 'arch')}">📐 ${en ? 'Architecture' : '構成図'}</button>
-            <button type="button" onclick="switchViewMode('seq')" style="${modeBtnStyle(currentViewMode === 'seq')}">🔀 ${en ? 'Flow' : '実行フロー'}</button>
+            <button type="button" onclick="if(currentViewMode==='coderabbit'){switchViewMode('arch');}" style="${modeBtnStyle(currentViewMode === 'arch' || currentViewMode === 'seq')}">📐 ${en ? 'Architecture & Flows' : '構成・フロー'}</button>
           </div>
+          ${(currentViewMode === 'arch' || currentViewMode === 'seq') ? `<div class="subview-toggle-group" role="tablist" aria-label="${en ? 'Architecture view' : '構成・フローの表示方法'}">
+            <button type="button" role="tab" aria-selected="${currentViewMode === 'arch' && subView === 'cards'}" class="subview-btn ${currentViewMode === 'arch' && subView === 'cards' ? 'active' : ''}" id="subview-btn-cards" onclick="if(currentViewMode==='arch'){setArchSubView('cards');}else{currentArchSubView='cards';switchViewMode('arch');}">${en ? 'Components' : 'コンポーネント'}</button>
+            <button type="button" role="tab" aria-selected="${currentViewMode === 'arch' && subView === 'diagram'}" class="subview-btn ${currentViewMode === 'arch' && subView === 'diagram' ? 'active' : ''}" id="subview-btn-diagram" onclick="if(currentViewMode==='arch'){setArchSubView('diagram');}else{currentArchSubView='diagram';switchViewMode('arch');}">${en ? 'Diagram' : '構成図'}</button>
+            <button type="button" role="tab" aria-selected="${currentViewMode === 'seq'}" class="subview-btn ${currentViewMode === 'seq' ? 'active' : ''}" id="subview-btn-seq" onclick="switchViewMode('seq')">${en ? 'Execution Flow' : '実行フロー'}</button>
+          </div>` : ''}
           <span class="workspace-findings">${en ? `${count} findings` : `指摘 ${count}件`}</span>
           <button type="button" id="hero-rescan-btn" onclick="rescanRepositoryDirect(event, '${encodeURIComponent(source).replace(/'/g, '%27')}', this)" class="table-view-btn">${en ? 'Re-scan' : '再スキャン'}</button>
           ${githubLink}
-          ${currentViewMode === 'arch' ? `<div class="subview-toggle-group" role="tablist" aria-label="${en ? 'Architecture view' : '構成の表示方法'}">
-            <button type="button" role="tab" aria-selected="${subView === 'cards'}" class="subview-btn ${subView === 'cards' ? 'active' : ''}" id="subview-btn-cards" onclick="setArchSubView('cards')">${en ? 'Components' : 'コンポーネント'}</button>
-            <button type="button" role="tab" aria-selected="${subView === 'diagram'}" class="subview-btn ${subView === 'diagram' ? 'active' : ''}" id="subview-btn-diagram" onclick="setArchSubView('diagram')">${en ? 'Diagram' : '構成図'}</button>
-          </div>` : ''}
         </div>`;
       updateAuditRepositoryStatus(hero, item);
     }

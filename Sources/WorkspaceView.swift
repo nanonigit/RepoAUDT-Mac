@@ -110,7 +110,7 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         case .dashboard: return english ? "Dashboard" : "ダッシュボード"
         case .audit: return english ? "Audit results" : "監査結果"
         case .chat: return english ? "Chat" : "チャット"
-        case .architecture: return english ? "Architecture" : "構成図"
+        case .architecture: return english ? "Architecture & Flows" : "構成・フロー"
         case .sequence: return english ? "Execution flows" : "実行フロー"
         case .ai: return english ? "AI connections" : "AI 接続"
         case .mcp: return "MCP"
@@ -424,7 +424,7 @@ struct MainContentView: View {
         NavigationSplitView {
             List(selection: $selection) {
                 Section(english ? "Workspace" : "ワークスペース") {
-                    ForEach([WorkspacePage.dashboard, .audit, .chat, .architecture, .sequence]) { item in
+                    ForEach([WorkspacePage.dashboard, .audit, .chat, .architecture]) { item in
                         Label(item.title(english: english), systemImage: item.symbol)
                             .tag(item.rawValue)
                     }
