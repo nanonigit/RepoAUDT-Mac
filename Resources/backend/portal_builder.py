@@ -6997,6 +6997,26 @@ def build_portal_html(data, is_shareable=False):
         .filter(x => x.d && !x.d.is_root)
         .map(x => `<option value="${x.idx}" ${x.d === item || x.d.id === item.id ? 'selected' : ''}>${escapeHtml(x.d.repo || x.d.github_url || 'Repository')}</option>`)
         .join('');
+      const formatHeroDateTime = (raw, includeTime = true) => {
+        if (!raw) return '';
+        const dt = new Date(raw);
+        if (Number.isNaN(dt.valueOf())) return String(raw).slice(0, includeTime ? 16 : 10).replace('T', ' ').replace(/-/g, '/');
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        if (!includeTime) return `${y}/${m}/${d}`;
+        const hh = String(dt.getHours()).padStart(2, '0');
+        const mm = String(dt.getMinutes()).padStart(2, '0');
+        return `${y}/${m}/${d} ${hh}:${mm}`;
+      };
+      const analyzedAtText = formatHeroDateTime(item.analyzed_at || item.last_sync_attempted_at || '', true);
+      const repoUpdatedAtText = formatHeroDateTime(item.pushedAt || item.commit_date || item.updatedAt || '', false);
+      const updatedStampParts = [];
+      if (analyzedAtText) updatedStampParts.push(en ? `Updated: ${analyzedAtText}` : `解析更新: ${analyzedAtText}`);
+      if (repoUpdatedAtText) updatedStampParts.push(en ? `Last push: ${repoUpdatedAtText}` : `最終Push: ${repoUpdatedAtText}`);
+      const updatedStampHtml = updatedStampParts.length
+        ? `<span style="font-size:0.74rem;color:var(--workspace-muted);font-variant-numeric:tabular-nums;white-space:nowrap;" title="${escapeHtml(updatedStampParts.join(' / '))}">${escapeHtml(updatedStampParts.join(' · '))}</span>`
+        : '';
       const modeBtnStyle = (active) => active
         ? 'font-size:0.74rem;padding:4px 10px;border-radius:7px;cursor:pointer;border:1px solid #38bdf8;background:rgba(56,189,248,0.18);color:var(--workspace-text);font-weight:700;'
         : 'font-size:0.74rem;padding:4px 10px;border-radius:7px;cursor:pointer;border:1px solid var(--workspace-border);background:var(--workspace-surface);color:var(--workspace-muted);font-weight:500;';
@@ -7007,6 +7027,7 @@ def build_portal_html(data, is_shareable=False):
               ? `<select id="hero-repo-select" aria-label="${en ? 'Select repository' : 'リポジトリを切り替え'}" onchange="selectDiagram(Number(this.value))" style="font-size:1.02rem;font-weight:700;padding:4px 10px;border-radius:8px;border:1px solid var(--workspace-border);background:var(--workspace-surface);color:var(--workspace-text);cursor:pointer;max-width:360px;">${repoOptionsHtml}</select>`
               : `<h2 class="hero-repo-title" style="margin:0;">${escapeHtml(item.repo)}</h2>`}
             <button type="button" id="toggle-hero-meta-btn" class="table-view-btn" style="font-size:0.72rem;padding:2px 8px;" onclick="(function(btn){const b=document.getElementById('hero-meta-body');if(!b)return;const open=b.style.display==='none';b.style.display=open?'block':'none';btn.textContent=open?'${en ? '▼ Hide Details' : '▼ 詳細を畳む'}':'${en ? '▶ Commit & PR Details' : '▶ コミット・PR詳細'}';if(typeof safeStorageSet==='function')safeStorageSet('repoaudt_hero_meta_open',open?'1':'0');})(this)">${heroMetaOpen ? (en ? '▼ Hide Details' : '▼ 詳細を畳む') : (en ? '▶ Commit & PR Details' : '▶ コミット・PR詳細')}</button>
+            ${updatedStampHtml}
           </div>
           <div id="hero-meta-body" style="display:${heroMetaOpen ? 'block' : 'none'};margin-top:6px;">
             <div class="hero-repo-desc">${escapeHtml(localizeBackendText(item.description || ''))}</div>
