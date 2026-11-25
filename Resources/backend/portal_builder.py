@@ -4907,6 +4907,8 @@ def build_portal_html(data, is_shareable=False):
         <span class="seq-desc-tooltip" id="seq-desc-tooltip"></span>
     </div>
 
+    <div class="repo-summary-hero" id="repo-summary-hero"></div>
+
     <div class="sequence-walkthrough-panel" id="sequence-walkthrough-panel" style="display: none;">
       <div class="wt-top-controls">
         <div class="wt-btn-group">
@@ -4923,8 +4925,6 @@ def build_portal_html(data, is_shareable=False):
       </div>
       <div class="wt-transition-card" id="wt-transition-card" style="display: none;"></div>
     </div>
-
-    <div class="repo-summary-hero" id="repo-summary-hero"></div>
 
     <div class="canvas-layout">
       <div class="canvas-container" id="canvas-container">
