@@ -30,13 +30,23 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Inter', -apple-system, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Inter', sans-serif;
       background: var(--bg);
       color: var(--text);
       display: flex;
       height: 100vh;
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
+    }
+    #diagram-wrapper svg,
+    #diagram-wrapper svg text,
+    #diagram-wrapper svg tspan,
+    #diagram-wrapper svg foreignObject,
+    #diagram-wrapper svg .actor,
+    #diagram-wrapper svg .messageText,
+    #diagram-wrapper svg .noteText,
+    #diagram-wrapper svg .labelText {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Inter', sans-serif !important;
     }
     :focus-visible {
       outline: 2px solid var(--accent);
@@ -4720,7 +4730,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/25 06:43:19</strong>
+              <strong id="portal-sync-time">2026/11/25 12:15:19</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -5759,11 +5769,25 @@
     };
 
     if (window.mermaid) {
+      const uiFontStack = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Inter', sans-serif";
       mermaid.initialize({
         startOnLoad: false,
         theme: 'dark',
         securityLevel: 'loose',
-        fontFamily: 'Inter',
+        fontFamily: uiFontStack,
+        themeVariables: {
+          fontFamily: uiFontStack
+        },
+        sequence: {
+          useMaxWidth: false,
+          actorFontFamily: uiFontStack,
+          messageFontFamily: uiFontStack,
+          noteFontFamily: uiFontStack,
+          actorFontWeight: 600,
+          actorFontSize: 13,
+          messageFontSize: 13,
+          noteFontSize: 12
+        },
         flowchart: {
           useMaxWidth: false,
           htmlLabels: true,
@@ -8916,9 +8940,9 @@
               const inferredSourceUrl = (() => {
                 if (issue.official_source) return issue.official_source;
                 const combined = `${issue.title || ''} ${issue.desc || ''} ${issue.comment || ''}`;
-                const ghsa = combined.match(/(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})/i);
+                const ghsa = combined.match(/\b(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\b/i);
                 if (ghsa) return `https://osv.dev/vulnerability/${ghsa[1]}`;
-                const cve = combined.match(/(CVE-\d{4}-\d{4,})/i);
+                const cve = combined.match(/\b(CVE-\d{4}-\d{4,})\b/i);
                 if (cve) return `https://nvd.nist.gov/vuln/detail/${cve[1].toUpperCase()}`;
                 return '';
               })();

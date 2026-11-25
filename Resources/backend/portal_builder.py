@@ -323,13 +323,23 @@ def build_portal_html(data, is_shareable=False):
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Inter', -apple-system, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Inter', sans-serif;
       background: var(--bg);
       color: var(--text);
       display: flex;
       height: 100vh;
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
+    }
+    #diagram-wrapper svg,
+    #diagram-wrapper svg text,
+    #diagram-wrapper svg tspan,
+    #diagram-wrapper svg foreignObject,
+    #diagram-wrapper svg .actor,
+    #diagram-wrapper svg .messageText,
+    #diagram-wrapper svg .noteText,
+    #diagram-wrapper svg .labelText {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Inter', sans-serif !important;
     }
     :focus-visible {
       outline: 2px solid var(--accent);
@@ -5808,11 +5818,25 @@ def build_portal_html(data, is_shareable=False):
     };
 
     if (window.mermaid) {
+      const uiFontStack = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Inter', sans-serif";
       mermaid.initialize({
         startOnLoad: false,
         theme: 'dark',
         securityLevel: 'loose',
-        fontFamily: 'Inter',
+        fontFamily: uiFontStack,
+        themeVariables: {
+          fontFamily: uiFontStack
+        },
+        sequence: {
+          useMaxWidth: false,
+          actorFontFamily: uiFontStack,
+          messageFontFamily: uiFontStack,
+          noteFontFamily: uiFontStack,
+          actorFontWeight: 600,
+          actorFontSize: 13,
+          messageFontSize: 13,
+          noteFontSize: 12
+        },
         flowchart: {
           useMaxWidth: false,
           htmlLabels: true,
