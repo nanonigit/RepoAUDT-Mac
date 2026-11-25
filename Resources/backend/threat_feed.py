@@ -534,14 +534,75 @@ def fetch_and_correlate_threat_feed(
     status_rank = {"confirmed": 0, "stack_match": 1, "not_affected": 2}
     correlated.sort(key=lambda x: (status_rank.get(x["match_status"], 3), -(int(re.sub(r"\D", "", str(x.get("published") or "0")) or "0"))))
 
+    db_freshness = collect_vuln_db_freshness(non_root, fetched_at, sources_meta, used_cache)
     return {
         "ok": True,
         "fetched_at": fetched_at,
         "cached": used_cache,
         "sources": sources_meta,
+        "db_freshness": db_freshness,
         "scanned_repos": len(non_root),
         "stack_inventory": dict(sorted(stack_repo_counts.items(), key=lambda kv: -kv[1])),
         "matched_count": matched_count,
         "unaffected_count": len(correlated) - matched_count,
         "items": correlated,
+    }
+
+
+def _format_local_timestamp(raw: str) -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone().strftime("%Y/%m/%d %H:%M")
+    except Exception:
+        return text[:16].replace("T", " ")
+
+
+def collect_vuln_db_freshness(
+    diagrams: List[Dict[str, Any]],
+    fetched_at: str,
+    sources_meta: Dict[str, Any],
+    used_cache: bool,
+) -> Dict[str, Any]:
+    """Return human-readable reference timestamps for OSV/EPSS, CISA KEV/GHSA, and Trivy local DB."""
+    # 1. Latest repository scan time (when OSV.dev & FIRST EPSS were queried live)
+    latest_scan_raw = ""
+    for d in diagrams or []:
+        if not isinstance(d, dict) or d.get("is_root"):
+            continue
+        ts = str(d.get("analyzedAt") or d.get("analyzed_at") or d.get("updatedAt") or "").strip()
+        if ts and ts > latest_scan_raw:
+            latest_scan_raw = ts
+
+    # 2. Trivy local DB UpdatedAt (macOS ~/Library/Caches/trivy/db/metadata.json or ~/.cache/trivy/db/metadata.json)
+    trivy_updated_raw = ""
+    home = Path.home()
+    for candidate in (
+        home / "Library" / "Caches" / "trivy" / "db" / "metadata.json",
+        home / ".cache" / "trivy" / "db" / "metadata.json",
+    ):
+        if candidate.is_file():
+            try:
+                meta = json.loads(candidate.read_text(encoding="utf-8"))
+                trivy_updated_raw = str(meta.get("UpdatedAt") or "").strip()
+                if trivy_updated_raw:
+                    break
+            except Exception:
+                pass
+
+    kev_ok = bool((sources_meta.get("cisa_kev") or {}).get("ok"))
+    ghsa_ok = bool((sources_meta.get("ghsa_critical") or {}).get("ok"))
+    return {
+        "osv_epss_at": _format_local_timestamp(latest_scan_raw),
+        "osv_epss_raw": latest_scan_raw,
+        "threat_feed_at": _format_local_timestamp(fetched_at),
+        "threat_feed_cached": bool(used_cache),
+        "cisa_kev_ok": kev_ok,
+        "ghsa_ok": ghsa_ok,
+        "trivy_db_at": _format_local_timestamp(trivy_updated_raw),
+        "trivy_db_raw": trivy_updated_raw,
     }

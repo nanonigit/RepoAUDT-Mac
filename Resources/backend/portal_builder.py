@@ -7979,9 +7979,32 @@ def build_portal_html(data, is_shareable=False):
           </div>
 
           ${hasVuln ? `
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
               <div class="section-title" style="color: #f87171; margin: 0;">${isEn ? '⚠️ Detected Known Vulnerabilities (Click for official sources)' : '⚠️ 検出された既知の脆弱性 (クリックして公式ソースを表示)'}</div>
               <button type="button" class="table-view-btn" style="font-size: 0.72rem; padding: 3px 9px;" onclick="copyAllInspectorAdvisoriesForAI(this)">${isEn ? '📋 Copy All for AI Review' : '📋 全件をAI確認用コピー'}</button>
+            </div>
+            <div style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 8px; font-variant-numeric: tabular-nums;">
+              ${(() => {
+                const rawAt = repoItem.analyzedAt || repoItem.analyzed_at || repoItem.updatedAt || '';
+                let fmtAt = '';
+                if (rawAt) {
+                  const d = new Date(rawAt);
+                  if (!isNaN(d.getTime())) {
+                    const pad = (n) => String(n).padStart(2, '0');
+                    fmtAt = `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                  } else {
+                    fmtAt = String(rawAt).slice(0, 16).replace('T', ' ');
+                  }
+                }
+                if (isEn) {
+                  return fmtAt
+                    ? `🕒 Queried at: ${escapeHtml(fmtAt)} (OSV.dev / FIRST EPSS / CISA KEV live lookup at scan time)`
+                    : '🕒 OSV.dev / FIRST EPSS / CISA KEV live lookup at scan time';
+                }
+                return fmtAt
+                  ? `🕒 照合時点: ${escapeHtml(fmtAt)}（OSV.dev / FIRST EPSS / CISA KEV スキャン時リアルタイム照合）`
+                  : '🕒 OSV.dev / FIRST EPSS / CISA KEV スキャン時リアルタイム照合';
+              })()}
             </div>
             ${advisories.map((adv, idx) => {
               const advEncoded = encodeDataArg(adv);

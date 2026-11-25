@@ -185,6 +185,10 @@ struct MainContentView: View {
     @State private var threatFeedFetchedAt = ""
     @State private var threatFeedStackSummary = ""
     @State private var threatFeedSourceWarnings: [String] = []
+    @State private var vulnDbOsvEpssAt = ""
+    @State private var vulnDbFeedAt = ""
+    @State private var vulnDbFeedCached = false
+    @State private var vulnDbTrivyAt = ""
     @State private var loadingThreatFeed = false
     @State private var threatFeedShowAll = false
     @State private var showRiskTrendReasons = false
@@ -4398,6 +4402,11 @@ struct MainContentView: View {
                     sourceWarnings.append("GHSA Critical")
                 }
             }
+            let freshness = json["db_freshness"] as? [String: Any] ?? [:]
+            let osvAt = (freshness["osv_epss_at"] as? String) ?? ""
+            let feedAt = (freshness["threat_feed_at"] as? String) ?? ""
+            let feedCached = (freshness["threat_feed_cached"] as? Bool) ?? false
+            let trivyAt = (freshness["trivy_db_at"] as? String) ?? ""
             await MainActor.run {
                 threatFeedItems = parsed
                 threatFeedMatchedCount = (json["matched_count"] as? Int) ?? 0
@@ -4406,6 +4415,10 @@ struct MainContentView: View {
                 threatFeedFetchedAt = (json["fetched_at"] as? String) ?? ""
                 threatFeedStackSummary = stackStr
                 threatFeedSourceWarnings = sourceWarnings
+                vulnDbOsvEpssAt = osvAt
+                vulnDbFeedAt = feedAt
+                vulnDbFeedCached = feedCached
+                vulnDbTrivyAt = trivyAt
             }
         } catch {
             // Non-fatal dashboard enhancement
@@ -4462,6 +4475,43 @@ struct MainContentView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 230)
                 }
+
+                HStack(spacing: 12) {
+                    Image(systemName: "clock.badge.checkmark")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if !vulnDbFeedAt.isEmpty {
+                        Text(
+                            english
+                                ? "CISA KEV / GHSA: \(vulnDbFeedAt)\(vulnDbFeedCached ? " (cached)" : " (live)")"
+                                : "CISA KEV / GHSA: \(vulnDbFeedAt) 取得\(vulnDbFeedCached ? "（キャッシュ）" : "（最新）")"
+                        )
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    }
+                    if !vulnDbOsvEpssAt.isEmpty {
+                        Text(
+                            english
+                                ? "OSV.dev / EPSS: \(vulnDbOsvEpssAt) (at last scan)"
+                                : "OSV.dev / EPSS: \(vulnDbOsvEpssAt) 照合（最終スキャン時点）"
+                        )
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    }
+                    if !vulnDbTrivyAt.isEmpty {
+                        Text(
+                            english
+                                ? "Trivy DB: \(vulnDbTrivyAt)"
+                                : "Trivy DB: \(vulnDbTrivyAt) 更新"
+                        )
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
 
                 if loadingThreatFeed && threatFeedItems.isEmpty {
                     HStack(spacing: 8) {
