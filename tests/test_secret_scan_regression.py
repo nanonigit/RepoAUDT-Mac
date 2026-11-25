@@ -95,6 +95,24 @@ class TestSecretScanRegression(unittest.TestCase):
             findings = security_audit_engine.scan_secrets_and_credentials(root, lambda _: "Docs")
             self.assertEqual(findings, [])
 
+    def test_ignores_recaptcha_public_sitekey_but_keeps_secret_key(self) -> None:
+        import source_scanners
+        self.assertTrue(
+            source_scanners._is_public_client_key_line(
+                "sitekey:'6LfsDt0sAAAAALb1234567890abcdef1234PfIK',size:'normal'"
+            )
+        )
+        self.assertTrue(
+            source_scanners._is_public_client_key_line(
+                "assert.equal(f.captcha.sitekey,'6LfsDt0sAAAAALb1234567890abcdef1234PfIK')"
+            )
+        )
+        self.assertFalse(
+            source_scanners._is_public_client_key_line(
+                "RECAPTCHA_SECRET_KEY='6LfsDt0sAAAAALb1234567890abcdef1234PfIK'"
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
