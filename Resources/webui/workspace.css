@@ -124,21 +124,21 @@
 @media (prefers-reduced-motion: reduce) {
   .native-host *, .native-host *::before, .native-host *::after { animation: none !important; transition: none !important; }
 }
-.native-host body .component-heading { font-size: 16px; font-weight: 600; color: var(--workspace-text); }
-.native-host body .component-heading span { color: var(--workspace-muted); font-size: 13px; margin-left: 6px; }
-.native-host body .component-hint { font-size: 13px; color: var(--workspace-muted); margin-top: 6px; }
+.native-host body .component-heading { font-size: 14px; font-weight: 600; color: var(--workspace-text); }
+.native-host body .component-heading span { color: var(--workspace-muted); font-size: 12px; margin-left: 6px; }
+.native-host body .component-hint { font-size: 12px; color: var(--workspace-muted); margin-top: 2px; }
 .native-host body .component-list { border: 1px solid var(--workspace-border); border-radius: 10px; overflow: hidden; }
 .native-host body .component-row.visual-node-card {
-  width: 100%; display: flex; flex-direction: row; align-items: center; gap: 18px; padding: 20px;
+  width: 100%; display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 8px 14px;
   text-align: left; color: var(--workspace-text); border: 0; border-radius: 0; background: var(--workspace-surface);
 }
 .native-host body .component-row + .component-row { border-top: 1px solid var(--workspace-border); }
 .native-host body .component-row:hover { background: var(--workspace-raised); }
 .native-host body .component-row.selected { background: var(--accent-dim); box-shadow: inset 3px 0 var(--workspace-accent); }
 .component-main { flex: 1; min-width: 0; }
-.component-main strong { font-size: 14px; display: block; }
-.component-main code { font: 12px/1.6 ui-monospace, monospace; color: var(--workspace-muted); display: block; overflow-wrap: anywhere; margin: 4px 0; }
-.component-main p { font-size: 13px; font-weight: 400; color: var(--workspace-muted); line-height: 1.7; }
+.component-main strong { font-size: 13px; display: inline; margin-right: 8px; }
+.component-main code { font: 11.5px/1.3 ui-monospace, monospace; color: var(--workspace-muted); display: inline; overflow-wrap: anywhere; }
+.component-main p { font-size: 12px; font-weight: 400; color: var(--workspace-muted); line-height: 1.4; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .component-count { font-size: 12px; white-space: nowrap; color: var(--workspace-muted); }
 .workspace-commit { font-size: 12px; color: var(--workspace-muted); margin-top: 8px; }
 .workspace-commit code { margin-left: 8px; font: 12px ui-monospace, monospace; }
