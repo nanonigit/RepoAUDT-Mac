@@ -353,11 +353,28 @@ struct AIConnectionView: View {
                             .foregroundStyle(.secondary)
                     }
                     if store.geminiCliInstalled && !store.geminiCliAuthenticated {
+                        HStack(spacing: 10) {
+                            Button {
+                                openGeminiCliLoginInTerminal()
+                            } label: {
+                                Label(
+                                    english ? "Open Terminal to Sign In" : "ターミナルで Google ログインを開く",
+                                    systemImage: "terminal"
+                                )
+                            }
+                            .buttonStyle(.borderedProminent)
+                            Button {
+                                Task { await store.refreshGeminiCliStatus() }
+                            } label: {
+                                Label(english ? "Re-check Login" : "ログイン状態を再確認", systemImage: "arrow.clockwise")
+                            }
+                            .buttonStyle(.bordered)
+                        }
                         Text(english
-                             ? "Run `gemini` once in Terminal to sign in with your Google account."
-                             : "初回のみターミナルで `gemini` を 1 回実行して Google アカウントでログインしてください。")
+                             ? "Click the button above to launch `gemini` in Terminal, sign in with Google, then click Re-check Login."
+                             : "上のボタンを押すとターミナルが自動で開き `gemini` が起動します。Google ログイン完了後に「ログイン状態を再確認」を押してください。")
                             .font(.caption)
-                            .foregroundStyle(SemanticColors.role("warningText"))
+                            .foregroundStyle(.secondary)
                     }
                 } header: {
                     Text(english ? "Gemini CLI Runtime" : "Gemini CLI ランタイム")
@@ -383,6 +400,35 @@ struct AIConnectionView: View {
             }
         }
         .task { store.port = port; store.loadAI() }
+    }
+
+    private func openGeminiCliLoginInTerminal() {
+        let geminiBin = store.geminiCliPath.isEmpty ? "gemini" : store.geminiCliPath
+        let scriptURL = FileManager.default.temporaryDirectory.appendingPathComponent("repoaudt_gemini_login.command")
+        let script = """
+        #!/bin/zsh
+        clear
+        echo "=========================================="
+        echo " RepoAUDT Mac — Gemini CLI Google Login"
+        echo "=========================================="
+        echo ""
+        echo "Sign in with your Google account, then return to RepoAUDT Mac."
+        echo ""
+        "\(geminiBin)"
+        """
+        do {
+            try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            proc.arguments = ["-a", "Terminal", scriptURL.path]
+            try proc.run()
+        } catch {
+            store.failed = true
+            store.feedback = english
+                ? "Could not launch Terminal: \(error.localizedDescription)"
+                : "ターミナルを起動できませんでした: \(error.localizedDescription)"
+        }
     }
 }
 

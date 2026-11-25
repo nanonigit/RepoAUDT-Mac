@@ -571,14 +571,6 @@ struct MainContentView: View {
                         .help(english ? "Show or hide details" : "詳細を表示・非表示")
                         .disabled(!coordinator.ready)
                     }
-                    Button {
-                        addRepoError = nil
-                        showAddRepoSheet = true
-                    } label: {
-                        Label(english ? "Add repository" : "リポジトリを追加", systemImage: "plus")
-                    }
-                    .help(english ? "Analyze a GitHub URL" : "GitHub URL を指定して解析")
-                    .disabled(!backend.isReady)
                     Picker(english ? "Language" : "言語", selection: $language) {
                         Text("日本語").tag("ja")
                         Text("English").tag("en")
