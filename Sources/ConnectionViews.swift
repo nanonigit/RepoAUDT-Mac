@@ -86,6 +86,60 @@ final class ConnectionStore: ObservableObject {
         return models[prov] ?? ""
     }
 
+    func providerReadiness(for prov: String, modelOverride: String = "", english: Bool) -> (ready: Bool, label: String) {
+        let configured = settings["configured"] as? [String: Bool] ?? [:]
+        switch prov {
+        case "none":
+            return (true, english ? "Static Analysis Only (Ready)" : "利用可能（静的解析のみ）")
+        case "gemini_cli":
+            if !geminiCliInstalled {
+                return (false, english ? "Not ready — Antigravity CLI not installed" : "利用不可（Antigravity CLI 未導入）")
+            }
+            if !geminiCliAuthenticated && !(configured["gemini_cli"] ?? false) {
+                return (false, english ? "Not ready — Google login required" : "利用不可（Google ログイン要確認）")
+            }
+            let ver = geminiCliVersion.isEmpty ? "" : " v\(geminiCliVersion)"
+            return (true, english ? "Ready (Antigravity CLI\(ver))" : "利用可能（Antigravity CLI\(ver) · 認証済）")
+        case "copilot":
+            if !copilotInstalled {
+                return (false, english ? "Not ready — Copilot SDK not installed" : "利用不可（Copilot SDK 未導入）")
+            }
+            let ver = copilotVersion.isEmpty ? "" : " v\(copilotVersion)"
+            return (true, english ? "Ready (GitHub Copilot SDK\(ver))" : "利用可能（GitHub Copilot SDK\(ver)）")
+        case "local":
+            let m = modelOverride.isEmpty ? savedModel(for: "local") : modelOverride
+            if m.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return (false, english ? "Not ready — Enter local model ID" : "利用不可（ローカルモデル ID 未入力）")
+            }
+            return (true, english ? "Configured (\(localURL))" : "設定済み（\(localURL)）")
+        default:
+            if configured[prov] == true || (prov == provider && !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                return (true, english ? "Ready (API key configured)" : "利用可能（API キー設定済み）")
+            }
+            return (false, english ? "Not ready — API key not configured" : "利用不可（API キー未設定）")
+        }
+    }
+
+    func testSecondaryAI(english: Bool) {
+        guard secondaryProvider != "none" else { return }
+        run {
+            let body: [String: Any] = [
+                "active_provider": self.provider,
+                "secondary_provider": self.secondaryProvider,
+                "secondary_model": self.secondaryModel,
+            ]
+            _ = try await self.request("/api/settings", body: body)
+            let result = try await self.request("/api/test-llm", body: ["provider": self.secondaryProvider])
+            let ok = result["ok"] as? Bool ?? false
+            self.failed = !ok
+            self.feedback = (result["message"] as? String)
+                ?? (result["error"] as? String)
+                ?? (ok
+                    ? (english ? "Second-opinion AI test succeeded." : "セカンドオピニオン AI の接続テストに成功しました。")
+                    : (english ? "Second-opinion AI test failed." : "セカンドオピニオン AI の接続テストに失敗しました。"))
+        }
+    }
+
     func selectProvider() {
         let models = settings["models"] as? [String: String] ?? [:]
         model = models[provider] ?? ""
@@ -387,6 +441,14 @@ struct AIConnectionView: View {
                 )
                     .font(.caption).foregroundStyle(.secondary)
                 }
+                let primaryState = store.providerReadiness(for: store.provider, modelOverride: store.model, english: english)
+                HStack(spacing: 6) {
+                    Image(systemName: primaryState.ready ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.caption)
+                    Text(primaryState.label)
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(SemanticColors.role(primaryState.ready ? "successText" : "warningText"))
             } header: {
                 Text(english ? "AI connection" : "AI 接続")
             }
@@ -433,6 +495,23 @@ struct AIConnectionView: View {
                     Text(english ? "Active second-opinion model: \(secDefault)" : "セカンドオピニオン使用モデル: \(secDefault)")
                         .font(.caption.monospaced())
                         .foregroundStyle(SemanticColors.role("infoText"))
+                }
+                if store.secondaryProvider != "none" {
+                    let secState = store.providerReadiness(for: store.secondaryProvider, modelOverride: store.secondaryModel, english: english)
+                    HStack(spacing: 8) {
+                        Image(systemName: secState.ready ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .font(.caption)
+                        Text(secState.label)
+                            .font(.caption.weight(.semibold))
+                        Spacer()
+                        Button(english ? "Test Second-Opinion" : "セカンドオピニオンをテスト") {
+                            store.testSecondaryAI(english: english)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(store.busy || !secState.ready)
+                    }
+                    .foregroundStyle(SemanticColors.role(secState.ready ? "successText" : "warningText"))
                 }
                 Text(
                     english
