@@ -4760,7 +4760,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/25 20:05:35</strong>
+              <strong id="portal-sync-time">2026/11/25 20:21:52</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -7951,7 +7951,10 @@
           </div>
 
           ${hasVuln ? `
-            <div class="section-title" style="color: #f87171;">${isEn ? '⚠️ Detected Known Vulnerabilities (Click for official sources)' : '⚠️ 検出された既知の脆弱性 (クリックして公式ソースを表示)'}</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
+              <div class="section-title" style="color: #f87171; margin: 0;">${isEn ? '⚠️ Detected Known Vulnerabilities (Click for official sources)' : '⚠️ 検出された既知の脆弱性 (クリックして公式ソースを表示)'}</div>
+              <button type="button" class="table-view-btn" style="font-size: 0.72rem; padding: 3px 9px;" onclick="copyAllInspectorAdvisoriesForAI(this)">${isEn ? '📋 Copy All for AI Review' : '📋 全件をAI確認用コピー'}</button>
+            </div>
             ${advisories.map((adv, idx) => {
               const advEncoded = encodeDataArg(adv);
               return `
@@ -7976,6 +7979,7 @@
                         ${s.name} ↗
                       </a>
                     `).join('')}
+                    <button type="button" class="sec-source-btn" style="cursor: pointer;" onclick="copyInspectorAdvisoryForAI('${advEncoded}', this)">${isEn ? '📋 Copy for AI Review' : '📋 AI確認用コピー'}</button>
                   </div>
                 </div>
               `;
@@ -11091,6 +11095,59 @@
       });
     }
 
+    function formatAdvisoryForAI(adv, repoName, componentName) {
+      const tier = typeof severityToTierBadge === 'function' ? severityToTierBadge(adv.severity || 'HIGH') : (adv.severity || 'HIGH');
+      const epssText = (adv.epss !== undefined && adv.epss !== null) ? ` (EPSS ${(Number(adv.epss) * 100).toFixed(1)}%)` : '';
+      const sources = (adv.sources || []).map(s => `- ${s.name}: ${s.url}`).join('\n');
+      const lines = [
+        `- **リポジトリ**: \`${repoName || '-'}\`${componentName ? ` / コンポーネント: \`${componentName}\`` : ''}`,
+        `- **重要度**: \`${tier}\`${epssText}`,
+        `- **CVE / GHSA**: \`${adv.cve || 'N/A'}\``,
+        `- **タイトル / パッケージ**: ${adv.title || adv.pkg || ''}`,
+        `- **詳細**: ${adv.summary || adv.msg || ''}`
+      ];
+      if (adv.fix_version || adv.remediation) {
+        lines.push(`- **推奨対策**: ${adv.remediation || `アップデート先: ${adv.fix_version}`}`);
+      }
+      if (sources) {
+        lines.push(`- **公式ソース**:\n${sources}`);
+      }
+      return lines.join('\n');
+    }
+
+    function copyInspectorAdvisoryForAI(encodedAdv, btnEl) {
+      let adv = null;
+      try {
+        adv = decodeDataArg(encodedAdv);
+      } catch (e) {
+        return;
+      }
+      if (!adv) return;
+      const repoName = selectedNodeData?.repoItem?.repo || selectedDiagram?.repo || '';
+      const compName = selectedNodeData?.name || '';
+      const prompt = [
+        '以下の検出された脆弱性について、このリポジトリでの実影響（実際に悪用可能な経路か）、対応優先度、安全なアップデートまたは回避策を確認してください。',
+        '',
+        formatAdvisoryForAI(adv, repoName, compName)
+      ].join('\n');
+      copyToClipboard(prompt, btnEl);
+    }
+
+    function copyAllInspectorAdvisoriesForAI(btnEl) {
+      const repoItem = selectedNodeData?.repoItem || selectedDiagram;
+      const advisories = repoItem?.deps?.security_advisories || [];
+      if (!advisories.length) return;
+      const repoName = repoItem?.repo || '';
+      const compName = selectedNodeData?.name || '';
+      const blocks = advisories.map((adv, idx) => `### ${idx + 1}. ${adv.cve || adv.pkg || 'Vulnerability'}\n${formatAdvisoryForAI(adv, repoName, compName)}`);
+      const prompt = [
+        `\`${repoName}\` で検出された既知の脆弱性（全${advisories.length}件）について、優先順位・実影響・一括アップデートの影響範囲を確認してください。`,
+        '',
+        ...blocks
+      ].join('\n\n');
+      copyToClipboard(prompt, btnEl);
+    }
+
 
     /* ==========================================================================
        UI Mode Management (Simple Mode vs Developer Mode)
@@ -12947,11 +13004,46 @@ function renderNativeInspector() {
       <h3>${en ? 'Saved findings' : '保存済みの指摘'} · ${related.length}</h3>
       ${related.length ? `<ul>${related.map(issue => `<li>${escapeHtml(issue.title || '')}</li>`).join('')}</ul>` :
         `<p>${en ? 'No related findings recorded.' : '関連する指摘は記録されていません。'}</p>`}
-      <button type="button" class="table-view-btn" onclick="switchViewMode('coderabbit'); setInspectorCollapsed(true)">${en ? 'Open audit results' : '監査結果で確認'}</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button type="button" class="table-view-btn" onclick="switchViewMode('coderabbit'); setInspectorCollapsed(true)">${en ? 'Open audit results' : '監査結果で確認'}</button>
+        <button type="button" class="table-view-btn" onclick="copyNativeInspectorForAI(this)">${en ? '📋 Copy for AI Review' : '📋 AI確認用コピー'}</button>
+      </div>
       <h3>${en ? 'Repository' : 'リポジトリ'}</h3>
       <p>${escapeHtml(repoItem.repo)}</p>
       <code>${escapeHtml(repoItem.commit_hash || (en ? 'Commit not recorded' : 'コミット未記録'))}</code>
     </section>`;
+}
+
+function copyNativeInspectorForAI(btnEl) {
+  if (!selectedNodeData) return;
+  const {name, path, spec = {}, repoItem} = selectedNodeData;
+  const related = getRepoActionItems(repoItem).filter(issue =>
+    name === repoItem.repo || issue.target_node === name ||
+    (path && String(issue.file || '').includes(path)));
+  const advisories = repoItem?.deps?.security_advisories || [];
+  const lines = [
+    '以下のコンポーネントの役割と検出された指摘について、設計上のリスクや具体的な修正方針をAI観点で確認してください。',
+    '',
+    `- **リポジトリ**: \`${repoItem.repo}\` (${repoItem.commit_hash || 'commit未記録'})`,
+    `- **コンポーネント**: \`${name}\`${path ? ` (\`${path}\`)` : ''}`,
+    `- **役割**: ${spec.desc || repoItem.description || '記録なし'}`,
+    `- **保存済みの指摘 (${related.length}件)**:`
+  ];
+  if (related.length) {
+    related.forEach((issue, idx) => {
+      const loc = issue.file ? ` (${issue.file}${issue.line ? `:${issue.line}` : ''})` : '';
+      lines.push(`  ${idx + 1}. [${issue.severity || 'INFO'}] ${issue.title || ''}${loc}`);
+    });
+  } else {
+    lines.push('  なし');
+  }
+  if (advisories.length) {
+    lines.push(`- **既知の脆弱性 (${advisories.length}件)**:`);
+    advisories.slice(0, 10).forEach((adv, idx) => {
+      lines.push(`  ${idx + 1}. [${adv.severity || 'HIGH'}] ${adv.cve || ''} ${adv.title || adv.pkg || ''}`);
+    });
+  }
+  copyToClipboard(lines.join('\n'), btnEl);
 }
 
 /* Read-only GitHub evidence and contextual conversation in the native workspace. */

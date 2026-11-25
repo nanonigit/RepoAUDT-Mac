@@ -1893,10 +1893,10 @@ struct MainContentView: View {
                                     tint: SemanticColors.role("warningText")
                                 )
                                 auditScopeItem(
-                                    title: english ? "Secrets, Git History & Liveness (Gitleaks + TruffleHog)" : "シークレット・Git履歴＆生存確認（Gitleaks + TruffleHog）",
+                                    title: english ? "Secrets, Git History & Revocation (Gitleaks + TruffleHog)" : "シークレット・Git履歴＆失効確認（Gitleaks + TruffleHog）",
                                     summary: english
-                                        ? "Scans HEAD, Git commit history, and keystores with 800+ masked detectors, plus opt-in read-only Active/Revoked verification."
-                                        : "最新ファイル＋Git コミット履歴・キーストア露出を 800+ 検出器でマスク検出し、手動オプトインで読み取り専用の有効/失効確認が行えます。",
+                                        ? "Scans HEAD, Git history, and keystores with 800+ masked detectors (filtering public client keys), automatic Git history persistence checks, and opt-in AWS/OpenAI/GitHub revocation checks."
+                                        : "最新ファイル＋Git 履歴・キーストア露出を 800+ 検出器でマスク検出（公開キー除外）。修正後の Git 履歴残存の自動判定と、手動ボタンでの AWS/OpenAI/GitHub 失効確認に対応します。",
                                     symbol: "key.fill",
                                     tint: SemanticColors.role("actionText")
                                 )
@@ -1907,6 +1907,22 @@ struct MainContentView: View {
                                         : "ワークフロー権限・インジェクション、リポジトリ保護設定、重要度加重 Risk Score と PASS/WARN/BLOCK ゲートを評価します。",
                                     symbol: "gearshape.2.fill",
                                     tint: SemanticColors.role("infoText")
+                                )
+                                auditScopeItem(
+                                    title: english ? "AI Second Opinion & Finding Deduplication" : "AI セカンドオピニオン & 指摘重複マージ",
+                                    summary: english
+                                        ? "Cross-checks findings with redacted source context using secondary AI (Claude/Gemini/Codex), merges overlapping AI + static (OSV/Actions) alerts, and provides per-repo AI Chat."
+                                        : "マスク済みコード文脈を添えてセカンド AI（Claude/Gemini/Codex）で過検知を検証。AI 監査と OSV/Actions 静的解析の重複を統合し、リポジトリ別の AI 相談も行えます。",
+                                    symbol: "sparkles",
+                                    tint: Color.purple
+                                )
+                                auditScopeItem(
+                                    title: english ? "Auto Commit Monitor & Remediation Tracker (launchd)" : "新着コミット自動監視 & 修正トラッカー（launchd 常駐）",
+                                    summary: english
+                                        ? "Continuously re-audits new commits even when the app is closed, tracks Risk Score trends, and auto-detects when Slack/Issue-requested P0/P1 findings are resolved."
+                                        : "アプリ未起動時も新着コミットを検知して自動再監査。リスクスコア推移を記録し、Slack / Issue で修正依頼した P0/P1 指摘の解消を自動追跡します。",
+                                    symbol: "arrow.triangle.2.circlepath.circle.fill",
+                                    tint: Color.green
                                 )
                             }
                         }

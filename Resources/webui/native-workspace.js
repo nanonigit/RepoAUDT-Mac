@@ -100,9 +100,44 @@ function renderNativeInspector() {
       <h3>${en ? 'Saved findings' : '保存済みの指摘'} · ${related.length}</h3>
       ${related.length ? `<ul>${related.map(issue => `<li>${escapeHtml(issue.title || '')}</li>`).join('')}</ul>` :
         `<p>${en ? 'No related findings recorded.' : '関連する指摘は記録されていません。'}</p>`}
-      <button type="button" class="table-view-btn" onclick="switchViewMode('coderabbit'); setInspectorCollapsed(true)">${en ? 'Open audit results' : '監査結果で確認'}</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button type="button" class="table-view-btn" onclick="switchViewMode('coderabbit'); setInspectorCollapsed(true)">${en ? 'Open audit results' : '監査結果で確認'}</button>
+        <button type="button" class="table-view-btn" onclick="copyNativeInspectorForAI(this)">${en ? '📋 Copy for AI Review' : '📋 AI確認用コピー'}</button>
+      </div>
       <h3>${en ? 'Repository' : 'リポジトリ'}</h3>
       <p>${escapeHtml(repoItem.repo)}</p>
       <code>${escapeHtml(repoItem.commit_hash || (en ? 'Commit not recorded' : 'コミット未記録'))}</code>
     </section>`;
+}
+
+function copyNativeInspectorForAI(btnEl) {
+  if (!selectedNodeData) return;
+  const {name, path, spec = {}, repoItem} = selectedNodeData;
+  const related = getRepoActionItems(repoItem).filter(issue =>
+    name === repoItem.repo || issue.target_node === name ||
+    (path && String(issue.file || '').includes(path)));
+  const advisories = repoItem?.deps?.security_advisories || [];
+  const lines = [
+    '以下のコンポーネントの役割と検出された指摘について、設計上のリスクや具体的な修正方針をAI観点で確認してください。',
+    '',
+    `- **リポジトリ**: \`${repoItem.repo}\` (${repoItem.commit_hash || 'commit未記録'})`,
+    `- **コンポーネント**: \`${name}\`${path ? ` (\`${path}\`)` : ''}`,
+    `- **役割**: ${spec.desc || repoItem.description || '記録なし'}`,
+    `- **保存済みの指摘 (${related.length}件)**:`
+  ];
+  if (related.length) {
+    related.forEach((issue, idx) => {
+      const loc = issue.file ? ` (${issue.file}${issue.line ? `:${issue.line}` : ''})` : '';
+      lines.push(`  ${idx + 1}. [${issue.severity || 'INFO'}] ${issue.title || ''}${loc}`);
+    });
+  } else {
+    lines.push('  なし');
+  }
+  if (advisories.length) {
+    lines.push(`- **既知の脆弱性 (${advisories.length}件)**:`);
+    advisories.slice(0, 10).forEach((adv, idx) => {
+      lines.push(`  ${idx + 1}. [${adv.severity || 'HIGH'}] ${adv.cve || ''} ${adv.title || adv.pkg || ''}`);
+    });
+  }
+  copyToClipboard(lines.join('\n'), btnEl);
 }

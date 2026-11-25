@@ -7979,7 +7979,10 @@ def build_portal_html(data, is_shareable=False):
           </div>
 
           ${hasVuln ? `
-            <div class="section-title" style="color: #f87171;">${isEn ? '⚠️ Detected Known Vulnerabilities (Click for official sources)' : '⚠️ 検出された既知の脆弱性 (クリックして公式ソースを表示)'}</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
+              <div class="section-title" style="color: #f87171; margin: 0;">${isEn ? '⚠️ Detected Known Vulnerabilities (Click for official sources)' : '⚠️ 検出された既知の脆弱性 (クリックして公式ソースを表示)'}</div>
+              <button type="button" class="table-view-btn" style="font-size: 0.72rem; padding: 3px 9px;" onclick="copyAllInspectorAdvisoriesForAI(this)">${isEn ? '📋 Copy All for AI Review' : '📋 全件をAI確認用コピー'}</button>
+            </div>
             ${advisories.map((adv, idx) => {
               const advEncoded = encodeDataArg(adv);
               return `
@@ -8004,6 +8007,7 @@ def build_portal_html(data, is_shareable=False):
                         ${s.name} ↗
                       </a>
                     `).join('')}
+                    <button type="button" class="sec-source-btn" style="cursor: pointer;" onclick="copyInspectorAdvisoryForAI('${advEncoded}', this)">${isEn ? '📋 Copy for AI Review' : '📋 AI確認用コピー'}</button>
                   </div>
                 </div>
               `;
@@ -11114,6 +11118,59 @@ def build_portal_html(data, is_shareable=False):
           btnEl.style.color = '';
         }, 2000);
       });
+    }
+
+    function formatAdvisoryForAI(adv, repoName, componentName) {
+      const tier = typeof severityToTierBadge === 'function' ? severityToTierBadge(adv.severity || 'HIGH') : (adv.severity || 'HIGH');
+      const epssText = (adv.epss !== undefined && adv.epss !== null) ? ` (EPSS ${(Number(adv.epss) * 100).toFixed(1)}%)` : '';
+      const sources = (adv.sources || []).map(s => `- ${s.name}: ${s.url}`).join('\\n');
+      const lines = [
+        `- **リポジトリ**: \\`${repoName || '-'}\\`${componentName ? ` / コンポーネント: \\`${componentName}\\`` : ''}`,
+        `- **重要度**: \\`${tier}\\`${epssText}`,
+        `- **CVE / GHSA**: \\`${adv.cve || 'N/A'}\\``,
+        `- **タイトル / パッケージ**: ${adv.title || adv.pkg || ''}`,
+        `- **詳細**: ${adv.summary || adv.msg || ''}`
+      ];
+      if (adv.fix_version || adv.remediation) {
+        lines.push(`- **推奨対策**: ${adv.remediation || `アップデート先: ${adv.fix_version}`}`);
+      }
+      if (sources) {
+        lines.push(`- **公式ソース**:\\n${sources}`);
+      }
+      return lines.join('\\n');
+    }
+
+    function copyInspectorAdvisoryForAI(encodedAdv, btnEl) {
+      let adv = null;
+      try {
+        adv = decodeDataArg(encodedAdv);
+      } catch (e) {
+        return;
+      }
+      if (!adv) return;
+      const repoName = selectedNodeData?.repoItem?.repo || selectedDiagram?.repo || '';
+      const compName = selectedNodeData?.name || '';
+      const prompt = [
+        '以下の検出された脆弱性について、このリポジトリでの実影響（実際に悪用可能な経路か）、対応優先度、安全なアップデートまたは回避策を確認してください。',
+        '',
+        formatAdvisoryForAI(adv, repoName, compName)
+      ].join('\\n');
+      copyToClipboard(prompt, btnEl);
+    }
+
+    function copyAllInspectorAdvisoriesForAI(btnEl) {
+      const repoItem = selectedNodeData?.repoItem || selectedDiagram;
+      const advisories = repoItem?.deps?.security_advisories || [];
+      if (!advisories.length) return;
+      const repoName = repoItem?.repo || '';
+      const compName = selectedNodeData?.name || '';
+      const blocks = advisories.map((adv, idx) => `### ${idx + 1}. ${adv.cve || adv.pkg || 'Vulnerability'}\\n${formatAdvisoryForAI(adv, repoName, compName)}`);
+      const prompt = [
+        `\\`${repoName}\\` で検出された既知の脆弱性（全${advisories.length}件）について、優先順位・実影響・一括アップデートの影響範囲を確認してください。`,
+        '',
+        ...blocks
+      ].join('\\n\\n');
+      copyToClipboard(prompt, btnEl);
     }
 
 
