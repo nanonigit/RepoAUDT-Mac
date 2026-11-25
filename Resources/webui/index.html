@@ -4730,7 +4730,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/25 12:41:03</strong>
+              <strong id="portal-sync-time">2026/11/25 12:42:09</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -6970,9 +6970,11 @@
         return `${y}/${m}/${d} ${hh}:${mm}`;
       };
       const analyzedAtText = formatHeroDateTime(item.analyzed_at || item.last_sync_attempted_at || '', true);
-      const repoUpdatedAtText = formatHeroDateTime(item.pushedAt || item.commit_date || item.updatedAt || '', false);
+      const commitAtText = formatHeroDateTime(item.commit_date || '', true);
+      const repoUpdatedAtText = formatHeroDateTime(item.pushedAt || item.updatedAt || '', true);
       const updatedStampParts = [];
       if (analyzedAtText) updatedStampParts.push(en ? `Updated: ${analyzedAtText}` : `解析更新: ${analyzedAtText}`);
+      if (commitAtText) updatedStampParts.push(en ? `Last commit: ${commitAtText}` : `最終コミット: ${commitAtText}`);
       if (repoUpdatedAtText) updatedStampParts.push(en ? `Last push: ${repoUpdatedAtText}` : `最終Push: ${repoUpdatedAtText}`);
       const updatedStampHtml = updatedStampParts.length
         ? `<span style="font-size:0.74rem;color:var(--workspace-muted);font-variant-numeric:tabular-nums;white-space:nowrap;" title="${escapeHtml(updatedStampParts.join(' / '))}">${escapeHtml(updatedStampParts.join(' · '))}</span>`
