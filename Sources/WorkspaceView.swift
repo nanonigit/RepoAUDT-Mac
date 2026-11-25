@@ -4638,10 +4638,17 @@ struct MainContentView: View {
                                         Text("\(rec.repo) · \(rec.file)").font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
                                         HStack(spacing: 8) {
                                             let col: Color = rec.elapsedDays >= 3 ? SemanticColors.role("warningText") : SemanticColors.role("infoText")
-                                            Text(rec.elapsedDays >= 1
-                                                ? (english ? "\(rec.elapsedDays)d elapsed" : "依頼から \(rec.elapsedDays)日経過")
-                                                : (english ? "Requested today" : "本日依頼済み"))
-                                                .font(.caption2.weight(.semibold))
+                                            let reqDateStr = formattedAnalysisDate(rec.requestedAt).map { String($0.prefix(10)) } ?? ""
+                                            let statusText: String = {
+                                                if reqDateStr.isEmpty {
+                                                    return english ? "\(rec.elapsedDays)d elapsed" : "\(rec.elapsedDays)日経過"
+                                                }
+                                                return english
+                                                    ? "Requested \(reqDateStr) · \(rec.elapsedDays)d elapsed"
+                                                    : "\(reqDateStr) 依頼 · \(rec.elapsedDays)日経過"
+                                            }()
+                                            Text(statusText)
+                                                .font(.caption2.monospacedDigit().weight(.semibold))
                                                 .foregroundStyle(col)
                                             if !rec.issueUrl.isEmpty, let url = URL(string: rec.issueUrl) {
                                                 Button("GitHub Issue ↗") { NSWorkspace.shared.open(url) }

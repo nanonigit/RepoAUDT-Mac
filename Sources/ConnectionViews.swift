@@ -81,6 +81,11 @@ final class ConnectionStore: ObservableObject {
         }
     }
 
+    func savedModel(for prov: String) -> String {
+        let models = settings["models"] as? [String: String] ?? [:]
+        return models[prov] ?? ""
+    }
+
     func selectProvider() {
         let models = settings["models"] as? [String: String] ?? [:]
         model = models[provider] ?? ""
@@ -338,7 +343,12 @@ struct AIConnectionView: View {
                     }
                     let activeModelLabel: String = {
                         if store.model.isEmpty || store.model == "auto" {
-                            return english ? "Auto (CLI Default)" : "自動（CLI デフォルト）"
+                            if let def = store.geminiCliModels.first {
+                                return english
+                                    ? "Auto (Default: \(def.label) [\(def.id)])"
+                                    : "自動（既定: \(def.label) [\(def.id)]）"
+                            }
+                            return english ? "Auto (CLI Default)" : "自動（CLI 既定）"
                         }
                         if let found = store.geminiCliModels.first(where: { $0.id == store.model }) {
                             return "\(found.label) [\(found.id)]"
@@ -393,7 +403,11 @@ struct AIConnectionView: View {
                 }
                 if store.secondaryProvider == "gemini_cli" {
                     Picker(english ? "Second-Opinion Model" : "クロスチェック用モデル", selection: $store.secondaryModel) {
-                        Text(english ? "Auto (CLI Default)" : "自動（CLI デフォルト）").tag("")
+                        Text(
+                            store.geminiCliModels.first.map {
+                                english ? "Auto (Default: \($0.label))" : "自動（既定: \($0.label)）"
+                            } ?? (english ? "Auto (CLI Default)" : "自動（CLI 既定）")
+                        ).tag("")
                         ForEach(store.geminiCliModels) { opt in
                             Text("\(opt.label) (\(opt.id))").tag(opt.id)
                         }
@@ -403,6 +417,22 @@ struct AIConnectionView: View {
                         english ? "Model override (optional)" : "モデル上書き（任意・空欄時は既定モデル）",
                         text: $store.secondaryModel
                     )
+                    let secDefault: String = {
+                        if !store.secondaryModel.isEmpty { return store.secondaryModel }
+                        let fallback = store.savedModel(for: store.secondaryProvider)
+                        if !fallback.isEmpty { return fallback }
+                        switch store.secondaryProvider {
+                        case "copilot": return "auto (Copilot default)"
+                        case "openai": return "gpt-4o"
+                        case "claude": return "claude-3-7-sonnet-latest"
+                        case "gemini": return "gemini-2.5-flash"
+                        case "groq": return "llama-3.3-70b-versatile"
+                        default: return "default"
+                        }
+                    }()
+                    Text(english ? "Active second-opinion model: \(secDefault)" : "セカンドオピニオン使用モデル: \(secDefault)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(SemanticColors.role("infoText"))
                 }
                 Text(
                     english

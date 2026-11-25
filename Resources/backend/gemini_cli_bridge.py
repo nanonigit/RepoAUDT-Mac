@@ -158,11 +158,16 @@ def list_available_models(*, force: bool = False) -> Dict[str, Any]:
     now = time.time()
     cached_ts, cached_list = _MODELS_CACHE
     if not force and cached_list and (now - cached_ts) < _MODELS_CACHE_TTL_SEC:
-        return {"ok": True, "cached": True, "models": cached_list}
+        return {
+            "ok": True,
+            "cached": True,
+            "models": cached_list,
+            "default_model": cached_list[0] if cached_list else None,
+        }
 
     binary, kind = find_cli_binary()
     if not binary:
-        return {"ok": False, "cached": False, "models": [], "error": "CLI not installed"}
+        return {"ok": False, "cached": False, "models": [], "default_model": None, "error": "CLI not installed"}
 
     cmd = [binary, "models"] if kind == "agy" else [binary, "--list-models"]
     try:
@@ -176,9 +181,20 @@ def list_available_models(*, force: bool = False) -> Dict[str, Any]:
         models = _parse_models_output((proc.stdout or "") + "\n" + (proc.stderr or ""))
         if models:
             _MODELS_CACHE = (now, models)
-        return {"ok": True, "cached": False, "models": models}
+        return {
+            "ok": True,
+            "cached": False,
+            "models": models,
+            "default_model": models[0] if models else None,
+        }
     except Exception as exc:
-        return {"ok": False, "cached": False, "models": cached_list, "error": str(exc)}
+        return {
+            "ok": False,
+            "cached": False,
+            "models": cached_list,
+            "default_model": cached_list[0] if cached_list else None,
+            "error": str(exc),
+        }
 
 
 def install_or_update_gemini_cli() -> Dict[str, Any]:
