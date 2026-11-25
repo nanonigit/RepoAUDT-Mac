@@ -7024,7 +7024,7 @@ def build_portal_html(data, is_shareable=False):
         <div class="hero-left-info">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             ${repoOptionsHtml
-              ? `<select id="hero-repo-select" aria-label="${en ? 'Select repository' : 'リポジトリを切り替え'}" onchange="selectDiagram(Number(this.value))" style="font-size:1.02rem;font-weight:700;padding:4px 10px;border-radius:8px;border:1px solid var(--workspace-border);background:var(--workspace-surface);color:var(--workspace-text);cursor:pointer;max-width:360px;">${repoOptionsHtml}</select>`
+              ? `<select id="hero-repo-select" aria-label="${en ? 'Select repository' : 'リポジトリを切り替え'}" onchange="selectDiagram(Number(this.value))" style="font-size:0.88rem;font-weight:400;padding:4px 10px;border-radius:8px;border:1px solid var(--workspace-border);background:var(--workspace-surface);color:var(--workspace-text);cursor:pointer;max-width:360px;">${repoOptionsHtml}</select>`
               : `<h2 class="hero-repo-title" style="margin:0;">${escapeHtml(item.repo)}</h2>`}
             <button type="button" id="toggle-hero-meta-btn" class="table-view-btn" style="font-size:0.72rem;padding:2px 8px;" onclick="(function(btn){const b=document.getElementById('hero-meta-body');if(!b)return;const open=b.style.display==='none';b.style.display=open?'block':'none';btn.textContent=open?'${en ? '▼ Hide Details' : '▼ 詳細を畳む'}':'${en ? '▶ Commit & PR Details' : '▶ コミット・PR詳細'}';if(typeof safeStorageSet==='function')safeStorageSet('repoaudt_hero_meta_open',open?'1':'0');})(this)">${heroMetaOpen ? (en ? '▼ Hide Details' : '▼ 詳細を畳む') : (en ? '▶ Commit & PR Details' : '▶ コミット・PR詳細')}</button>
             ${updatedStampHtml}
