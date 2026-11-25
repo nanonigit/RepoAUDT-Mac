@@ -19,7 +19,7 @@ Enter a GitHub repository URL or `owner/repo`, analyze the code, and inspect fin
 - **Audit chat:** start in the sidebar or from a finding. Each question checks GitHub again and sends the question, recent messages, and comparison metadata to the configured AI provider. Source lines stay in the workspace.
 - **Native navigation:** a macOS sidebar and toolbar, optional detail inspector, and Japanese / English switching, aligned with NetworkPNTR Mac and NetworkISPR Mac.
 - **Consistent colors:** light and dark appearances share semantic roles. Blue identifies actions and selection, red marks serious findings or failures, amber indicates caution, and green denotes confirmed success. Labels and symbols accompany severity colors.
-- **Cloud AI:** settings and connection tests for OpenAI, Claude, Gemini, and Groq, using the existing audit integrations.
+- **Cloud & CLI AI:** settings and connection tests for OpenAI, Claude, Gemini (API key), **Gemini CLI** (Google account login via `@google/gemini-cli`, no API key required), Groq, and GitHub Copilot SDK.
 - **Local LLM:** connect to a loopback OpenAI-compatible API using its base URL and model identifier. An API key is optional.
 - **MCP server:** seven tools for repository listings, architecture, security reports, repository analysis, snippet scanning, CycloneDX SBOM export, and SARIF export, available over stdio or local HTTP.
 - **MCP client:** connect to stdio or HTTP servers, inspect tool schemas, enter JSON arguments, and explicitly run tools.

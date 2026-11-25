@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import copilot_bridge
+import gemini_cli_bridge
 
 BREW_UPGRADABLE_TOOLS = frozenset({
     "gh",
@@ -230,6 +231,7 @@ def upgrade_cli_tool(tool_name: str) -> Dict[str, Any]:
 def get_runtime_diagnostics() -> Dict[str, Any]:
     """Return runtime environment diagnostics for the System / Update view."""
     copilot_status = copilot_bridge.get_copilot_runtime_status()
+    gemini_cli_status = gemini_cli_bridge.get_gemini_cli_runtime_status()
     gh_bin = shutil.which("gh") or ""
     outdated = _probe_brew_outdated()
     gh_latest = outdated.get("gh", "")
@@ -260,6 +262,10 @@ def get_runtime_diagnostics() -> Dict[str, Any]:
         "copilot_sdk_version": copilot_cur,
         "copilot_sdk_update_available": copilot_update_available,
         "copilot_sdk_latest_version": copilot_latest,
+        "gemini_cli_installed": gemini_cli_status.get("installed", False),
+        "gemini_cli_version": gemini_cli_status.get("version", ""),
+        "gemini_cli_path": gemini_cli_status.get("path", ""),
+        "gemini_cli_authenticated": gemini_cli_status.get("authenticated", False),
         "repo": repo_info,
         "scanners": _probe_cli_scanners(outdated),
     }

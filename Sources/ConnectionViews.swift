@@ -26,6 +26,11 @@ final class ConnectionStore: ObservableObject {
     @Published var copilotVersion = ""
     @Published var copilotPythonPath = ""
     @Published var copilotStatusLoaded = false
+    @Published var geminiCliInstalled = false
+    @Published var geminiCliVersion = ""
+    @Published var geminiCliPath = ""
+    @Published var geminiCliAuthenticated = false
+    @Published var geminiCliAuthMethod = ""
     private var settings: [String: Any] = [:]
     var port = 18765
 
@@ -84,6 +89,33 @@ final class ConnectionStore: ObservableObject {
             self.localURL = self.settings["local_base_url"] as? String ?? self.localURL
             self.selectProvider()
             await self.refreshCopilotStatus()
+            await self.refreshGeminiCliStatus()
+        }
+    }
+
+    func refreshGeminiCliStatus() async {
+        do {
+            let status = try await self.request("/api/connections/gemini-cli/status")
+            self.geminiCliInstalled = status["installed"] as? Bool ?? false
+            self.geminiCliVersion = status["version"] as? String ?? ""
+            self.geminiCliPath = status["path"] as? String ?? ""
+            self.geminiCliAuthenticated = status["authenticated"] as? Bool ?? false
+            self.geminiCliAuthMethod = status["auth_method"] as? String ?? ""
+        } catch {}
+    }
+
+    func installOrUpdateGeminiCli(english: Bool) {
+        run {
+            let result = try await self.request("/api/connections/gemini-cli/install", body: [:])
+            self.geminiCliInstalled = result["installed"] as? Bool ?? false
+            self.geminiCliVersion = result["version"] as? String ?? ""
+            self.geminiCliPath = result["path"] as? String ?? ""
+            self.geminiCliAuthenticated = result["authenticated"] as? Bool ?? false
+            self.geminiCliAuthMethod = result["auth_method"] as? String ?? ""
+            let verLabel = self.geminiCliVersion.isEmpty ? "" : " (v\(self.geminiCliVersion))"
+            self.feedback = english
+                ? "Gemini CLI\(verLabel) is ready."
+                : "Gemini CLI\(verLabel) の準備が完了しました。"
         }
     }
 
@@ -221,7 +253,8 @@ struct AIConnectionView: View {
                 Picker(english ? "Provider" : "接続先", selection: $store.provider) {
                     Text("OpenAI").tag("openai")
                     Text("Claude").tag("claude")
-                    Text("Gemini").tag("gemini")
+                    Text("Gemini (API Key)").tag("gemini")
+                    Text("Gemini CLI").tag("gemini_cli")
                     Text("Groq").tag("groq")
                     Text("GitHub Copilot").tag("copilot")
                     Text(english ? "Local LLM" : "ローカル LLM").tag("local")
@@ -238,7 +271,9 @@ struct AIConnectionView: View {
                         ? (english ? "Token (optional)" : "トークン（任意）")
                         : (store.provider == "copilot"
                            ? (english ? "GitHub Token (optional)" : "GitHub トークン（任意）")
-                           : "API Key"),
+                           : (store.provider == "gemini_cli"
+                              ? (english ? "GEMINI_API_KEY (optional)" : "GEMINI_API_KEY（任意・Google ログイン時は空欄）")
+                              : "API Key")),
                     text: $store.key,
                     prompt: Text(store.keyStatus.isEmpty ? "" : store.keyStatus)
                 )
@@ -247,9 +282,13 @@ struct AIConnectionView: View {
                         ? (english
                            ? "Uses your GitHub Copilot subscription via Copilot SDK (falls back to gh CLI login if blank)."
                            : "GitHub Copilot SDK 経由でサブスクリプションを利用します（空欄時は gh CLI のログインを使用）。")
-                        : (english
-                           ? "Leave the key blank to keep the saved value."
-                           : "キーを空欄にすると、保存済みの値を使用します。")
+                        : (store.provider == "gemini_cli"
+                           ? (english
+                              ? "Runs local @google/gemini-cli in read-only headless mode using your Google account login (no API key needed)."
+                              : "ローカルの @google/gemini-cli を読み取り専用ヘッドレスモードで実行します（Google ログイン済みなら API キー不要）。")
+                           : (english
+                              ? "Leave the key blank to keep the saved value."
+                              : "キーを空欄にすると、保存済みの値を使用します。"))
                 )
                     .font(.caption).foregroundStyle(.secondary)
             } header: {
@@ -286,6 +325,44 @@ struct AIConnectionView: View {
                     Text(english ? "GitHub Copilot SDK" : "GitHub Copilot SDK ランタイム")
                 }
             }
+            if store.provider == "gemini_cli" {
+                Section {
+                    HStack {
+                        Label(
+                            store.geminiCliInstalled
+                                ? (english
+                                   ? "Installed\(store.geminiCliVersion.isEmpty ? "" : " (v\(store.geminiCliVersion))") · \(store.geminiCliAuthenticated ? "Authenticated" : "Login required")"
+                                   : "インストール済み\(store.geminiCliVersion.isEmpty ? "" : " (v\(store.geminiCliVersion))") · \(store.geminiCliAuthenticated ? "認証済み" : "ログイン要確認")")
+                                : (english ? "Not installed" : "未インストール"),
+                            systemImage: (store.geminiCliInstalled && store.geminiCliAuthenticated) ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+                        )
+                        .foregroundStyle(SemanticColors.role((store.geminiCliInstalled && store.geminiCliAuthenticated) ? "successText" : "warningText"))
+                        Spacer()
+                        Button(
+                            store.geminiCliInstalled
+                                ? (english ? "Update Gemini CLI" : "アップデート")
+                                : (english ? "Install Gemini CLI" : "インストール")
+                        ) {
+                            store.installOrUpdateGeminiCli(english: english)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    if !store.geminiCliPath.isEmpty {
+                        Text(store.geminiCliPath)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                    if store.geminiCliInstalled && !store.geminiCliAuthenticated {
+                        Text(english
+                             ? "Run `gemini` once in Terminal to sign in with your Google account."
+                             : "初回のみターミナルで `gemini` を 1 回実行して Google アカウントでログインしてください。")
+                            .font(.caption)
+                            .foregroundStyle(SemanticColors.role("warningText"))
+                    }
+                } header: {
+                    Text(english ? "Gemini CLI Runtime" : "Gemini CLI ランタイム")
+                }
+            }
             Section {
                 HStack {
                     Button(english ? "Save" : "保存") { store.saveAI(test: false, english: english) }
@@ -301,6 +378,8 @@ struct AIConnectionView: View {
             store.selectProvider()
             if next == "copilot" {
                 Task { await store.refreshCopilotStatus() }
+            } else if next == "gemini_cli" {
+                Task { await store.refreshGeminiCliStatus() }
             }
         }
         .task { store.port = port; store.loadAI() }

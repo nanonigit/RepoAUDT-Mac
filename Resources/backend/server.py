@@ -36,7 +36,8 @@ import analyzer  # noqa: E402
 import app_updater  # noqa: E402
 import audit_evidence  # noqa: E402
 import audit_evidence  # noqa: E402
-import copilot_bridge  # noqa: E402
+import copilot_bridge
+import gemini_cli_bridge  # noqa: E402
 import diff_verification  # noqa: E402
 import mcp_server  # noqa: E402
 import mcp_client  # noqa: E402
@@ -667,6 +668,13 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": str(exc)})
             return
 
+        if self.path == "/api/connections/gemini-cli/status":
+            try:
+                self._send_json(200, gemini_cli_bridge.get_gemini_cli_runtime_status())
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
         if self.path == "/api/app/diagnostics":
             try:
                 self._send_json(200, app_updater.get_runtime_diagnostics())
@@ -845,6 +853,13 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/connections/copilot/install":
             try:
                 self._send_json(200, copilot_bridge.install_or_update_copilot_sdk())
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
+        if self.path == "/api/connections/gemini-cli/install":
+            try:
+                self._send_json(200, gemini_cli_bridge.install_or_update_gemini_cli())
             except Exception as exc:
                 self._send_json(400, {"ok": False, "error": str(exc)})
             return

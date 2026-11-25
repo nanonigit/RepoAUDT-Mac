@@ -19,6 +19,7 @@ import urllib.error
 import urllib.request
 from connection_utils import validate_endpoint, open_endpoint
 import copilot_bridge
+import gemini_cli_bridge
 from workflow_audit import MAX_FILES, find_template_injections_in_workflow, read_small_file, run_actionlint, run_zizmor, workflow_files
 from source_scanners import scan_extended_security, scan_semgrep_and_trivy, scan_source
 from runtime_patches import scan_runtime_patches
@@ -55,12 +56,13 @@ SETTINGS_FILE = APP_SUPPORT_DIR / "settings.json"
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "local_base_url": "http://127.0.0.1:11434/v1",
-    "active_provider": "auto",  # auto | openai | claude | gemini | groq | local | copilot
+    "active_provider": "auto",  # auto | openai | claude | gemini | gemini_cli | groq | local | copilot
     "keys": {
         "local": "",
         "openai": "",
         "claude": "",
         "gemini": "",
+        "gemini_cli": "",
         "groq": "",
         "copilot": "",
     },
@@ -69,6 +71,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "openai": "gpt-4o",
         "claude": "claude-3-7-sonnet-latest",
         "gemini": "gemini-2.5-flash",
+        "gemini_cli": "auto",
         "groq": "llama-3.3-70b-versatile",
         "copilot": "auto",
     },
@@ -143,12 +146,12 @@ def save_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
     current = load_settings()
     if "active_provider" in payload:
         prov_val = str(payload["active_provider"]).strip()
-        if prov_val in ("auto", "openai", "claude", "gemini", "groq", "local", "copilot"):
+        if prov_val in ("auto", "openai", "claude", "gemini", "gemini_cli", "groq", "local", "copilot"):
             current["active_provider"] = prov_val
     if "local_base_url" in payload:
         current["local_base_url"] = validate_endpoint(payload["local_base_url"], local_only=True)
     if isinstance(payload.get("keys"), dict):
-        for k in ("openai", "claude", "gemini", "groq", "local", "copilot"):
+        for k in ("openai", "claude", "gemini", "gemini_cli", "groq", "local", "copilot"):
             if k in payload["keys"]:
                 val = str(payload["keys"][k]).strip()
                 # Keep existing key if input was left blank or still contains masked ellipsis
@@ -189,13 +192,14 @@ def get_masked_settings(settings: Optional[Dict[str, Any]] = None) -> Dict[str, 
     s = settings or load_settings()
     masked_keys = {}
     configured_status = {}
-    for k in ("openai", "claude", "gemini", "groq", "local", "copilot"):
+    for k in ("openai", "claude", "gemini", "gemini_cli", "groq", "local", "copilot"):
         raw = s["keys"].get(k, "")
         masked_keys[k] = mask_key(raw)
         configured_status[k] = bool(raw and len(raw) >= 8)
 
     configured_status["local"] = bool(s.get("models", {}).get("local"))
     configured_status["copilot"] = configured_status["copilot"] or copilot_bridge.is_copilot_ready()
+    configured_status["gemini_cli"] = configured_status["gemini_cli"] or gemini_cli_bridge.is_gemini_cli_ready()
 
     return {
         "local_base_url": s.get("local_base_url", DEFAULT_SETTINGS["local_base_url"]),
@@ -1611,6 +1615,13 @@ def choose_active_llm(settings: Dict[str, Any]) -> Optional[Tuple[str, str, str]
             return ("copilot", token, model)
         return None
 
+    if pref == "gemini_cli":
+        model = str(models.get("gemini_cli") or DEFAULT_SETTINGS["models"]["gemini_cli"]).strip()
+        token = (keys.get("gemini_cli") or "").strip()
+        if token or gemini_cli_bridge.is_gemini_cli_ready():
+            return ("gemini_cli", token, model)
+        return None
+
     order = [pref] if pref in ("openai", "claude", "gemini", "groq") else ["openai", "claude", "gemini", "groq"]
     for prov in order:
         k = (keys.get(prov) or "").strip()
@@ -1640,6 +1651,14 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             github_token=api_key,
+        )
+
+    if provider == "gemini_cli":
+        return gemini_cli_bridge.call_gemini_cli_sync(
+            model=model or DEFAULT_SETTINGS["models"]["gemini_cli"],
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            api_key=api_key,
         )
 
     if provider == "local":
@@ -1783,7 +1802,7 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
         idx = api_key.rfind("sk-")
         if idx > 0:
             api_key = api_key[idx:]
-    if not api_key and provider not in ("local", "copilot"):
+    if not api_key and provider not in ("local", "copilot", "gemini_cli"):
         return {"ok": False, "provider": provider, "error": f"{provider.upper()} の APIキーが未入力です。"}
 
     model = settings["models"].get(provider, DEFAULT_SETTINGS["models"].get(provider, ""))
