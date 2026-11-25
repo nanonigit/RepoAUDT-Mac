@@ -1664,7 +1664,7 @@ def analyze_organization_or_user(
             "eta_seconds": None,
             "log": f"🔎 GitHub ({owner}) からリポジトリ一覧を取得しています…",
         })
-    repos_meta = list_org_or_user_repositories(owner, limit=35)
+    repos_meta = list_org_or_user_repositories(owner, limit=100)
     if not repos_meta:
         raise RuntimeError(f"GitHub の組織またはユーザー '{owner}' 配下にリポジトリが見つかりませんでした。")
 
@@ -1682,9 +1682,9 @@ def analyze_organization_or_user(
     child_diagrams: List[Dict[str, Any]] = []
     cat_label = f"{owner} Repositories"
 
-    # Deep-analyze up to 6 repos that either exist locally or are the most recently pushed
+    # Deep-analyze all discovered repositories in the organization (up to 100)
     deep_count = 0
-    target_repos = repos_meta[:18]
+    target_repos = repos_meta[:100]
     total_targets = len(target_repos)
     org_started_at = time.time()
     for idx, rmeta in enumerate(target_repos):
@@ -1709,7 +1709,7 @@ def analyze_organization_or_user(
             })
 
         local_repo = find_existing_local_repo(owner, rname)
-        should_deep_analyze = (local_repo is not None) or (deep_count < 3)
+        should_deep_analyze = True
         if should_deep_analyze:
             try:
                 res = analyze_repository(
@@ -1717,6 +1717,10 @@ def analyze_organization_or_user(
                     category_label=cat_label,
                     fallback_meta=rmeta,
                 )
+                try:
+                    save_analysis_result(res)
+                except Exception:
+                    pass
                 cdiag = res["diagram"]
                 child_diagrams.append(cdiag)
                 all_specs.update(res.get("techSpecs", {}))
