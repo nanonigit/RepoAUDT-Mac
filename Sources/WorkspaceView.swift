@@ -1988,78 +1988,134 @@ struct MainContentView: View {
         let p0Total = aspmRepos.reduce(0) { $0 + $1.p0 }
         let p1Total = aspmRepos.reduce(0) { $0 + $1.p1 }
 
+        let scoreValues = pts.map { $0.orgRiskScore ?? $0.riskScore }
+        let rawMin = scoreValues.min() ?? 0
+        let rawMax = scoreValues.max() ?? 100
+        let minAxis = max(0, min(rawMin - 4, rawMax - 10))
+        let maxAxis = min(100, max(rawMax + 4, minAxis + 10))
+        let axisSpan = max(1, maxAxis - minAxis)
+        let midAxis = (minAxis + maxAxis) / 2
+        let firstLabel = pts.first?.shortTimestamp ?? ""
+        let midLabel = pts.count >= 3 ? pts[pts.count / 2].shortTimestamp : ""
+        let lastLabel = pts.last?.shortTimestamp ?? ""
+
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .center, spacing: 20) {
-                    GeometryReader { geo in
-                        let w = max(1, geo.size.width)
-                        let h = max(1, geo.size.height)
-                        let pad: CGFloat = 8
-                        let usableW = max(1, w - pad * 2)
-                        let usableH = max(1, h - pad * 2)
-
-                        ZStack {
-                            // Subtle horizontal reference lines (0, 50, 100)
-                            ForEach([0.0, 0.5, 1.0], id: \.self) { frac in
-                                let y = pad + usableH * CGFloat(1.0 - frac)
-                                Path { p in
-                                    p.move(to: CGPoint(x: pad, y: y))
-                                    p.addLine(to: CGPoint(x: w - pad, y: y))
-                                }
-                                .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    VStack(spacing: 4) {
+                        HStack(alignment: .center, spacing: 6) {
+                            VStack {
+                                Text("\(maxAxis)")
+                                Spacer()
+                                Text("\(midAxis)")
+                                Spacer()
+                                Text("\(minAxis)")
                             }
+                            .font(.system(size: 9).monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 24, height: 88, alignment: .trailing)
 
-                            if pts.count < 2 {
-                                Text(english ? "Collecting org-wide trend snapshots (chart appears after next scan)" : "全体平均トレンドを蓄積中（次回の解析から推移グラフが表示されます）")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 12)
-                            } else {
-                                // Area fill
-                                Path { path in
-                                    for (idx, pt) in pts.enumerated() {
-                                        let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
-                                        let norm = min(1.0, max(0.0, Double(pt.orgRiskScore ?? pt.riskScore) / 100.0))
-                                        let y = pad + usableH * CGFloat(1.0 - norm)
-                                        if idx == 0 {
-                                            path.move(to: CGPoint(x: x, y: h - pad))
-                                            path.addLine(to: CGPoint(x: x, y: y))
-                                        } else {
-                                            path.addLine(to: CGPoint(x: x, y: y))
+                            GeometryReader { geo in
+                                let w = max(1, geo.size.width)
+                                let h = max(1, geo.size.height)
+                                let pad: CGFloat = 8
+                                let usableW = max(1, w - pad * 2)
+                                let usableH = max(1, h - pad * 2)
+
+                                ZStack {
+                                    // Subtle horizontal reference lines (min, mid, max)
+                                    ForEach([0.0, 0.5, 1.0], id: \.self) { frac in
+                                        let y = pad + usableH * CGFloat(1.0 - frac)
+                                        Path { p in
+                                            p.move(to: CGPoint(x: pad, y: y))
+                                            p.addLine(to: CGPoint(x: w - pad, y: y))
+                                        }
+                                        .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                                    }
+
+                                    if pts.count < 2 {
+                                        Text(english ? "Collecting org-wide trend snapshots (chart appears after next scan)" : "全体平均トレンドを蓄積中（次回の解析から推移グラフが表示されます）")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .multilineTextAlignment(.center)
+                                            .padding(.horizontal, 12)
+                                    } else {
+                                        // Area fill
+                                        Path { path in
+                                            for (idx, pt) in pts.enumerated() {
+                                                let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
+                                                let val = Double(pt.orgRiskScore ?? pt.riskScore)
+                                                let norm = min(1.0, max(0.0, (val - Double(minAxis)) / Double(axisSpan)))
+                                                let y = pad + usableH * CGFloat(1.0 - norm)
+                                                if idx == 0 {
+                                                    path.move(to: CGPoint(x: x, y: h - pad))
+                                                    path.addLine(to: CGPoint(x: x, y: y))
+                                                } else {
+                                                    path.addLine(to: CGPoint(x: x, y: y))
+                                                }
+                                            }
+                                            path.addLine(to: CGPoint(x: w - pad, y: h - pad))
+                                            path.closeSubpath()
+                                        }
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [latestColor.opacity(0.28), latestColor.opacity(0.02)],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
+
+                                        // Line stroke
+                                        Path { path in
+                                            for (idx, pt) in pts.enumerated() {
+                                                let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
+                                                let val = Double(pt.orgRiskScore ?? pt.riskScore)
+                                                let norm = min(1.0, max(0.0, (val - Double(minAxis)) / Double(axisSpan)))
+                                                let y = pad + usableH * CGFloat(1.0 - norm)
+                                                if idx == 0 {
+                                                    path.move(to: CGPoint(x: x, y: y))
+                                                } else {
+                                                    path.addLine(to: CGPoint(x: x, y: y))
+                                                }
+                                            }
+                                        }
+                                        .stroke(latestColor, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+
+                                        // Data point markers
+                                        ForEach(Array(pts.enumerated()), id: \.offset) { idx, pt in
+                                            let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
+                                            let val = Double(pt.orgRiskScore ?? pt.riskScore)
+                                            let norm = min(1.0, max(0.0, (val - Double(minAxis)) / Double(axisSpan)))
+                                            let y = pad + usableH * CGFloat(1.0 - norm)
+                                            let isLast = idx == pts.count - 1
+                                            Circle()
+                                                .fill(isLast ? latestColor : latestColor.opacity(0.75))
+                                                .frame(width: isLast ? 7 : 4, height: isLast ? 7 : 4)
+                                                .position(x: x, y: y)
                                         }
                                     }
-                                    path.addLine(to: CGPoint(x: w - pad, y: h - pad))
-                                    path.closeSubpath()
                                 }
-                                .fill(
-                                    LinearGradient(
-                                        colors: [latestColor.opacity(0.28), latestColor.opacity(0.02)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-
-                                // Line stroke
-                                Path { path in
-                                    for (idx, pt) in pts.enumerated() {
-                                        let x = pad + usableW * CGFloat(idx) / CGFloat(max(1, pts.count - 1))
-                                        let norm = min(1.0, max(0.0, Double(pt.orgRiskScore ?? pt.riskScore) / 100.0))
-                                        let y = pad + usableH * CGFloat(1.0 - norm)
-                                        if idx == 0 {
-                                            path.move(to: CGPoint(x: x, y: y))
-                                        } else {
-                                            path.addLine(to: CGPoint(x: x, y: y))
-                                        }
-                                    }
-                                }
-                                .stroke(latestColor, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
                             }
+                            .frame(height: 88)
+                            .background(Color(nsColor: .windowBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
+                        }
+                        if pts.count >= 2 {
+                            HStack {
+                                Text(firstLabel)
+                                Spacer()
+                                if !midLabel.isEmpty {
+                                    Text(midLabel)
+                                    Spacer()
+                                }
+                                Text(lastLabel)
+                            }
+                            .font(.system(size: 9.5).monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 30)
+                            .padding(.trailing, 4)
                         }
                     }
-                    .frame(height: 84)
-                    .background(Color(nsColor: .windowBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
 
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 6) {
