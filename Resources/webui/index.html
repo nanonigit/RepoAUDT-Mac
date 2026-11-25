@@ -4730,7 +4730,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/25 12:28:05</strong>
+              <strong id="portal-sync-time">2026/11/25 12:31:04</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -6997,15 +6997,12 @@
           </div>
         </div>
         <div class="hero-right-controls">
-          <div style="display:inline-flex;gap:4px;align-items:center;" role="group" aria-label="${en ? 'Repository view mode' : '表示切り替え'}">
-            <button type="button" onclick="switchViewMode('coderabbit')" style="${modeBtnStyle(currentViewMode === 'coderabbit')}">🛡️ ${en ? 'Audit' : '監査結果'}</button>
-            <button type="button" onclick="if(currentViewMode==='coderabbit'){switchViewMode('arch');}" style="${modeBtnStyle(currentViewMode === 'arch' || currentViewMode === 'seq')}">📐 ${en ? 'Architecture & Flows' : '構成・フロー'}</button>
-          </div>
-          ${(currentViewMode === 'arch' || currentViewMode === 'seq') ? `<div class="subview-toggle-group" role="tablist" aria-label="${en ? 'Architecture view' : '構成・フローの表示方法'}">
+          <div class="subview-toggle-group" role="tablist" aria-label="${en ? 'Repository view' : '表示切り替え'}">
+            <button type="button" role="tab" aria-selected="${currentViewMode === 'coderabbit'}" class="subview-btn ${currentViewMode === 'coderabbit' ? 'active' : ''}" id="subview-btn-audit" onclick="switchViewMode('coderabbit')">${en ? 'Audit' : '監査結果'}</button>
             <button type="button" role="tab" aria-selected="${currentViewMode === 'arch' && subView === 'cards'}" class="subview-btn ${currentViewMode === 'arch' && subView === 'cards' ? 'active' : ''}" id="subview-btn-cards" onclick="if(currentViewMode==='arch'){setArchSubView('cards');}else{currentArchSubView='cards';switchViewMode('arch');}">${en ? 'Components' : 'コンポーネント'}</button>
             <button type="button" role="tab" aria-selected="${currentViewMode === 'arch' && subView === 'diagram'}" class="subview-btn ${currentViewMode === 'arch' && subView === 'diagram' ? 'active' : ''}" id="subview-btn-diagram" onclick="if(currentViewMode==='arch'){setArchSubView('diagram');}else{currentArchSubView='diagram';switchViewMode('arch');}">${en ? 'Diagram' : '構成図'}</button>
             <button type="button" role="tab" aria-selected="${currentViewMode === 'seq'}" class="subview-btn ${currentViewMode === 'seq' ? 'active' : ''}" id="subview-btn-seq" onclick="switchViewMode('seq')">${en ? 'Execution Flow' : '実行フロー'}</button>
-          </div>` : ''}
+          </div>
           <span class="workspace-findings">${en ? `${count} findings` : `指摘 ${count}件`}</span>
           <button type="button" id="hero-rescan-btn" onclick="rescanRepositoryDirect(event, '${encodeURIComponent(source).replace(/'/g, '%27')}', this)" class="table-view-btn">${en ? 'Re-scan' : '再スキャン'}</button>
           ${githubLink}
