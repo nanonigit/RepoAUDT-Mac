@@ -254,7 +254,7 @@ struct AIConnectionView: View {
                     Text("OpenAI").tag("openai")
                     Text("Claude").tag("claude")
                     Text("Gemini (API Key)").tag("gemini")
-                    Text("Gemini CLI").tag("gemini_cli")
+                    Text("Antigravity CLI (Gemini)").tag("gemini_cli")
                     Text("Groq").tag("groq")
                     Text("GitHub Copilot").tag("copilot")
                     Text(english ? "Local LLM" : "ローカル LLM").tag("local")
@@ -284,8 +284,8 @@ struct AIConnectionView: View {
                            : "GitHub Copilot SDK 経由でサブスクリプションを利用します（空欄時は gh CLI のログインを使用）。")
                         : (store.provider == "gemini_cli"
                            ? (english
-                              ? "Runs local @google/gemini-cli in read-only headless mode using your Google account login (no API key needed)."
-                              : "ローカルの @google/gemini-cli を読み取り専用ヘッドレスモードで実行します（Google ログイン済みなら API キー不要）。")
+                              ? "Runs local Antigravity CLI (agy) in read-only headless mode using your Google account login (no API key needed)."
+                              : "ローカルの Antigravity CLI（agy）を読み取り専用ヘッドレスモードで実行します（Google ログイン済みなら API キー不要）。")
                            : (english
                               ? "Leave the key blank to keep the saved value."
                               : "キーを空欄にすると、保存済みの値を使用します。"))
@@ -340,8 +340,8 @@ struct AIConnectionView: View {
                         Spacer()
                         Button(
                             store.geminiCliInstalled
-                                ? (english ? "Update Gemini CLI" : "アップデート")
-                                : (english ? "Install Gemini CLI" : "インストール")
+                                ? (english ? "Update Antigravity CLI" : "アップデート")
+                                : (english ? "Install Antigravity CLI" : "インストール")
                         ) {
                             store.installOrUpdateGeminiCli(english: english)
                         }
@@ -371,13 +371,13 @@ struct AIConnectionView: View {
                             .buttonStyle(.bordered)
                         }
                         Text(english
-                             ? "Click the button above to launch `gemini` in Terminal, sign in with Google, then click Re-check Login."
-                             : "上のボタンを押すとターミナルが自動で開き `gemini` が起動します。Google ログイン完了後に「ログイン状態を再確認」を押してください。")
+                             ? "Click the button above to launch `agy` in Terminal, sign in with Google, then click Re-check Login."
+                             : "上のボタンを押すとターミナルが自動で開き `agy` が起動します。Google ログイン完了後に「ログイン状態を再確認」を押してください。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 } header: {
-                    Text(english ? "Gemini CLI Runtime" : "Gemini CLI ランタイム")
+                    Text(english ? "Antigravity CLI (agy) Runtime" : "Antigravity CLI (agy) ランタイム")
                 }
             }
             Section {

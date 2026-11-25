@@ -19,7 +19,7 @@ GitHub リポジトリの URL または `owner/repo` を入力し、解析結果
 - **監査チャット：** サイドバーまたは指摘から開始できます。質問ごとに GitHub を再確認し、質問・直近のメッセージ・比較のメタデータを設定済み AI に送信します。ソース行は作業画面に留めます。
 - **ネイティブな操作：** NetworkPNTR Mac / NetworkISPR Mac に合わせた macOS のサイドバーとツールバー、必要時に開く詳細、日英切替。
 - **意味を統一した配色：** ライト／ダークに対応。青は操作・選択、赤は重大な指摘・失敗、黄／橙は注意、緑は確認済みの成功。重要度には文字と記号も併記。
-- **クラウド / CLI AI：** OpenAI / Claude / Gemini（API キー）/ **Gemini CLI**（`@google/gemini-cli`・Google ログインで API キー不要）/ Groq / GitHub Copilot SDK の設定と接続テスト、既存の AI 監査連携。
+- **クラウド / CLI AI：** OpenAI / Claude / Gemini（API キー）/ **Antigravity CLI (Gemini)**（`brew install --cask antigravity-cli`・Google ログインで API キー不要）/ Groq / GitHub Copilot SDK の設定と接続テスト、既存の AI 監査連携。
 - **ローカル LLM：** ループバックの OpenAI 互換 API に、接続先 URL とモデル名を指定して接続。API キーは任意。
 - **MCP サーバー：** リポジトリ一覧、構成、監査レポート、リポジトリ解析、コード断片の監査、CycloneDX SBOM 出力、SARIF 出力の7ツールを stdio / ローカル HTTP で提供。
 - **MCP クライアント：** stdio / HTTP サーバーへの接続、ツールの定義確認、JSON 引数の入力、明示操作によるツール実行。

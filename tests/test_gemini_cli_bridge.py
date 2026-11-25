@@ -13,12 +13,16 @@ import security_audit_engine
 
 class TestGeminiCliBridge(unittest.TestCase):
     def test_extract_response_text_handles_json_and_prefixed_warnings(self) -> None:
-        raw = 'Warning: something\n{"response": "OK ready"}'
+        raw = 'warning: something\n{"status": "SUCCESS", "response": "OK ready"}'
         self.assertEqual(gemini_cli_bridge._extract_response_text(raw), "OK ready")
 
-    def test_call_gemini_cli_sync_invokes_headless_plan_mode(self) -> None:
-        fake_proc = mock.Mock(returncode=0, stdout='{"response": "{\\"status\\": \\"ok\\"}"}', stderr="")
-        with mock.patch.object(gemini_cli_bridge, "find_gemini_cli", return_value="/opt/homebrew/bin/gemini"), \
+    def test_call_agy_invokes_headless_plan_mode(self) -> None:
+        fake_proc = mock.Mock(
+            returncode=0,
+            stdout='{"status":"SUCCESS","response":"{\\"status\\": \\"ok\\"}"}',
+            stderr="",
+        )
+        with mock.patch.object(gemini_cli_bridge, "find_cli_binary", return_value=("/opt/homebrew/bin/agy", "agy")), \
              mock.patch("subprocess.run", return_value=fake_proc) as run_mock:
             out = gemini_cli_bridge.call_gemini_cli_sync(
                 model="gemini-2.5-pro",
@@ -27,20 +31,18 @@ class TestGeminiCliBridge(unittest.TestCase):
             )
         self.assertEqual(out, '{"status": "ok"}')
         args = run_mock.call_args[0][0]
-        self.assertEqual(
-            args,
-            ["/opt/homebrew/bin/gemini", "-p", "", "-o", "json", "--approval-mode", "plan", "-m", "gemini-2.5-pro"],
-        )
-        self.assertIn("[System Instructions]", run_mock.call_args[1]["input"])
-        self.assertIn("Verify CVE", run_mock.call_args[1]["input"])
+        self.assertEqual(args[:6], ["/opt/homebrew/bin/agy", "--output-format", "json", "--mode", "plan", "--print-timeout"])
+        self.assertIn("--model", args)
+        self.assertIn("gemini-2.5-pro", args)
+        self.assertTrue(any(a.startswith("--print=") and "Verify CVE" in a for a in args))
 
-    def test_call_gemini_cli_sync_reports_login_required_clearly(self) -> None:
+    def test_call_cli_reports_login_required_clearly(self) -> None:
         fake_proc = mock.Mock(returncode=1, stdout="", stderr="Error: User unauthenticated. Please login.")
-        with mock.patch.object(gemini_cli_bridge, "find_gemini_cli", return_value="/opt/homebrew/bin/gemini"), \
+        with mock.patch.object(gemini_cli_bridge, "find_cli_binary", return_value=("/opt/homebrew/bin/agy", "agy")), \
              mock.patch("subprocess.run", return_value=fake_proc):
             with self.assertRaises(RuntimeError) as ctx:
                 gemini_cli_bridge.call_gemini_cli_sync(user_prompt="Ping")
-        self.assertIn("Google アカウント", str(ctx.exception))
+        self.assertIn("未ログイン", str(ctx.exception))
 
     def test_security_audit_engine_resolves_and_dispatches_gemini_cli(self) -> None:
         settings = {
