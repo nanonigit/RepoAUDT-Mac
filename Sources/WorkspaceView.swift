@@ -3118,11 +3118,17 @@ struct MainContentView: View {
             let jobId = syncResp["job_id"] as? String ?? ""
             if !jobId.isEmpty {
                 listRefreshNote = english ? "Analyzing repositories…" : "全リポジトリを解析中…"
-                for attempt in 0..<1800 {
+                var attempt = 0
+                var consecutiveFailures = 0
+                while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(1))
+                    attempt += 1
                     guard let statusResp = try? await requestJSON("/api/sync/status?job_id=\(jobId)") else {
+                        consecutiveFailures += 1
+                        if consecutiveFailures >= 30 { break }
                         continue
                     }
+                    consecutiveFailures = 0
                     let status = statusResp["status"] as? String ?? ""
                     let total = statusResp["total"] as? Int ?? max(1, dashboardRepositories.count)
                     let completed = statusResp["completed"] as? Int ?? 0
@@ -3145,7 +3151,7 @@ struct MainContentView: View {
                     if attempt % 3 == 2 {
                         coordinator.send("refresh")
                     }
-                    if status == "completed" {
+                    if status == "completed" || status == "error" || status == "idle" {
                         break
                     }
                 }
@@ -4687,11 +4693,17 @@ struct MainContentView: View {
             }
             Task {
                 var finalDiagramId = ""
-                for attempt in 0..<1800 {
+                var attempt = 0
+                var consecutiveFailures = 0
+                while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(1))
+                    attempt += 1
                     guard let statusResp = try? await requestJSON("/api/sync/status?job_id=\(jobId)") else {
+                        consecutiveFailures += 1
+                        if consecutiveFailures >= 30 { break }
                         continue
                     }
+                    consecutiveFailures = 0
                     let status = statusResp["status"] as? String ?? ""
                     let total = statusResp["total"] as? Int ?? 1
                     let completed = statusResp["completed"] as? Int ?? 0
@@ -4714,7 +4726,7 @@ struct MainContentView: View {
                     if attempt % 4 == 3 {
                         coordinator.send("refresh")
                     }
-                    if status == "completed" || status == "error" {
+                    if status == "completed" || status == "error" || status == "idle" {
                         break
                     }
                 }
