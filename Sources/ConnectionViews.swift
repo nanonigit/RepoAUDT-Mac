@@ -309,7 +309,7 @@ final class ConnectionStore: ObservableObject {
     }
 
     static func jsonText(_ value: Any) throws -> String {
-        let data = try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys])
+        let data = try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
         return String(decoding: data, as: UTF8.self)
     }
 

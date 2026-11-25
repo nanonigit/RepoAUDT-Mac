@@ -7,6 +7,7 @@ import queue
 import re
 import signal
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -18,7 +19,7 @@ import security_audit_engine
 CONFIG_FILE = security_audit_engine.APP_SUPPORT_DIR / "mcp-client.json"
 DEFAULT_CONFIG = {
     "transport": "stdio",
-    "command": "/usr/bin/python3",
+    "command": sys.executable or "/usr/bin/python3",
     "args": [str(Path(__file__).with_name("mcp_server.py"))],
     "url": "http://127.0.0.1:18765/api/mcp",
     "token_env": "",
