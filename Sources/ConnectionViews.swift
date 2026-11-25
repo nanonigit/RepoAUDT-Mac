@@ -407,6 +407,7 @@ struct AIConnectionView: View {
         let scriptURL = FileManager.default.temporaryDirectory.appendingPathComponent("repoaudt_gemini_login.command")
         let script = """
         #!/bin/zsh
+        export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
         clear
         echo "=========================================="
         echo " RepoAUDT Mac — Gemini CLI Google Login"
@@ -415,6 +416,12 @@ struct AIConnectionView: View {
         echo "Sign in with your Google account, then return to RepoAUDT Mac."
         echo ""
         "\(geminiBin)"
+        code=$?
+        if [ $code -ne 0 ]; then
+          echo ""
+          echo "gemini exited with status $code. Press Enter to close."
+          read
+        fi
         """
         do {
             try script.write(to: scriptURL, atomically: true, encoding: .utf8)
