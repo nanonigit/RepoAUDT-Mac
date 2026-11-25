@@ -7020,9 +7020,11 @@ def build_portal_html(data, is_shareable=False):
         return `${y}/${m}/${d} ${hh}:${mm}`;
       };
       const analyzedAtText = formatHeroDateTime(item.analyzed_at || item.last_sync_attempted_at || '', true);
-      const repoUpdatedAtText = formatHeroDateTime(item.pushedAt || item.commit_date || item.updatedAt || '', false);
+      const commitAtText = formatHeroDateTime(item.commit_date || '', true);
+      const repoUpdatedAtText = formatHeroDateTime(item.pushedAt || item.updatedAt || '', true);
       const updatedStampParts = [];
       if (analyzedAtText) updatedStampParts.push(en ? `Updated: ${analyzedAtText}` : `解析更新: ${analyzedAtText}`);
+      if (commitAtText) updatedStampParts.push(en ? `Last commit: ${commitAtText}` : `最終コミット: ${commitAtText}`);
       if (repoUpdatedAtText) updatedStampParts.push(en ? `Last push: ${repoUpdatedAtText}` : `最終Push: ${repoUpdatedAtText}`);
       const updatedStampHtml = updatedStampParts.length
         ? `<span style="font-size:0.74rem;color:var(--workspace-muted);font-variant-numeric:tabular-nums;white-space:nowrap;" title="${escapeHtml(updatedStampParts.join(' / '))}">${escapeHtml(updatedStampParts.join(' · '))}</span>`
@@ -7047,12 +7049,11 @@ def build_portal_html(data, is_shareable=False):
           </div>
         </div>
         <div class="hero-right-controls">
-          <div class="subview-toggle-group" role="tablist" aria-label="${en ? 'Repository view' : '表示切り替え'}">
-            <button type="button" role="tab" aria-selected="${currentViewMode === 'coderabbit'}" class="subview-btn ${currentViewMode === 'coderabbit' ? 'active' : ''}" id="subview-btn-audit" onclick="switchViewMode('coderabbit')">${en ? 'Audit' : '監査結果'}</button>
+          ${(currentViewMode === 'arch' || currentViewMode === 'seq') ? `<div class="subview-toggle-group" role="tablist" aria-label="${en ? 'Architecture & Flow view' : '表示切り替え'}">
             <button type="button" role="tab" aria-selected="${currentViewMode === 'arch' && subView === 'cards'}" class="subview-btn ${currentViewMode === 'arch' && subView === 'cards' ? 'active' : ''}" id="subview-btn-cards" onclick="if(currentViewMode==='arch'){setArchSubView('cards');}else{currentArchSubView='cards';switchViewMode('arch');}">${en ? 'Components' : 'コンポーネント'}</button>
             <button type="button" role="tab" aria-selected="${currentViewMode === 'arch' && subView === 'diagram'}" class="subview-btn ${currentViewMode === 'arch' && subView === 'diagram' ? 'active' : ''}" id="subview-btn-diagram" onclick="if(currentViewMode==='arch'){setArchSubView('diagram');}else{currentArchSubView='diagram';switchViewMode('arch');}">${en ? 'Diagram' : '構成図'}</button>
             <button type="button" role="tab" aria-selected="${currentViewMode === 'seq'}" class="subview-btn ${currentViewMode === 'seq' ? 'active' : ''}" id="subview-btn-seq" onclick="switchViewMode('seq')">${en ? 'Execution Flow' : '実行フロー'}</button>
-          </div>
+          </div>` : ''}
           <span class="workspace-findings">${en ? `${count} findings` : `指摘 ${count}件`}</span>
           <button type="button" id="hero-rescan-btn" onclick="rescanRepositoryDirect(event, '${encodeURIComponent(source).replace(/'/g, '%27')}', this)" class="table-view-btn">${en ? 'Re-scan' : '再スキャン'}</button>
           ${githubLink}
