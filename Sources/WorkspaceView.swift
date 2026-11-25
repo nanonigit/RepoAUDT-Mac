@@ -2645,31 +2645,29 @@ struct MainContentView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     }
-                    if let latestRepo = repositories.filter({ !($0.updatedAt ?? "").isEmpty }).max(by: { ($0.updatedAt ?? "") < ($1.updatedAt ?? "") }),
-                       let latestTime = formattedAnalysisDate(latestRepo.updatedAt) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                            Text(
-                                english
-                                    ? "Latest commit: \(latestRepo.name) (\(latestTime))"
-                                    : "最終コミット: \(latestRepo.name) (\(latestTime))"
-                            )
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    let latestCommitCandidate: (repo: String, time: String)? = {
+                        var candidates: [(repo: String, time: String)] = []
+                        for r in repositories {
+                            if let t = formattedAnalysisDate(r.updatedAt), !t.isEmpty {
+                                candidates.append((r.name, t))
+                            }
                         }
-                    } else if let latestUpd = monitorUpdates.first, !latestUpd.detectedAt.isEmpty {
-                        let updTime = formattedAnalysisDate(latestUpd.detectedAt) ?? latestUpd.detectedAt
+                        for u in monitorUpdates {
+                            if let t = formattedAnalysisDate(u.detectedAt), !t.isEmpty {
+                                candidates.append((u.repo, t))
+                            }
+                        }
+                        return candidates.max(by: { $0.time < $1.time })
+                    }()
+                    if let latest = latestCommitCandidate {
                         HStack(spacing: 6) {
                             Image(systemName: "clock.arrow.circlepath")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                             Text(
                                 english
-                                    ? "Latest commit: \(latestUpd.repo) (\(updTime))"
-                                    : "最終コミット: \(latestUpd.repo) (\(updTime))"
+                                    ? "Latest commit: \(latest.repo) (\(latest.time))"
+                                    : "最終コミット: \(latest.repo) (\(latest.time))"
                             )
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.secondary)

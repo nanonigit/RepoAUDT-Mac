@@ -321,7 +321,15 @@ class SyncDaemon:
             sev = str(item.get("severity") or "info").lower()
             if not title:
                 continue
-            key = f"{title}|{file_raw}"
+            if "AI監査]" in title:
+                # LLM findings can rephrase titles or shift by 1-2 lines between scans;
+                # normalize key by file path + CWE (or severity) to avoid false "resolved" alerts.
+                file_base = file_raw.rsplit(":", 1)[0].strip().lower() if ":" in file_raw else file_raw.lower()
+                cwe_match = re.search(r"CWE-\d+", title, re.IGNORECASE)
+                cwe_key = cwe_match.group(0).upper() if cwe_match else sev
+                key = f"ai|{file_base}|{cwe_key}"
+            else:
+                key = f"{title}|{file_raw}"
             if key not in sigs:
                 sigs[key] = {
                     "title": title,

@@ -155,6 +155,44 @@ class TestCommitMonitor(unittest.TestCase):
                 self.assertFalse(res_off["launchd_installed"])
                 self.assertFalse(plist_file.exists())
 
+    def test_ai_finding_rephrasing_does_not_trigger_false_resolved(self) -> None:
+        before_diag = {
+            "coderabbit": {
+                "action_items": [
+                    {
+                        "title": "[GEMINI_CLI AI監査] knexfile.ts にデータベースパスワードがハードコードされている (CWE-798)",
+                        "file": "knexfile.ts:14 (Target: core)",
+                        "severity": "high",
+                    },
+                    {
+                        "title": "[GEMINI_CLI AI監査] ワークフロー全体に過剰な書き込み権限 (CWE-269)",
+                        "file": ".github/workflows/doc.yml:22 (Target: ci)",
+                        "severity": "medium",
+                    },
+                ]
+            }
+        }
+        after_diag = {
+            "coderabbit": {
+                "action_items": [
+                    {
+                        "title": "[GEMINI_CLI AI監査] knexfile.ts にデータベースパスワードのフォールバック値がハードコードされている (CWE-798)",
+                        "file": "knexfile.ts:14 (Target: core)",
+                        "severity": "high",
+                    },
+                    {
+                        "title": "[GEMINI_CLI AI監査] ワークフロー全体に過剰な書き込み権限が付与されている (CWE-269)",
+                        "file": ".github/workflows/doc.yml:23 (Target: ci)",
+                        "severity": "medium",
+                    },
+                ]
+            }
+        }
+        before_sigs = server.SyncDaemon._collect_finding_signatures(before_diag)
+        after_sigs = server.SyncDaemon._collect_finding_signatures(after_diag)
+        resolved = [info for k, info in before_sigs.items() if k not in after_sigs]
+        self.assertEqual(resolved, [])
+
 
 if __name__ == "__main__":
     unittest.main()
