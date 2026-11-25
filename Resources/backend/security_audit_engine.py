@@ -1996,7 +1996,13 @@ def call_llm_provider(provider: str, api_key: str, model: str, system_prompt: st
     raise ValueError(f"Unsupported provider: {provider}")
 
 
-def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -> Dict[str, Any]:
+def test_llm_connection(
+    provider: str,
+    api_key_override: Optional[str] = None,
+    model_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    if provider == "none":
+        return {"ok": False, "provider": provider, "error": "AI は現在「使用しない（静的解析のみ）」に設定されています。"}
     settings = load_settings()
     api_key = (api_key_override or "").strip()
     if not api_key or ("..." in api_key and len(api_key) < 30):
@@ -2008,7 +2014,7 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
     if not api_key and provider not in ("local", "copilot", "gemini_cli"):
         return {"ok": False, "provider": provider, "error": f"{provider.upper()} の APIキーが未入力です。"}
 
-    model = settings["models"].get(provider, DEFAULT_SETTINGS["models"].get(provider, ""))
+    model = (model_override or "").strip() or settings["models"].get(provider, DEFAULT_SETTINGS["models"].get(provider, ""))
 
     # Step 1: For OpenAI, verify API key & model existence via GET /v1/models first (zero-cost check)
     models_verified = False
@@ -2085,11 +2091,12 @@ def test_llm_connection(provider: str, api_key_override: Optional[str] = None) -
             system_prompt="Return a JSON object: {\"status\": \"ok\", \"engine\": \"ready\"}",
             user_prompt="Ping test. Respond with JSON.",
         )
+        display_model = model or "CLI default"
         return {
             "ok": True,
             "provider": provider,
-            "model": model,
-            "message": f"✅ {provider.upper()} ({model}) への認証・推論テストに完全成功しました！",
+            "model": display_model,
+            "message": f"✅ {provider.upper()} ({display_model}) への認証・推論テストに完全成功しました！",
             "sample": raw[:120],
         }
     except urllib.error.HTTPError as he:

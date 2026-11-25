@@ -8704,7 +8704,7 @@ def build_portal_html(data, is_shareable=False):
           majorReviewItems.push(it);
         } else if (it.update_type === 'Safe Patch/Minor') {
           safeBatchItems.push(it);
-          const m = cmd.match(/^npm install\s+([^\s]+)$/);
+          const m = cmd.match(/^npm install\\s+([^\\s]+)$/);
           if (m && !seenSpecs.has(m[1])) {
             seenSpecs.add(m[1]);
             npmSafeSpecs.push(m[1]);
@@ -8771,18 +8771,18 @@ def build_portal_html(data, is_shareable=False):
           return String(a.title || '').localeCompare(String(b.title || ''));
         }
         if (findingSortOrder === 'dateDesc') {
-          const da = String(a.detected_at || repoAuditRawDate || '').replace(/\//g, '-');
-          const db = String(b.detected_at || repoAuditRawDate || '').replace(/\//g, '-');
+          const da = String(a.detected_at || repoAuditRawDate || '').replace(/\\//g, '-');
+          const db = String(b.detected_at || repoAuditRawDate || '').replace(/\\//g, '-');
           return db.localeCompare(da);
         }
         return 0;
       });
       const formatFindingDate = (raw, withYear = false) => {
         if (!raw) return '';
-        const normalized = String(raw).trim().replace(/\//g, '-');
+        const normalized = String(raw).trim().replace(/\\//g, '-');
         const dt = new Date(normalized);
         if (Number.isNaN(dt.valueOf())) {
-          const m = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+          const m = normalized.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
           if (!m) return '';
           return en ? `${m[2]}/${m[3]}` : `${Number(m[2])}月${Number(m[3])}日`;
         }
@@ -8966,9 +8966,9 @@ def build_portal_html(data, is_shareable=False):
               const inferredSourceUrl = (() => {
                 if (issue.official_source) return issue.official_source;
                 const combined = `${issue.title || ''} ${issue.desc || ''} ${issue.comment || ''}`;
-                const ghsa = combined.match(/\b(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\b/i);
+                const ghsa = combined.match(/\\b(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\\b/i);
                 if (ghsa) return `https://osv.dev/vulnerability/${ghsa[1]}`;
-                const cve = combined.match(/\b(CVE-\d{4}-\d{4,})\b/i);
+                const cve = combined.match(/\\b(CVE-\\d{4}-\\d{4,})\\b/i);
                 if (cve) return `https://nvd.nist.gov/vuln/detail/${cve[1].toUpperCase()}`;
                 return '';
               })();
@@ -8980,7 +8980,7 @@ def build_portal_html(data, is_shareable=False):
                   }
                 }
               } catch (_) { /* A finding can legitimately have no external advisory. */ }
-              const osvPkgMatch = String(issue.title || '').match(/\[OSV[^\]]*\]\s+([^\s(]+)/);
+              const osvPkgMatch = String(issue.title || '').match(/\\[OSV[^\\]]*\\]\\s+([^\\s(]+)/);
               const evidenceCmd = osvPkgMatch
                 ? `grep -n '"${osvPkgMatch[1]}"' ${String(file || 'package.json').split(' ')[0].split(':')[0]}`
                 : '';
@@ -9763,19 +9763,19 @@ def build_portal_html(data, is_shareable=False):
       }
 
       advisories.forEach(adv => {
-        const pkgName = String(adv.package_name || adv.pkg || '').replace(/\s*\([^)]+\)\s*$/, '').trim();
+        const pkgName = String(adv.package_name || adv.pkg || '').replace(/\\s*\\([^)]+\\)\\s*$/, '').trim();
         const pkgLower = pkgName.toLowerCase();
         const alreadyCovered = actionItems.some(x =>
           x.title.includes(adv.cve || adv.pkg) ||
           (x.title.includes('[依存関係脆弱性集約]') && x.title.toLowerCase().includes(pkgLower))
         );
         if (!alreadyCovered) {
-          const eco = String(adv.ecosystem || ((String(adv.pkg || '').match(/\(([^)]+)\)\s*$/) || [])[1]) || 'npm').toLowerCase();
+          const eco = String(adv.ecosystem || ((String(adv.pkg || '').match(/\\(([^)]+)\\)\\s*$/) || [])[1]) || 'npm').toLowerCase();
           const installedVer = String(adv.installed || adv.installed_version || '').trim();
           const rawFixed = String(adv.fixed_version || adv.safe_version || '').trim();
-          const fixedCandidates = rawFixed.split(/[,;]/).map(s => s.trim()).filter(v => v && !/-(?:rc|alpha|beta|dev|canary|preview|next|pre)(?:[.\-\d]|$)/i.test(v));
+          const fixedCandidates = rawFixed.split(/[,;]/).map(s => s.trim()).filter(v => v && !/-(?:rc|alpha|beta|dev|canary|preview|next|pre)(?:[.\\-\\d]|$)/i.test(v));
           const toVer = v => {
-            const m = String(v || '').match(/(\d+(?:\.\d+)*)/);
+            const m = String(v || '').match(/(\\d+(?:\\.\\d+)*)/);
             if (!m) return null;
             const p = m[1].split('.').map(Number);
             while (p.length < 3) p.push(0);
@@ -9801,7 +9801,7 @@ def build_portal_html(data, is_shareable=False):
             pool.sort((a, b) => cmpVer(toVer(a), toVer(b)));
             fixedVer = sameMajor.length ? pool[pool.length - 1] : pool[0];
           }
-          const cleanTarget = String(adv.target || '').replace(/^\.\//, '').trim();
+          const cleanTarget = String(adv.target || '').replace(/^\\.\\//, '').trim();
           let targetFile = cleanTarget || 'package.json';
           let fixCmd = fixedVer ? `npm install ${pkgName}@^${fixedVer}` : `npm install ${pkgName}@latest`;
           let diffText = (fixedVer && installedVer) ? `- "${pkgName}": "^${installedVer}"\n+ "${pkgName}": "^${fixedVer}"` : '';

@@ -181,6 +181,7 @@ struct MainContentView: View {
     @State private var threatFeedScannedRepos = 0
     @State private var threatFeedFetchedAt = ""
     @State private var threatFeedStackSummary = ""
+    @State private var threatFeedSourceWarnings: [String] = []
     @State private var loadingThreatFeed = false
     @State private var threatFeedShowAll = false
     @State private var showRiskTrendReasons = false
@@ -3948,6 +3949,15 @@ struct MainContentView: View {
             }
             let stackDict = json["stack_inventory"] as? [String: Int] ?? [:]
             let stackStr = stackDict.sorted { $0.value > $1.value }.prefix(6).map { "\($0.key)(\($0.value))" }.joined(separator: " · ")
+            var sourceWarnings: [String] = []
+            if let sources = json["sources"] as? [String: [String: Any]] {
+                if let kev = sources["cisa_kev"], (kev["ok"] as? Bool) == false {
+                    sourceWarnings.append("CISA KEV")
+                }
+                if let ghsa = sources["ghsa_critical"], (ghsa["ok"] as? Bool) == false {
+                    sourceWarnings.append("GHSA Critical")
+                }
+            }
             await MainActor.run {
                 threatFeedItems = parsed
                 threatFeedMatchedCount = (json["matched_count"] as? Int) ?? 0
@@ -3955,6 +3965,7 @@ struct MainContentView: View {
                 threatFeedScannedRepos = (json["scanned_repos"] as? Int) ?? 0
                 threatFeedFetchedAt = (json["fetched_at"] as? String) ?? ""
                 threatFeedStackSummary = stackStr
+                threatFeedSourceWarnings = sourceWarnings
             }
         } catch {
             // Non-fatal dashboard enhancement
@@ -3982,6 +3993,20 @@ struct MainContentView: View {
                     Text(english ? "Not Affected: \(threatFeedUnaffectedCount)" : "影響なし確認済: \(threatFeedUnaffectedCount)件")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
+
+                    if !threatFeedSourceWarnings.isEmpty {
+                        Label(
+                            english
+                                ? "Feed unavailable: \(threatFeedSourceWarnings.joined(separator: ", "))"
+                                : "一部取得失敗: \(threatFeedSourceWarnings.joined(separator: ", "))",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(SemanticColors.role("warningText").opacity(0.16), in: Capsule())
+                        .foregroundStyle(SemanticColors.role("warningText"))
+                    }
 
                     if !threatFeedStackSummary.isEmpty {
                         Text(english ? "Detected Stacks: \(threatFeedStackSummary)" : "自社構成: \(threatFeedStackSummary)")
@@ -4359,6 +4384,8 @@ struct MainContentView: View {
                     consensus: (resp["consensus"] as? String) ?? "static_only",
                     consensusLabel: (resp["consensus_label"] as? String) ?? "",
                     note: (resp["note"] as? String) ?? "",
+                    codeContextLoaded: (resp["code_context_loaded"] as? Bool) ?? false,
+                    codeContextError: (resp["code_context_error"] as? String) ?? "",
                     primary: parseSide(resp["primary"]),
                     secondary: parseSide(resp["secondary"])
                 )
@@ -4420,6 +4447,21 @@ struct MainContentView: View {
                     Image(systemName: res.mode == "dual_ai" ? "person.2.fill" : "cpu")
                     Text(res.consensusLabel.isEmpty ? res.consensus : res.consensusLabel)
                         .font(.subheadline.bold())
+                    Spacer()
+                    Label(
+                        res.codeContextLoaded
+                            ? (english ? "Real Code Inspected" : "実コード参照済")
+                            : (english ? "Metadata Only" : "実コード未取得（メタ情報のみ）"),
+                        systemImage: res.codeContextLoaded ? "doc.text.magnifyingglass" : "exclamationmark.triangle"
+                    )
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        (res.codeContextLoaded ? SemanticColors.role("successText") : SemanticColors.role("warningText")).opacity(0.16),
+                        in: Capsule()
+                    )
+                    .foregroundStyle(res.codeContextLoaded ? SemanticColors.role("successText") : SemanticColors.role("warningText"))
                 }
                 .foregroundStyle(bannerColor)
                 .padding(.horizontal, 12)
@@ -4777,6 +4819,8 @@ private struct CrossCheckResponse {
     let consensus: String
     let consensusLabel: String
     let note: String
+    let codeContextLoaded: Bool
+    let codeContextError: String
     let primary: CrossCheckSideResult?
     let secondary: CrossCheckSideResult?
 }

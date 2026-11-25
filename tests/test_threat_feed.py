@@ -84,6 +84,34 @@ class TestThreatFeed(unittest.TestCase):
             self.assertIn("Dockerfile:1", by_cve["CVE-2026-88888"]["matched_repos"][0]["evidence"])
             self.assertEqual(by_cve["CVE-2026-77777"]["match_status"], "not_affected")
 
+    def test_cisa_kev_falls_back_to_github_mirror_on_403(self) -> None:
+        fake_kev = json.dumps({
+            "vulnerabilities": [
+                {
+                    "cveID": "CVE-2026-55555",
+                    "vendorProject": "F5",
+                    "product": "NGINX",
+                    "vulnerabilityName": "NGINX Mirror Fallback Test",
+                    "shortDescription": "Test mirror fallback",
+                    "dateAdded": "2026-11-20",
+                }
+            ]
+        })
+
+        def fake_fetch(url: str) -> str:
+            if url == threat_feed.CISA_KEV_URL:
+                raise RuntimeError("HTTP Error 403: Forbidden")
+            if url == threat_feed.CISA_KEV_FALLBACK_URL:
+                return fake_kev
+            return "[]"
+
+        res = threat_feed.fetch_and_correlate_threat_feed([], force=True, fetcher=fake_fetch)
+        self.assertTrue(res["ok"])
+        self.assertTrue(res["sources"]["cisa_kev"]["ok"])
+        self.assertEqual(res["sources"]["cisa_kev"].get("mirror"), "github")
+        self.assertEqual(res["sources"]["cisa_kev"]["count"], 1)
+        self.assertEqual(res["items"][0]["cve"], "CVE-2026-55555")
+
 
 if __name__ == "__main__":
     unittest.main()

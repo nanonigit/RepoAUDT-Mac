@@ -130,7 +130,10 @@ final class ConnectionStore: ObservableObject {
                 "secondary_model": self.secondaryModel,
             ]
             _ = try await self.request("/api/settings", body: body)
-            let result = try await self.request("/api/test-llm", body: ["provider": self.secondaryProvider])
+            let result = try await self.request("/api/test-llm", body: [
+                "provider": self.secondaryProvider,
+                "model": self.secondaryModel,
+            ])
             let ok = result["ok"] as? Bool ?? false
             self.failed = !ok
             self.feedback = (result["message"] as? String)
@@ -285,7 +288,10 @@ final class ConnectionStore: ObservableObject {
                 return
             }
             if test {
-                let result = try await self.request("/api/test-llm", body: ["provider": self.provider])
+                let result = try await self.request("/api/test-llm", body: [
+                    "provider": self.provider,
+                    "model": self.model,
+                ])
                 self.feedback = english ? "Inference test succeeded using \(result["model"] as? String ?? self.model)." :
                     "\(result["model"] as? String ?? self.model) の推論テストが成功しました。"
             } else {

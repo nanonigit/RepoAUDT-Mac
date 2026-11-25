@@ -13,6 +13,7 @@ import binascii
 import json
 import os
 import plistlib
+import re
 import concurrent.futures
 import subprocess
 import sys
@@ -34,7 +35,6 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 import analyzer  # noqa: E402
 import app_updater  # noqa: E402
-import audit_evidence  # noqa: E402
 import audit_evidence  # noqa: E402
 import copilot_bridge
 import gemini_cli_bridge  # noqa: E402
@@ -879,6 +879,7 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 diagram_id = str(body.get("diagram_id") or "").strip()
                 finding = body.get("finding") if isinstance(body.get("finding"), dict) else {}
                 code_ctx = ""
+                code_ctx_error = ""
                 # Read redacted local file context if available
                 try:
                     state = analyzer.load_saved_analyses()
@@ -906,15 +907,22 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                             # Redact potential secrets before sending to any LLM
                             snippet = re.sub(r"(AKIA[0-9A-Z]{4})[0-9A-Z]{8,16}", r"\1****REDACTED", snippet)
                             snippet = re.sub(r"(sk-[a-zA-Z0-9_-]{6})[a-zA-Z0-9_-]{12,}", r"\1****REDACTED", snippet)
+                            snippet = re.sub(r"((?:ghp|gho|ghs|ghu|github_pat)_[a-zA-Z0-9_]{4})[a-zA-Z0-9_]{12,}", r"\1****REDACTED", snippet)
+                            snippet = re.sub(r"(xox[abps]-[a-zA-Z0-9-]{6})[a-zA-Z0-9-]{10,}", r"\1****REDACTED", snippet)
+                            snippet = re.sub(r"eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}", "[REDACTED JWT]", snippet)
                             snippet = re.sub(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----", "[REDACTED PRIVATE KEY]", snippet)
                             code_ctx = snippet
-                except Exception:
-                    pass
+                except Exception as ctx_exc:
+                    code_ctx_error = str(ctx_exc)[:160]
                 res = security_audit_engine.cross_check_finding(
                     repo_name or "Repository",
                     finding,
                     code_context=code_ctx,
                 )
+                if isinstance(res, dict):
+                    res["code_context_loaded"] = bool(code_ctx)
+                    if code_ctx_error:
+                        res["code_context_error"] = code_ctx_error
                 self._send_json(200, res)
             except Exception as exc:
                 self._send_json(400, {"ok": False, "error": str(exc)})
@@ -1476,7 +1484,8 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 body = json.loads(body_raw)
                 provider = (body.get("provider") or "openai").strip()
                 key_override = body.get("api_key")
-                res = security_audit_engine.test_llm_connection(provider, key_override)
+                model_override = (body.get("model") or "").strip() or None
+                res = security_audit_engine.test_llm_connection(provider, key_override, model_override=model_override)
                 self._send_json(200, res)
             except Exception as exc:
                 self._send_json(400, {"ok": False, "error": str(exc)})

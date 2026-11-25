@@ -81,6 +81,26 @@ class TestCrossCheckAndStaticOnlyMode(unittest.TestCase):
         self.assertEqual(res["mode"], "dual_ai")
         self.assertEqual(res["consensus"], "disagreed")
 
+    def test_llm_connection_respects_model_override(self) -> None:
+        fake_settings = {
+            "active_provider": "gemini_cli",
+            "keys": {"gemini_cli": ""},
+            "models": {"gemini_cli": "gemini-4-neon-medium"},
+        }
+        with mock.patch.object(security_audit_engine, "load_settings", return_value=fake_settings), \
+             mock.patch.object(security_audit_engine, "call_llm_provider", return_value='{"status":"ok"}') as call_mock:
+            res = security_audit_engine.test_llm_connection(
+                "gemini_cli",
+                model_override="claude-opus-5-5-high",
+            )
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["model"], "claude-opus-5-5-high")
+        self.assertEqual(call_mock.call_args.kwargs.get("model"), "claude-opus-5-5-high")
+
+    def test_server_imports_re_for_cross_check_redaction(self) -> None:
+        import server
+        self.assertTrue(hasattr(server, "re"), "server.py must import re for /api/audit/cross-check secret redaction")
+
 
 if __name__ == "__main__":
     unittest.main()

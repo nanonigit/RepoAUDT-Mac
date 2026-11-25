@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 CISA_KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+CISA_KEV_FALLBACK_URL = "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
 GHSA_CRITICAL_URL = "https://api.github.com/advisories?severity=critical&per_page=30"
 CACHE_TTL_SECONDS = 6 * 3600
 
@@ -419,8 +420,18 @@ def fetch_and_correlate_threat_feed(
             kev_items = parse_cisa_kev_payload(kev_raw)
             raw_combined.extend(kev_items)
             sources_meta["cisa_kev"] = {"ok": True, "count": len(kev_items)}
-        except Exception as exc:
-            sources_meta["cisa_kev"] = {"ok": False, "count": 0, "error": str(exc)[:120]}
+        except Exception as primary_exc:
+            try:
+                kev_raw = get_fn(CISA_KEV_FALLBACK_URL)
+                kev_items = parse_cisa_kev_payload(kev_raw)
+                raw_combined.extend(kev_items)
+                sources_meta["cisa_kev"] = {"ok": True, "count": len(kev_items), "mirror": "github"}
+            except Exception as fallback_exc:
+                sources_meta["cisa_kev"] = {
+                    "ok": False,
+                    "count": 0,
+                    "error": f"{str(primary_exc)[:80]} / mirror: {str(fallback_exc)[:80]}",
+                }
 
         try:
             ghsa_raw = get_fn(GHSA_CRITICAL_URL)
