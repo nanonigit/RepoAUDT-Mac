@@ -2381,3 +2381,158 @@ def run_llm_deep_vulnerability_audit_with_status(
     except Exception as exc:
         print(f"Notice: LLM deep audit skipped/failed for {repo_name}: {exc}", file=sys.stderr)
         return [], f"{provider.upper()} ({model})", "skipped"
+
+
+_DEP_MANIFEST_BASENAMES = {
+    "package.json",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "requirements.txt",
+    "pyproject.toml",
+    "poetry.lock",
+    "pipfile",
+    "pipfile.lock",
+    "composer.json",
+    "composer.lock",
+    "go.mod",
+    "go.sum",
+    "cargo.toml",
+    "cargo.lock",
+    "gemfile",
+    "gemfile.lock",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+}
+_ADVISORY_ID_RE = re.compile(r"\b(?:CVE-\d{4}-\d{4,}|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\b", re.IGNORECASE)
+_OSV_TITLE_PKG_RE = re.compile(r"(?:\[OSV脆弱性検出\]|\[依存関係脆弱性集約\])\s+([@a-zA-Z0-9_./-]+)")
+
+
+def _strip_finding_file_and_line(raw_file: str) -> Tuple[str, Optional[int]]:
+    base = str(raw_file or "").split(" (Target:", 1)[0].strip()
+    if ":" in base:
+        left, right = base.rsplit(":", 1)
+        if right.isdigit():
+            cleaned = left.strip()
+            return (cleaned[2:] if cleaned.startswith("./") else cleaned), int(right)
+    return (base[2:] if base.startswith("./") else base), None
+
+
+def _extract_osv_package_name(item: Dict[str, Any]) -> str:
+    for key in ("pkg", "package_name"):
+        val = str(item.get(key) or "").strip()
+        if val:
+            return re.sub(r"\s*\([^)]+\)\s*$", "", val).strip().lower()
+    m = _OSV_TITLE_PKG_RE.search(str(item.get("title") or ""))
+    return m.group(1).strip().lower() if m else ""
+
+
+def _ai_mentions_package(ai_item: Dict[str, Any], pkg: str) -> bool:
+    if not pkg:
+        return False
+    haystack = f"{ai_item.get('title', '')}\n{ai_item.get('diff', '')}".lower()
+    patterns = [rf"(?<![a-z0-9_/@-]){re.escape(pkg)}(?![a-z0-9_/-])"]
+    if pkg == "next":
+        patterns.append(r"(?<![a-z0-9_/-])next\.js(?![a-z0-9_/-])")
+    elif pkg == "ckeditor5":
+        patterns.append(r"(?<![a-z0-9_/-])ckeditor\s*5(?![a-z0-9_/-])")
+    return any(re.search(pat, haystack) for pat in patterns)
+
+
+def _classify_gha_finding(item: Dict[str, Any]) -> str:
+    text = f"{item.get('title', '')} {item.get('desc', '')}".lower()
+    if any(k in text for k in ("インジェクション", "injection", "head_ref", "cwe-78")):
+        return "injection"
+    if "write-all" in text:
+        return "write_all"
+    if any(k in text for k in ("未固定", "unpinned", "cwe-829")):
+        return "unpinned_action"
+    return ""
+
+
+def merge_ai_and_static_findings(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Deduplicate overlapping AI audit findings against OSV and static GitHub Actions findings.
+
+    1. When an AI finding targets a dependency manifest (e.g. package.json) for a package/CVE
+       already reported by OSV or aggregated dependency findings, keep the canonical OSV row
+       and attach the AI summary as a supplemental note.
+    2. When an AI finding and static [GitHub Actions監査] findings cover the same workflow file
+       and vulnerability class (e.g. script injection), keep the consolidated AI finding (which
+       includes a full unified diff) and append the static scanner's detected line numbers.
+    """
+    if not items or len(items) < 2:
+        return list(items or [])
+
+    copied = [dict(it) for it in items if isinstance(it, dict)]
+
+    # Index OSV / aggregated dependency findings
+    osv_entries: List[Tuple[int, str, Set[str]]] = []
+    # Index AI GitHub Actions findings by (workflow_path, gha_class)
+    ai_gha_index: Dict[Tuple[str, str], int] = {}
+
+    for idx, it in enumerate(copied):
+        title = str(it.get("title") or "")
+        is_osv = title.startswith("[OSV脆弱性検出]") or title.startswith("[依存関係脆弱性集約]")
+        if is_osv:
+            pkg = _extract_osv_package_name(it)
+            adv_ids = {m.upper() for m in _ADVISORY_ID_RE.findall(f"{title} {it.get('desc', '')}")}
+            osv_entries.append((idx, pkg, adv_ids))
+            continue
+
+        if "AI監査]" in title:
+            fpath, _ = _strip_finding_file_and_line(str(it.get("file") or ""))
+            if fpath.startswith(".github/workflows/"):
+                gha_cls = _classify_gha_finding(it)
+                if gha_cls and (fpath, gha_cls) not in ai_gha_index:
+                    ai_gha_index[(fpath, gha_cls)] = idx
+
+    drop_indices: Set[int] = set()
+    gha_static_lines: Dict[int, List[int]] = {}
+
+    for idx, it in enumerate(copied):
+        title = str(it.get("title") or "")
+        fpath, line_no = _strip_finding_file_and_line(str(it.get("file") or ""))
+        basename = Path(fpath).name.lower() if fpath else ""
+
+        # Rule 1: AI manifest dependency finding duplicates OSV / aggregated dependency finding
+        if "AI監査]" in title and basename in _DEP_MANIFEST_BASENAMES and osv_entries:
+            ai_adv_ids = {m.upper() for m in _ADVISORY_ID_RE.findall(f"{title} {it.get('desc', '')}")}
+            matched_osv_idx: Optional[int] = None
+            for osv_idx, pkg, osv_adv_ids in osv_entries:
+                if (ai_adv_ids and osv_adv_ids and (ai_adv_ids & osv_adv_ids)) or _ai_mentions_package(it, pkg):
+                    matched_osv_idx = osv_idx
+                    break
+            if matched_osv_idx is not None:
+                osv_item = copied[matched_osv_idx]
+                ai_first_line = str(it.get("desc") or "").splitlines()[0].strip() if it.get("desc") else ""
+                note = f"【AI監査補足】{title}"
+                if ai_first_line:
+                    note += f" — {ai_first_line[:200]}"
+                existing_desc = str(osv_item.get("desc") or "")
+                if note not in existing_desc:
+                    osv_item["desc"] = f"{existing_desc}\n{note}".strip()
+                osv_item["ai_corroborated"] = True
+                drop_indices.add(idx)
+                continue
+
+        # Rule 2: Static [GitHub Actions監査] line findings covered by consolidated AI workflow finding
+        if "[GitHub Actions監査]" in title and fpath.startswith(".github/workflows/"):
+            gha_cls = _classify_gha_finding(it)
+            ai_idx = ai_gha_index.get((fpath, gha_cls))
+            if ai_idx is not None:
+                if line_no is not None:
+                    gha_static_lines.setdefault(ai_idx, []).append(line_no)
+                drop_indices.add(idx)
+
+    for ai_idx, lines in gha_static_lines.items():
+        unique_lines = sorted(set(lines))
+        if unique_lines:
+            line_str = ", ".join(f"L{ln}" for ln in unique_lines)
+            existing_desc = str(copied[ai_idx].get("desc") or "")
+            note = f"【静的スキャナ検知行】{line_str}"
+            if note not in existing_desc:
+                copied[ai_idx]["desc"] = f"{existing_desc}\n{note}".strip()
+            copied[ai_idx]["static_corroborated"] = True
+
+    return [it for idx, it in enumerate(copied) if idx not in drop_indices]

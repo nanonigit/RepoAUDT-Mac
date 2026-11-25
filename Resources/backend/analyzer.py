@@ -1427,6 +1427,12 @@ def analyze_checkout(
     coderabbit["findings"] = security_audit_engine.merge_secret_and_gitleaks_findings(
         coderabbit.get("findings") or []
     )
+    coderabbit["action_items"] = security_audit_engine.merge_ai_and_static_findings(
+        coderabbit.get("action_items") or []
+    )
+    coderabbit["findings"] = security_audit_engine.merge_ai_and_static_findings(
+        coderabbit.get("findings") or []
+    )
     if runtime_inventory:
         coderabbit["action_items"].insert(0, runtime_inventory)
     authorization_findings, authorization_scope = authorization_audit.scan_authorization(
