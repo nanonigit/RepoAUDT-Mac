@@ -1522,6 +1522,7 @@ def analyze_checkout(
         "github_url": github_url,
         "sequences": sequences,
         "coderabbit": coderabbit,
+        "tech_specs": repo_tech_specs,
     }
 
     local_ts, utc_ts = now_timestamps()

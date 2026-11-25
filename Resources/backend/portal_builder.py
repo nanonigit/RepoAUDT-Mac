@@ -6901,22 +6901,30 @@ def build_portal_html(data, is_shareable=False):
           if (seen.has(title)) continue;
           seen.add(title);
 
-          const specKey = Object.keys(techSpecs).find(k =>
+          const isPlaceholderNode = /^no runtime modules detected$/i.test(title.trim());
+          const scopedSpecs = (item.tech_specs && typeof item.tech_specs === 'object') ? item.tech_specs : null;
+          const specPool = scopedSpecs || techSpecs;
+          const specKey = isPlaceholderNode ? null : Object.keys(specPool).find(k =>
             k.toLowerCase() === nid.toLowerCase() ||
             k.toLowerCase() === title.toLowerCase() ||
-            title.toLowerCase().includes(k.toLowerCase())
+            (scopedSpecs && title.toLowerCase().includes(k.toLowerCase()))
           );
-          const specObj = specKey ? techSpecs[specKey] : null;
+          const specObj = specKey ? specPool[specKey] : null;
           const hasAlert = actionItems.some(a =>
             (a.target_node && title.toLowerCase().includes(a.target_node.toLowerCase())) ||
             (a.file && subtitle.toLowerCase().includes(a.file.split(':')[0].toLowerCase()))
           );
+          const fallbackDesc = isPlaceholderNode
+            ? (isEn
+              ? `${item.repo} contains no application runtime modules (documentation / schema / configuration repository).`
+              : `${item.repo} にはアプリ実行モジュールが検出されませんでした（ドキュメント・設計図・設定中心のリポジトリです）。`)
+            : (isEn
+              ? `Handles ${title} responsibilities within ${item.repo}.`
+              : `${item.repo} の中で「${title}」の役割を担当する部品です。クリックすると右側に詳しい解説が表示されます。`);
           cards.push({
             title,
             subtitle,
-            desc: localizeBackendText((specObj && specObj.desc) ? specObj.desc : (isEn
-              ? `Handles ${title} responsibilities within ${item.repo}.`
-              : `${item.repo} の中で「${title}」の役割を担当する部品です。クリックすると右側に詳しい解説が表示されます。`)),
+            desc: localizeBackendText((specObj && specObj.desc) ? specObj.desc : fallbackDesc),
             alertCount: hasAlert ? 1 : 0,
             openRepoIndex: -1,
             nodeName: title,
@@ -7269,21 +7277,28 @@ def build_portal_html(data, is_shareable=False):
 
           if (!firstLine) firstLine = rawFullText || 'Component';
 
-          // If matchedKey exists, use authoritative title and files from techSpecs!
-          if (matchedKey && techSpecs[matchedKey]) {
-            firstLine = techSpecs[matchedKey].title || firstLine;
-            if (techSpecs[matchedKey].files && techSpecs[matchedKey].files.length > 0) {
-              secondLine = techSpecs[matchedKey].files[0];
+          const activeSpecs = (currentRepoItem && currentRepoItem.tech_specs && typeof currentRepoItem.tech_specs === 'object')
+            ? currentRepoItem.tech_specs
+            : techSpecs;
+          const isPlaceholderTitle = /^no runtime modules detected$/i.test(firstLine.trim());
+          // If matchedKey exists, use authoritative title and files from activeSpecs!
+          if (!isPlaceholderTitle && matchedKey && activeSpecs[matchedKey]) {
+            firstLine = activeSpecs[matchedKey].title || firstLine;
+            if (activeSpecs[matchedKey].files && activeSpecs[matchedKey].files.length > 0) {
+              secondLine = activeSpecs[matchedKey].files[0];
             }
           }
-          if (!matchedKey) {
-            for (const key of Object.keys(techSpecs)) {
-              const specObj = techSpecs[key];
+          if (!isPlaceholderTitle && !matchedKey) {
+            const hasScopedSpecs = !!(currentRepoItem && currentRepoItem.tech_specs && typeof currentRepoItem.tech_specs === 'object');
+            for (const key of Object.keys(activeSpecs)) {
+              const specObj = activeSpecs[key];
               if (
                 key.toLowerCase() === firstLine.toLowerCase() ||
-                (specObj.title && specObj.title.toLowerCase().includes(firstLine.toLowerCase())) ||
-                firstLine.toLowerCase().includes(key.toLowerCase()) ||
-                (secondLine && specObj.files && specObj.files.some(f => f.includes(secondLine) || secondLine.includes(f)))
+                (hasScopedSpecs && (
+                  (specObj.title && specObj.title.toLowerCase().includes(firstLine.toLowerCase())) ||
+                  firstLine.toLowerCase().includes(key.toLowerCase()) ||
+                  (secondLine && specObj.files && specObj.files.some(f => f.includes(secondLine) || secondLine.includes(f)))
+                ))
               ) {
                 matchedKey = key;
                 break;
@@ -7291,7 +7306,7 @@ def build_portal_html(data, is_shareable=False):
             }
           }
 
-          let spec = matchedKey ? techSpecs[matchedKey] : null;
+          let spec = (!isPlaceholderTitle && matchedKey) ? activeSpecs[matchedKey] : null;
 
           if (!spec) {
             // Intelligent Dynamic Component Analyzer (Concrete Responsibilities & Processing Logic)
