@@ -394,6 +394,37 @@ def analyze_repo_architecture(repo_dir: Path, repo_name: str) -> Dict[str, Any]:
     return {"components": components, "edges": edges, "sequences": sequences, "kind": "app"}
 
 
+def _nextjs_page_route_from_rel(rel_str: str) -> Optional[str]:
+    """Derive a clean Next.js page route from App Router (page.tsx) or Pages Router (pages/*.tsx)."""
+    norm = rel_str.replace("\\", "/")
+    fname = Path(norm).name.lower()
+    # App Router: app/**/page.{tsx,ts,jsx,js} or src/app/**/page.{tsx,ts,jsx,js}
+    if fname in ("page.tsx", "page.ts", "page.jsx", "page.js"):
+        for prefix in ("src/app/", "app/"):
+            if norm.startswith(prefix):
+                sub = norm[len(prefix):].rsplit("/", 1)[0] if "/" in norm[len(prefix):] else ""
+                # Strip route groups like (marketing)
+                segs = [s for s in sub.split("/") if s and not (s.startswith("(") and s.endswith(")"))]
+                return "/" + "/".join(segs)
+    # Pages Router: pages/**/*.{tsx,ts,jsx,js} or src/pages/**/*.{tsx,ts,jsx,js}
+    if Path(norm).suffix.lower() in (".tsx", ".ts", ".jsx", ".js"):
+        stem = Path(norm).stem
+        if stem.startswith("_"):
+            return None
+        for prefix in ("src/pages/", "pages/"):
+            if norm.startswith(prefix):
+                sub = norm[len(prefix):]
+                if sub.startswith("api/"):
+                    return None
+                no_ext = sub.rsplit(".", 1)[0]
+                if no_ext == "index":
+                    return "/"
+                if no_ext.endswith("/index"):
+                    no_ext = no_ext[:-6]
+                return "/" + no_ext.lstrip("/")
+    return None
+
+
 def _extract_grounded_sequences(
     repo_dir: Path,
     repo_name: str,
@@ -404,14 +435,23 @@ def _extract_grounded_sequences(
     has_src: bool,
 ) -> List[Dict[str, str]]:
     routes: List[Tuple[str, str, str]] = []  # (method_route, file_rel, mod_key)
+    page_routes: List[Tuple[str, str, str]] = []
+    middleware_entry: Optional[Tuple[str, str]] = None  # (rel_str, mod_key)
+
     for rel in code_files:
         rel_str = str(rel).replace("\\", "/")
-        content = (repo_dir / rel).read_text(encoding="utf-8", errors="ignore")
         mk = _module_key_for_file(rel, has_src)
+        if rel_str in ("middleware.ts", "middleware.js", "src/middleware.ts", "src/middleware.js"):
+            middleware_entry = (rel_str, mk)
         if "/api/" in rel_str and rel.name in ("route.ts", "route.js", "route.tsx"):
             route_path = "/" + rel_str.split("/api/", 1)[1].rsplit("/", 1)[0]
             routes.append((f"API /api{route_path}", rel_str, mk))
             continue
+        page_path = _nextjs_page_route_from_rel(rel_str)
+        if page_path is not None:
+            page_routes.append((f"PAGE {page_path}", rel_str, mk))
+            continue
+        content = (repo_dir / rel).read_text(encoding="utf-8", errors="ignore")
         for m in _ROUTE_EXPRESS_RE.finditer(content):
             routes.append((f"{m.group(1).upper()} {m.group(2)}", rel_str, mk))
         for m in _ROUTE_FASTAPI_RE.finditer(content):
@@ -424,6 +464,19 @@ def _extract_grounded_sequences(
             mname = meth.group(1).upper() if meth else "REQ"
             routes.append((f"{mname} /{base}/{sub}".rstrip("/"), rel_str, mk))
 
+    is_frontend_page_flow = False
+    if not routes and page_routes:
+        # Prioritize pages that have real imports or external integrations
+        page_routes.sort(
+            key=lambda r: (
+                -(len(file_imports.get(r[1], [])) + len(file_exts.get(r[1], set()))),
+                len(r[0]),
+                r[0],
+            )
+        )
+        routes = page_routes
+        is_frontend_page_flow = True
+
     if not routes:
         return []
 
@@ -431,12 +484,27 @@ def _extract_grounded_sequences(
     participants_added: Set[str] = set()
     interactions: List[str] = []
 
+    mw_id: Optional[str] = None
+    if is_frontend_page_flow and middleware_entry is not None:
+        mw_rel, mw_mk = middleware_entry
+        mw_id = _make_node_id("Entry", "Middleware")
+        participants_added.add(mw_id)
+        seq_lines.append(f"    participant {mw_id} as Middleware ({sanitize_mermaid_label(Path(mw_rel).name)})")
+        interactions.append(f"    Client->>{mw_id}: HTTP Request")
+        for dst_mk in list(dict.fromkeys(file_imports.get(mw_rel, [])))[:2]:
+            dst_id = id_by_mod.get(dst_mk, _make_node_id("Mod", dst_mk))
+            if dst_id not in participants_added:
+                participants_added.add(dst_id)
+                seq_lines.append(f"    participant {dst_id} as {sanitize_mermaid_label(dst_mk)}")
+            interactions.append(f"    {mw_id}->>{dst_id}: route / guard ({sanitize_mermaid_label(dst_mk)})")
+
     for route_label, rel_str, src_mk in routes[:4]:
         src_id = id_by_mod.get(src_mk, _make_node_id("Entry", Path(rel_str).stem))
         if src_id not in participants_added:
             participants_added.add(src_id)
             seq_lines.append(f"    participant {src_id} as {sanitize_mermaid_label(src_mk)}")
-        interactions.append(f"    Client->>{src_id}: {sanitize_mermaid_label(route_label)} ({sanitize_mermaid_label(Path(rel_str).name)})")
+        caller = mw_id if mw_id else "Client"
+        interactions.append(f"    {caller}->>{src_id}: {sanitize_mermaid_label(route_label)} ({sanitize_mermaid_label(Path(rel_str).name)})")
 
         for dst_mk in list(dict.fromkeys(file_imports.get(rel_str, [])))[:3]:
             dst_id = id_by_mod.get(dst_mk, _make_node_id("Mod", dst_mk))
@@ -455,11 +523,16 @@ def _extract_grounded_sequences(
         return []
 
     seq_str = "\n".join(seq_lines + interactions)
+    flow_title = (
+        f"{repo_name} ページルート・モジュール呼び出しフロー"
+        if is_frontend_page_flow
+        else f"{repo_name} 実ルート・依存呼び出しフロー"
+    )
     return [{
         "id": f"seq-{re.sub(r'[^a-zA-Z0-9]', '', repo_name).lower()}-routes",
-        "short_title": f"{repo_name} 実ルート・依存呼び出しフロー",
-        "title": f"{repo_name} 実ルート・依存呼び出しフロー",
-        "desc": "ソースコード内の実ルート定義と import 依存関係から抽出した実行シーケンスです。",
+        "short_title": flow_title,
+        "title": flow_title,
+        "desc": "ソースコード内の実ルート定義（API / ページ / Middleware）と import 依存関係から抽出した実行シーケンスです。",
         "diagram": seq_str,
         "mermaid": seq_str,
     }]
