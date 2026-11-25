@@ -197,6 +197,8 @@ struct MainContentView: View {
     @State private var monitorLaunchdInstalled = false
     @State private var seenMonitorUpdateKeys: Set<String> = []
     @State private var monitorUpdates: [MonitorUpdateEvent] = []
+    @State private var monitorPageSize = 10
+    @State private var monitorPageIndex = 0
     @State private var revocationChecks: [SecretRevocationItem] = []
 
     private struct ResolvedFindingSummary: Identifiable {
@@ -638,87 +640,119 @@ struct MainContentView: View {
         .sheet(item: $drilldownFilter) { filter in
             let filteredItems = filteredDrilldownItems(drilldownItems)
             let groups = groupedDrilldownItems(filteredItems)
+            let resolvedRecords: [RemediationRequestRecord] = remediationRequests.values
+                .filter { rec in
+                    rec.status == "resolved" && (filter.tier == nil || rec.tier.uppercased() == filter.tier?.uppercased())
+                }
+                .sorted { lhs, rhs in
+                    if !lhs.indexCode.isEmpty && !rhs.indexCode.isEmpty && lhs.indexCode != rhs.indexCode {
+                        return lhs.indexCode < rhs.indexCode
+                    }
+                    return (lhs.resolvedAt ?? "") > (rhs.resolvedAt ?? "")
+                }
+            let isResolvedTab = drilldownRequestFilter == "resolved"
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     Text(filter.title)
                         .font(.title3.bold())
                     Spacer()
-                    if !drilldownItems.isEmpty {
+                    if !drilldownItems.isEmpty || !resolvedRecords.isEmpty {
                         Picker("", selection: $drilldownRequestFilter) {
                             Text(english ? "All" : "すべて").tag("all")
                             Text(english ? "Unrequested" : "未依頼").tag("unrequested")
                             Text(english ? "Requested" : "依頼済").tag("requested")
+                            Text(english ? "Resolved (\(resolvedRecords.count))" : "修正済 (\(resolvedRecords.count))").tag("resolved")
                         }
                         .pickerStyle(.segmented)
-                        .frame(width: 210)
+                        .frame(width: 280)
 
-                        Picker("", selection: $drilldownGrouped) {
-                            Text(english ? "Grouped (\(groups.count))" : "グループ (\(groups.count))").tag(true)
-                            Text(english ? "List" : "一覧").tag(false)
+                        if !isResolvedTab {
+                            Picker("", selection: $drilldownGrouped) {
+                                Text(english ? "Grouped (\(groups.count))" : "グループ (\(groups.count))").tag(true)
+                                Text(english ? "List" : "一覧").tag(false)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 190)
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 190)
 
-                        let unrequestedItems = drilldownItems.filter { remediationRequests[$0.fingerprint]?.status != "requested" }
-                        let unrequestedGroups = groupedDrilldownItems(unrequestedItems)
-                        Menu {
+                        if isResolvedTab {
                             Button {
-                                copyDrilldownFixPrompt(for: unrequestedGroups)
+                                copyResolvedForAIVerification(records: resolvedRecords, tierLabel: filter.tier ?? "ALL")
                             } label: {
                                 Label(
-                                    english
-                                        ? "Copy Unrequested Only (\(unrequestedItems.count))"
-                                        : "未依頼のみ一括コピー (\(unrequestedItems.count)件)",
+                                    english ? "Copy for AI Verification (\(resolvedRecords.count))" : "AI 確認用コピー (\(resolvedRecords.count)件)",
+                                    systemImage: "sparkles"
+                                )
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .disabled(resolvedRecords.isEmpty)
+                        } else {
+                            let unrequestedItems = drilldownItems.filter { remediationRequests[$0.fingerprint]?.status != "requested" }
+                            let unrequestedGroups = groupedDrilldownItems(unrequestedItems)
+                            Menu {
+                                Button {
+                                    copyDrilldownFixPrompt(for: unrequestedGroups)
+                                } label: {
+                                    Label(
+                                        english
+                                            ? "Copy Unrequested Only (\(unrequestedItems.count))"
+                                            : "未依頼のみ一括コピー (\(unrequestedItems.count)件)",
+                                        systemImage: "doc.on.doc"
+                                    )
+                                }
+                                .disabled(unrequestedItems.isEmpty)
+
+                                Button {
+                                    copyDrilldownFixPrompt(for: unrequestedGroups)
+                                    Task { await toggleRemediationRequest(items: unrequestedItems, requested: true) }
+                                } label: {
+                                    Label(
+                                        english
+                                            ? "Copy Unrequested & Mark Requested (\(unrequestedItems.count))"
+                                            : "未依頼をコピー＋依頼済みにする (\(unrequestedItems.count)件)",
+                                        systemImage: "paperplane.fill"
+                                    )
+                                }
+                                .disabled(unrequestedItems.isEmpty)
+
+                                Divider()
+
+                                Button {
+                                    copyDrilldownFixPrompt(for: groups)
+                                } label: {
+                                    Label(
+                                        english
+                                            ? "Copy All Visible (\(filteredItems.count))"
+                                            : "表示中のすべてをコピー (\(filteredItems.count)件)",
+                                        systemImage: "doc.on.doc.fill"
+                                    )
+                                }
+                                .disabled(groups.isEmpty)
+                            } label: {
+                                Label(
+                                    unrequestedItems.isEmpty
+                                        ? (english ? "Copy Fix Requests" : "修正依頼コピー")
+                                        : (english ? "Copy Unrequested (\(unrequestedItems.count))" : "未依頼コピー (\(unrequestedItems.count))"),
                                     systemImage: "doc.on.doc"
                                 )
+                            } primaryAction: {
+                                if !unrequestedItems.isEmpty {
+                                    copyDrilldownFixPrompt(for: unrequestedGroups)
+                                } else {
+                                    copyDrilldownFixPrompt(for: groups)
+                                }
                             }
-                            .disabled(unrequestedItems.isEmpty)
-
-                            Button {
-                                copyDrilldownFixPrompt(for: unrequestedGroups)
-                                Task { await toggleRemediationRequest(items: unrequestedItems, requested: true) }
-                            } label: {
-                                Label(
-                                    english
-                                        ? "Copy Unrequested & Mark Requested (\(unrequestedItems.count))"
-                                        : "未依頼をコピー＋依頼済みにする (\(unrequestedItems.count)件)",
-                                    systemImage: "paperplane.fill"
-                                )
-                            }
-                            .disabled(unrequestedItems.isEmpty)
-
-                            Divider()
-
-                            Button {
-                                copyDrilldownFixPrompt(for: groups)
-                            } label: {
-                                Label(
-                                    english
-                                        ? "Copy All Visible (\(filteredItems.count))"
-                                        : "表示中のすべてをコピー (\(filteredItems.count)件)",
-                                    systemImage: "doc.on.doc.fill"
-                                )
-                            }
-                            .disabled(groups.isEmpty)
-                        } label: {
-                            Label(
-                                unrequestedItems.isEmpty
-                                    ? (english ? "Copy Fix Requests" : "修正依頼コピー")
-                                    : (english ? "Copy Unrequested (\(unrequestedItems.count))" : "未依頼コピー (\(unrequestedItems.count))"),
-                                systemImage: "doc.on.doc"
-                            )
-                        } primaryAction: {
-                            if !unrequestedItems.isEmpty {
-                                copyDrilldownFixPrompt(for: unrequestedGroups)
-                            } else {
-                                copyDrilldownFixPrompt(for: groups)
-                            }
+                            .menuStyle(.borderedButton)
+                            .controlSize(.small)
+                            .disabled(groups.isEmpty && unrequestedItems.isEmpty)
                         }
-                        .menuStyle(.borderedButton)
-                        .controlSize(.small)
-                        .disabled(groups.isEmpty && unrequestedItems.isEmpty)
                     }
-                    Text(english ? "\(filteredItems.count) / \(drilldownItems.count)" : "\(filteredItems.count) / \(drilldownItems.count) 件")
+                    Text(
+                        isResolvedTab
+                            ? (english ? "\(resolvedRecords.count) resolved" : "修正済 \(resolvedRecords.count) 件")
+                            : (english ? "\(filteredItems.count) / \(drilldownItems.count)" : "\(filteredItems.count) / \(drilldownItems.count) 件")
+                    )
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                     Button(english ? "Close" : "閉じる") {
@@ -756,6 +790,69 @@ struct MainContentView: View {
                 if loadingDrilldown {
                     ProgressView(english ? "Loading findings..." : "指摘を読み込み中…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if isResolvedTab {
+                    if resolvedRecords.isEmpty {
+                        ContentUnavailableView(
+                            english ? "No resolved findings yet" : "修正確認済みの指摘はまだありません",
+                            systemImage: "checkmark.seal"
+                        )
+                    } else {
+                        List(resolvedRecords) { rec in
+                            let badge = rec.indexCode.isEmpty ? rec.tier : rec.indexCode
+                            HStack(alignment: .top, spacing: 10) {
+                                Text(badge)
+                                    .font(.caption2.monospaced().bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(SemanticColors.role("successText").opacity(0.18), in: Capsule())
+                                    .foregroundStyle(SemanticColors.role("successText"))
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 6) {
+                                        Text(rec.title)
+                                            .font(.subheadline.weight(.semibold))
+                                            .lineLimit(2)
+                                        Text(english ? "✓ Resolved" : "✓ 修正確認済")
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 1)
+                                            .background(SemanticColors.role("successText").opacity(0.16), in: Capsule())
+                                            .foregroundStyle(SemanticColors.role("successText"))
+                                    }
+                                    HStack(spacing: 6) {
+                                        Text("\(rec.repo) · \(rec.file)")
+                                            .font(.caption.monospaced())
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                        if let sha = rec.resolvedCommit, !sha.isEmpty {
+                                            Text("HEAD: \(String(sha.prefix(7)))")
+                                                .font(.caption2.monospaced())
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                    }
+                                    HStack(spacing: 8) {
+                                        if let reqDate = formattedAnalysisDate(rec.requestedAt) {
+                                            Text(english ? "Requested: \(reqDate)" : "依頼日: \(reqDate)")
+                                        }
+                                        if let resAt = rec.resolvedAt, let resDate = formattedAnalysisDate(resAt) {
+                                            Text(english ? "Resolved: \(resDate)" : "修正確認: \(resDate)")
+                                                .foregroundStyle(SemanticColors.role("successText"))
+                                        }
+                                    }
+                                    .font(.caption2.monospacedDigit())
+                                    .foregroundStyle(.tertiary)
+                                }
+                                Spacer()
+                                Button {
+                                    copyResolvedForAIVerification(records: [rec], tierLabel: rec.tier)
+                                } label: {
+                                    Label(english ? "Copy for AI" : "AI確認コピー", systemImage: "sparkles")
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
                 } else if filteredItems.isEmpty {
                     ContentUnavailableView(
                         english ? "No matching findings" : "該当する指摘はありません",
@@ -2831,19 +2928,75 @@ struct MainContentView: View {
 
     @ViewBuilder
     private func monitorUpdatesCard() -> some View {
+        let totalCount = monitorUpdates.count
+        let pageSize = max(1, monitorPageSize)
+        let totalPages = max(1, (totalCount + pageSize - 1) / pageSize)
+        let safePage = min(max(0, monitorPageIndex), totalPages - 1)
+        let startIdx = safePage * pageSize
+        let endIdx = min(totalCount, startIdx + pageSize)
+        let pageSlice = startIdx < endIdx ? Array(monitorUpdates[startIdx..<endIdx]) : []
+
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
+                HStack(spacing: 10) {
                     Label(
                         english ? "Resolved Risks from New Commits" : "新着コミットで解消された監査結果",
                         systemImage: "checkmark.seal.fill"
                     )
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(SemanticColors.role("successText"))
+                    Text(english ? "(\(totalCount))" : "(\(totalCount)件)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
                     Spacer()
+                    HStack(spacing: 6) {
+                        Text(english ? "Show:" : "表示件数:")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Picker("", selection: Binding(
+                            get: { monitorPageSize },
+                            set: { newSize in
+                                monitorPageSize = newSize
+                                monitorPageIndex = 0
+                            }
+                        )) {
+                            Text("10").tag(10)
+                            Text("50").tag(50)
+                            Text("100").tag(100)
+                            Text("200").tag(200)
+                        }
+                        .labelsHidden()
+                        .frame(width: 72)
+                    }
+                    if totalPages > 1 {
+                        HStack(spacing: 4) {
+                            Button {
+                                monitorPageIndex = max(0, safePage - 1)
+                            } label: {
+                                Image(systemName: "chevron.left")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                            .disabled(safePage <= 0)
+
+                            Text("\(safePage + 1) / \(totalPages)")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .frame(minWidth: 42)
+
+                            Button {
+                                monitorPageIndex = min(totalPages - 1, safePage + 1)
+                            } label: {
+                                Image(systemName: "chevron.right")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                            .disabled(safePage >= totalPages - 1)
+                        }
+                    }
                 }
 
-                ForEach(Array(monitorUpdates.prefix(5))) { upd in
+                ForEach(pageSlice) { upd in
                     monitorUpdateRow(upd)
                 }
             }
@@ -2893,7 +3046,7 @@ struct MainContentView: View {
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(upd.resolvedFindings.prefix(8))) { item in
-                        resolvedFindingRow(item)
+                        resolvedFindingRow(item, repo: upd.repo)
                     }
                     if upd.resolvedCount > 8 {
                         Text(english ? "…and \(upd.resolvedCount - 8) more resolved" : "…ほか \(upd.resolvedCount - 8) 件解消")
@@ -2909,10 +3062,29 @@ struct MainContentView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.4)))
     }
 
+    private func remediationIndexBadge(repo: String, file: String, title: String) -> String {
+        let cleanFile = file.components(separatedBy: " (Target:").first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? file
+        if let rec = remediationRequests.values.first(where: {
+            $0.repo == repo && ($0.file == cleanFile || (!title.isEmpty && $0.title == title))
+        }) {
+            return rec.indexCode.isEmpty ? rec.tier : rec.indexCode
+        }
+        return ""
+    }
+
     @ViewBuilder
-    private func resolvedFindingRow(_ item: ResolvedFindingSummary) -> some View {
+    private func resolvedFindingRow(_ item: ResolvedFindingSummary, repo: String = "") -> some View {
         let sevTint = SemanticColors.severityColor(item.severity)
+        let idxBadge = remediationIndexBadge(repo: repo, file: item.file, title: item.title)
         HStack(spacing: 6) {
+            if !idxBadge.isEmpty {
+                Text(idxBadge)
+                    .font(.caption2.monospaced().bold())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Color(red: 0.92, green: 0.24, blue: 0.28).opacity(0.18), in: Capsule())
+                    .foregroundStyle(Color(red: 0.92, green: 0.24, blue: 0.28))
+            }
             Text(item.severity.uppercased())
                 .font(.caption2.weight(.bold))
                 .padding(.horizontal, 5)
@@ -2998,6 +3170,15 @@ struct MainContentView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
+                    let revBadge = remediationIndexBadge(repo: rev.repo, file: rev.file, title: rev.title)
+                    if !revBadge.isEmpty {
+                        Text(revBadge)
+                            .font(.caption2.monospaced().bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Color(red: 0.92, green: 0.24, blue: 0.28).opacity(0.18), in: Capsule())
+                            .foregroundStyle(Color(red: 0.92, green: 0.24, blue: 0.28))
+                    }
                     Text(rev.repo)
                         .font(.caption.weight(.semibold))
                     if !rev.newCommit.isEmpty {
@@ -4337,6 +4518,52 @@ struct MainContentView: View {
         }
     }
 
+    private func copyResolvedForAIVerification(records: [RemediationRequestRecord], tierLabel: String) {
+        guard !records.isEmpty else { return }
+        var lines: [String] = []
+        lines.append("# ✅ Security Remediation Verification Request (\(tierLabel) · \(records.count) resolved)")
+        lines.append("")
+        lines.append("Please verify that the following findings marked as resolved by RepoAUDT Mac have been completely and safely remediated:")
+        lines.append("1. Confirm the vulnerable code / hardcoded credential is completely removed from the current branch (HEAD).")
+        lines.append("2. For secrets/credentials, check whether the value still exists in Git history or other branches, and whether provider-side revocation/rotation is required.")
+        lines.append("3. Confirm no regressions or broken references were introduced by the fix.")
+        lines.append("")
+        for rec in records {
+            let badge = rec.indexCode.isEmpty ? rec.tier : rec.indexCode
+            lines.append("## [\(badge)] \(rec.title)")
+            lines.append("- **Repository**: `\(rec.repo)`")
+            lines.append("- **File**: `\(rec.file)`")
+            if let sha = rec.resolvedCommit, !sha.isEmpty {
+                lines.append("- **Resolved Commit**: `\(String(sha.prefix(12)))`")
+            }
+            if let reqDate = formattedAnalysisDate(rec.requestedAt) {
+                lines.append("- **Requested At**: \(reqDate)")
+            }
+            if let resAt = rec.resolvedAt, let resDate = formattedAnalysisDate(resAt) {
+                lines.append("- **Resolved Detected At**: \(resDate)")
+            }
+            lines.append("")
+        }
+        lines.append("---")
+        lines.append("")
+        lines.append("# ✅ セキュリティ修正完了の AI 確認依頼（\(tierLabel) · 修正確認済 \(records.count)件）")
+        lines.append("")
+        lines.append("RepoAUDT Mac で修正確認済みとなった上記 \(records.count) 件について、以下を確認してください：")
+        lines.append("1. 最新コード（HEAD）から脆弱性・ハードコードされた認証情報が完全に除去されているか。")
+        lines.append("2. シークレット漏洩の場合、Git 履歴や他ブランチへの残存およびプロバイダ側での無効化（Revoke / Rotate）が完了しているか。")
+        lines.append("3. 修正による既存機能への副作用・参照切れがないか。")
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+        let notice = english
+            ? "Copied \(records.count) resolved finding(s) for AI verification."
+            : "修正済み \(records.count)件の AI 確認用レポートをコピーしました。"
+        drilldownCopyNotice = notice
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            if drilldownCopyNotice == notice { drilldownCopyNotice = nil }
+        }
+    }
+
     private func filteredDrilldownItems(_ items: [DrilldownFindingItem]) -> [DrilldownFindingItem] {
         switch drilldownRequestFilter {
         case "unrequested":
@@ -4354,6 +4581,7 @@ struct MainContentView: View {
         for (fp, d) in rawMap {
             parsed[fp] = RemediationRequestRecord(
                 fingerprint: fp,
+                indexCode: (d["index_code"] as? String) ?? "",
                 repo: (d["repo"] as? String) ?? "",
                 title: (d["title"] as? String) ?? "",
                 file: (d["file"] as? String) ?? "",
@@ -4395,6 +4623,7 @@ struct MainContentView: View {
             guard !fp.isEmpty else { return nil }
             return [
                 "fingerprint": fp,
+                "index_code": it.indexCode,
                 "repo": it.repoName,
                 "title": it.title,
                 "file": it.file,
@@ -5340,6 +5569,7 @@ private struct ThreatFeedItem: Identifiable {
 private struct RemediationRequestRecord: Identifiable {
     var id: String { fingerprint }
     let fingerprint: String
+    let indexCode: String
     let repo: String
     let title: String
     let file: String

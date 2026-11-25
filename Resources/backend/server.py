@@ -434,7 +434,7 @@ class SyncDaemon:
                 self.last_check_time = now_local
                 if updated_items:
                     self.last_sync_time = now_local
-                    self.detected_updates = (updated_items + self.detected_updates)[:20]
+                    self.detected_updates = (updated_items + self.detected_updates)[:200]
                     self.last_check_summary = (
                         f"{checked_count}件確認 · {len(updated_items)}件の新着コミットを再監査"
                     )

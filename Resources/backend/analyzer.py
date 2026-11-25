@@ -2835,6 +2835,7 @@ def mark_remediation_requests(
             existing = reqs.get(fp) if isinstance(reqs.get(fp), dict) else {}
             reqs[fp] = {
                 "fingerprint": fp,
+                "index_code": str(it.get("index_code") or existing.get("index_code") or "").strip(),
                 "repo": str(it.get("repo") or existing.get("repo") or "").strip(),
                 "title": str(it.get("title") or existing.get("title") or "").strip(),
                 "file": str(it.get("file") or existing.get("file") or "").strip(),
