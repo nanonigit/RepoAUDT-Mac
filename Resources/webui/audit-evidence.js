@@ -47,13 +47,15 @@ function buildConversationTitle(repo, context) {
 }
 
 const AUDIT_PROVIDER_LABELS = {
+  gemini_cli: 'Antigravity CLI',
   openai: 'OpenAI',
   claude: 'Claude',
-  gemini: 'Gemini',
+  gemini: 'Gemini API',
   groq: 'Groq',
   copilot: 'GitHub Copilot',
   local: 'Local LLM'
 };
+let auditGeminiCliModels = [];
 
 async function loadAuditLLMConfig(force = false) {
   if (auditLLMConfig && !force) return auditLLMConfig;
@@ -63,12 +65,62 @@ async function loadAuditLLMConfig(force = false) {
       auditLLMConfig = await resp.json();
     }
   } catch (_) {}
+  try {
+    if (auditLLMConfig?.configured?.gemini_cli) {
+      const mresp = await fetch('/api/connections/gemini-cli/models');
+      if (mresp.ok) {
+        const mdata = await mresp.json();
+        auditGeminiCliModels = Array.isArray(mdata.models) ? mdata.models : [];
+      }
+    } else {
+      auditGeminiCliModels = [];
+    }
+  } catch (_) {}
   return auditLLMConfig;
 }
 
 function getConfiguredAuditProviders(cfg) {
   if (!cfg || !cfg.configured) return [];
   return Object.keys(AUDIT_PROVIDER_LABELS).filter(key => Boolean(cfg.configured[key]));
+}
+
+function getAuditModelOptions(cfg) {
+  const configured = getConfiguredAuditProviders(cfg);
+  const options = [];
+  for (const prov of configured) {
+    if (prov === 'gemini_cli' && auditGeminiCliModels.length > 0) {
+      const defaultModel = cfg?.models?.gemini_cli || '';
+      options.push({
+        value: 'gemini_cli',
+        provider: 'gemini_cli',
+        model: defaultModel,
+        label: defaultModel
+          ? `Antigravity CLI (${defaultModel})`
+          : `Antigravity CLI (${auditLabel('CLI default', 'CLI 既定')})`
+      });
+      for (const m of auditGeminiCliModels) {
+        const mid = String(m.id || '').trim();
+        const mlabel = String(m.label || mid).trim();
+        if (!mid || mid === defaultModel) continue;
+        options.push({
+          value: `gemini_cli::${mid}`,
+          provider: 'gemini_cli',
+          model: mid,
+          label: `Antigravity CLI — ${mlabel}`
+        });
+      }
+    } else {
+      const label = AUDIT_PROVIDER_LABELS[prov] || prov;
+      const model = cfg?.models?.[prov] || '';
+      options.push({
+        value: prov,
+        provider: prov,
+        model,
+        label: model ? `${label} (${model})` : label
+      });
+    }
+  }
+  return options;
 }
 
 function auditLabel(english, japanese) {
@@ -97,16 +149,33 @@ function auditLink(url, title) {
   return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)} ↗</a>`;
 }
 
-function repositoryFacts(info) {
+function repositoryFacts(info, repo) {
   if (info.latest_unavailable) {
-    return `<p>${auditLabel('Latest GitHub status unavailable', 'GitHub の最新情報を取得できません')}</p>`;
+    return `<span style="color:var(--workspace-muted);">${auditLabel('Latest GitHub status unavailable', 'GitHub の最新情報を取得できません')}</span>`;
   }
   const root = info.repository_url;
-  return `<div>${auditLabel('Latest branch commit', '最新ブランチのコミット')}:
-    <code>${escapeHtml(info.branch)}</code> ${auditLink(root + '/commit/' + info.head, info.head.slice(0, 7))}
-    · ${auditDate(info.head_date)}</div>
-    <div>${auditLabel('Repository last pushed', 'リポジトリの最終 Push')}: ${auditDate(info.pushed_at)}</div>
-    <div>${auditLabel('Checked', '取得日時')}: ${auditDate(info.checked_at)}</div>`;
+  const savedSha = String((repo && repo.commit_hash) || '').trim();
+  const headSha = String(info.head || '').trim();
+  const isUpToDate = savedSha && headSha && headSha.startsWith(savedSha.slice(0, 7));
+  const statusPill = savedSha && headSha
+    ? (isUpToDate
+      ? `<span style="padding:1px 7px;border-radius:999px;font-size:0.7rem;font-weight:600;background:rgba(52,211,153,0.16);color:#34d399;">✓ ${auditLabel('Up to date', '最新と一致')}</span>`
+      : `<span style="padding:1px 7px;border-radius:999px;font-size:0.7rem;font-weight:600;background:rgba(251,191,36,0.18);color:#fbbf24;">↑ ${auditLabel('Newer commit on GitHub', '新しいコミットあり')}</span>`)
+    : '';
+  return `<div style="display:grid;gap:5px;">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="color:var(--workspace-muted);min-width:92px;">${auditLabel('GitHub latest', 'GitHub 最新')}</span>
+      <code style="padding:2px 7px;border-radius:6px;background:rgba(148,163,184,0.14);color:var(--workspace-text);font-size:0.73rem;">${escapeHtml(info.branch)}</code>
+      ${auditLink(root + '/commit/' + headSha, headSha.slice(0, 7))}
+      <span style="color:var(--workspace-muted);font-variant-numeric:tabular-nums;">${auditDate(info.head_date)}</span>
+      ${statusPill}
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:var(--workspace-muted);font-size:0.73rem;font-variant-numeric:tabular-nums;">
+      <span>${auditLabel('Last push', '最終 Push')}: <strong style="color:var(--workspace-text);font-weight:500;">${auditDate(info.pushed_at)}</strong></span>
+      <span>·</span>
+      <span>${auditLabel('Checked', '確認時刻')}: ${auditDate(info.checked_at)}</span>
+    </div>
+  </div>`;
 }
 
 function pullRequestControl(repo) {
@@ -173,16 +242,23 @@ async function updateAuditRepositoryStatus(hero, repo, force = false) {
   target.textContent = auditLabel('Checking GitHub…', 'GitHub を確認中…');
   try {
     const info = await auditRepositoryStatuses.get(key);
-    target.innerHTML = repositoryFacts(info);
+    target.innerHTML = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:260px;">${repositoryFacts(info, repo)}</div>
+    </div>`;
   } catch (error) {
-    target.textContent = auditLabel('Latest GitHub status unavailable', 'GitHub の最新情報を取得できません');
+    target.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <span style="color:var(--workspace-muted);">${auditLabel('Latest GitHub status unavailable', 'GitHub の最新情報を取得できません')}</span>
+    </div>`;
   }
   const retry = document.createElement('button');
   retry.type = 'button';
   retry.className = 'table-view-btn';
-  retry.textContent = auditLabel('Refresh GitHub status', 'GitHub の情報を更新');
+  retry.style.cssText = 'font-size:0.72rem;padding:3px 9px;white-space:nowrap;';
+  retry.textContent = auditLabel('Refresh GitHub', 'GitHub 情報を更新');
   retry.onclick = () => updateAuditRepositoryStatus(hero, repo, true);
-  target.append(retry);
+  const row = target.firstElementChild;
+  if (row) row.append(retry);
+  else target.append(retry);
 }
 
 function recordedAuthorizationChain(repo, issue) {
@@ -656,7 +732,14 @@ function jumpToAuditRepoPage(repoId, findingTitle = '') {
 
 function buildAuditStarter(repo, context) {
   if (!repo || repo.is_root) return {greeting: '', greetingHtml: '', suggestions: []};
-  const issues = typeof getWorkspaceIssues === 'function' ? getWorkspaceIssues(repo) : [];
+  const rawIssues = typeof getWorkspaceIssues === 'function' ? getWorkspaceIssues(repo) : [];
+  const seenIssueKeys = new Set();
+  const issues = rawIssues.filter(i => {
+    const key = `${String(i.title || '').trim().toLowerCase()}|${String(i.file || '').split(' (Target:', 1)[0].trim().toLowerCase()}`;
+    if (seenIssueKeys.has(key)) return false;
+    seenIssueKeys.add(key);
+    return true;
+  });
   const repoId = String(repo.id || '');
   const repoBtn = `<button type="button" class="table-view-btn" style="padding: 2px 8px; font-size: 0.85rem;" data-jump-repo="${escapeHtml(repoId)}">${escapeHtml(repo.repo)}</button>`;
 
@@ -1058,122 +1141,88 @@ function renderAuditChat() {
   }
   const context = state.context;
   const cfg = auditLLMConfig;
-  const configured = getConfiguredAuditProviders(cfg);
-  const activeProv = cfg?.active_provider && configured.includes(cfg.active_provider)
+  const modelOptions = getAuditModelOptions(cfg);
+  const activeProv = cfg?.active_provider && modelOptions.some(o => o.value === cfg.active_provider)
     ? cfg.active_provider
-    : (configured[0] || '');
-  if (!state.selectedProvider || !configured.includes(state.selectedProvider)) {
+    : (modelOptions[0]?.value || '');
+  if (!state.selectedProvider || !modelOptions.some(o => o.value === state.selectedProvider)) {
     state.selectedProvider = activeProv;
   }
-  const formatProvider = prov => {
-    const label = AUDIT_PROVIDER_LABELS[prov] || prov;
-    const model = cfg?.models?.[prov] || '';
-    return model ? `${label} (${model})` : label;
-  };
-  const aiStatusHtml = !cfg
-    ? `<p class="audit-note">${auditLabel('Checking configured AI providers…', '接続済みAIを確認中…')}</p>`
-    : configured.length === 0
-      ? `<div class="audit-chat-error" role="status" style="padding: 8px 12px; border-radius: 8px; border: 1px solid currentColor; margin-top: 8px;">
-          ${auditLabel(
-            'No AI provider is connected yet. Open "Connections > AI connections" in the left sidebar to configure OpenAI, Claude, Gemini, Groq, GitHub Copilot, or a Local LLM.',
-            'AI がまだ1つも接続されていません。左サイドバーの「接続 ＞ AI 接続」から OpenAI / Claude / Gemini / Groq / GitHub Copilot / ローカル LLM のいずれかを接続してください。'
-          )}
-        </div>`
-      : configured.length === 1
-        ? `<p class="audit-note" style="margin-top: 6px;">🤖 ${auditLabel('Active AI', '使用中のAI')}: <strong>${escapeHtml(formatProvider(configured[0]))}</strong></p>`
-        : `<div class="issue-actions" style="margin-top: 8px; align-items: center;">
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
-              <span>🤖 ${auditLabel('AI model', '使用AI')}</span>
-              <select id="audit-chat-provider">
-                ${configured.map(prov => `<option value="${escapeHtml(prov)}" ${prov === state.selectedProvider ? 'selected' : ''}>${escapeHtml(formatProvider(prov))}</option>`).join('')}
-              </select>
-            </label>
-          </div>`;
+  const modelPickerHtml = !cfg
+    ? `<span style="font-size:0.78rem;color:var(--workspace-muted);">${auditLabel('Loading models…', 'モデル読込中…')}</span>`
+    : modelOptions.length === 0
+      ? `<span style="font-size:0.78rem;color:var(--workspace-danger-text);">${auditLabel('No AI connected (System > AI Connections)', 'AI 未接続（システム ＞ AI 接続で設定）')}</span>`
+      : `<select id="audit-chat-provider" aria-label="${auditLabel('AI model', '使用AI')}">
+          ${modelOptions.map(opt => `<option value="${escapeHtml(opt.value)}" ${opt.value === state.selectedProvider ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('')}
+        </select>`;
 
   const displayRepo = state.repoName || (selectedDiagram?.is_root ? '' : (selectedDiagram?.repo || ''));
-  const displayTitle = state.title || buildConversationTitle(selectedDiagram, context);
-  const historyOptionsHtml = auditConversations.length > 0
-    ? `<div class="issue-actions" style="margin-top: 6px; align-items: center; flex-wrap: wrap;">
-        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
-          <span>💬 ${auditLabel('Chat history', 'チャット履歴')}</span>
-          <select id="audit-chat-history" style="max-width: 440px;">
-            ${auditConversations.map(c => {
-              const labelRepo = c.repoName ? `[${c.repoName}] ` : '';
-              const msgCount = Array.isArray(c.messages) ? c.messages.length : 0;
-              const suffix = msgCount > 0 ? ` (${msgCount})` : '';
-              return `<option value="${escapeHtml(c.id)}" ${c.id === state.id ? 'selected' : ''}>${escapeHtml(labelRepo + (c.title || 'Chat') + suffix)}</option>`;
-            }).join('')}
-          </select>
-        </label>
-        <button type="button" id="audit-chat-new" class="table-view-btn">${auditLabel('+ New chat', '＋ 新しいチャット')}</button>
-      </div>`
+  const historySelectHtml = auditConversations.length > 1
+    ? `<select id="audit-chat-history" aria-label="${auditLabel('Chat history', 'チャット履歴')}">
+        ${auditConversations.map(c => {
+          const labelRepo = c.repoName ? `[${c.repoName}] ` : '';
+          const msgCount = Array.isArray(c.messages) ? c.messages.length : 0;
+          const suffix = msgCount > 0 ? ` (${msgCount})` : '';
+          return `<option value="${escapeHtml(c.id)}" ${c.id === state.id ? 'selected' : ''}>${escapeHtml(labelRepo + (c.title || 'Chat') + suffix)}</option>`;
+        }).join('')}
+      </select>`
     : '';
 
-  section.innerHTML = `<div class="audit-chat-inner">
-    <header>
-      <div class="issue-actions" style="margin-bottom: 8px;">
-        <button type="button" id="audit-chat-back" class="table-view-btn">${auditLabel('← Back to Audit Results', '← 監査結果に戻る')}</button>
+  section.innerHTML = `
+    <header class="audit-chat-topbar">
+      <div class="audit-chat-topbar-left">
+        <span class="audit-chat-repo-pill">${escapeHtml(displayRepo || auditLabel('AI Chat', 'AI チャット'))}</span>
+        ${context && context.path ? `<code style="font-size:0.74rem;padding:2px 6px;border-radius:5px;background:rgba(148,163,184,0.14);">${escapeHtml(context.path)}${context.line ? ':' + context.line : ''}</code>` : ''}
+        ${historySelectHtml}
+        <button type="button" id="audit-chat-new" class="table-view-btn" style="font-size:0.76rem;padding:4px 9px;">${auditLabel('+ New', '＋ 新規')}</button>
       </div>
-      <h2>${escapeHtml(displayTitle)}</h2>
-      <p style="font-size: 0.88rem; margin-top: 2px;">
-        ${auditLabel('Audit chat', '監査チャット')}${displayRepo ? ` · <strong>${escapeHtml(displayRepo)}</strong>` : ''}
-      </p>
-      ${historyOptionsHtml}
-      ${aiStatusHtml}
+      <button type="button" id="audit-chat-back" class="table-view-btn" style="font-size:0.78rem;padding:4px 10px;">${auditLabel('← Audit', '← 監査結果')}</button>
     </header>
-    ${!selectedDiagram || selectedDiagram.is_root ? `<p>${auditLabel('Select a saved repository from the sidebar.', 'サイドバーから保存済みのリポジトリを選択してください。')}</p>` : `
-    ${context ? `<code>${escapeHtml(context.path)}:${context.line}</code>` : `
-      <div class="audit-chat-location">
-        <label>${auditLabel('File path (optional)', 'ファイルパス（任意）')}
-          <input name="path" placeholder="src/main.py" maxlength="500" value="${escapeHtml(state.path)}"></label>
-        <label>${auditLabel('Audit line', '監査時の行番号')}
-          <input name="line" type="number" min="1" max="1000000" value="${escapeHtml(state.line)}"></label>
-      </div>`}
-    <div class="audit-chat-messages" aria-live="polite">
-      ${(state.greetingHtml || state.greeting) ? `<article>
-        <strong>${escapeHtml(state.selectedProvider === 'copilot' ? 'GitHub Copilot' : 'AI')}</strong>
-        ${state.greetingHtml ? `<div style="margin-top: 6px;">${state.greetingHtml}</div>` : `<p style="white-space: pre-line;">${escapeHtml(state.greeting)}</p>`}
-      </article>` : ''}
-      ${state.latest ? `<details><summary>${auditLabel('Latest GitHub evidence', '最新のGitHub確認結果')}</summary>
-        ${state.latest.path ? sourceComparison(state.latest) : repositoryFacts(state.latest)}</details>` : ''}
-      ${state.messages.map((message, idx) => {
-        const isLastAssistant = message.role === 'assistant' && idx === state.messages.length - 1 && !state.pending;
-        return `<article>
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-          <strong>${message.role === 'user'
-            ? auditLabel('You', 'あなた')
-            : escapeHtml(message.provider ? `AI (${AUDIT_PROVIDER_LABELS[message.provider] || message.provider}${message.model ? ' · ' + message.model : ''})` : 'AI')}</strong>
-          ${isLastAssistant ? `<button type="button" class="table-view-btn" data-audit-regenerate="1" style="font-size: 0.78rem; padding: 2px 8px;">${auditLabel('↻ Regenerate', '↻ 再生成')}</button>` : ''}
-        </div>
-        ${message.role === 'assistant' ? renderChatReferences(message.references) : ''}
-        <p>${escapeHtml(message.text)}</p>
-        ${message.role === 'assistant' ? renderDiffPathChecks(message.diffPathChecks) : ''}
-      </article>`;
-      }).join('')}
-      ${state.pending ? `<p class="audit-chat-pending" role="status"><span class="audit-spinner" aria-hidden="true"></span><span>${auditLabel('Checking GitHub and waiting for AI…', 'GitHub を確認し、AI の回答を待っています…')}</span></p>` : ''}
-      ${state.error ? `<p class="audit-chat-error" role="alert">${escapeHtml(state.error)}</p>` : ''}
-    </div>
-    ${!state.pending ? `<div class="issue-actions" style="margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
-      <button type="button" class="table-view-btn" data-audit-slash="/explain">${auditLabel('💡 /explain — Explain risk', '💡 /explain — 影響を解説')}</button>
-      <button type="button" class="table-view-btn" data-audit-slash="/fix">${auditLabel('🔧 /fix — Suggest fix', '🔧 /fix — 修正案を提示')}</button>
-      <button type="button" class="table-view-btn" data-audit-slash="/tests">${auditLabel('🧪 /tests — Regression tests', '🧪 /tests — 回帰テスト案')}</button>
-    </div>` : ''}
-    ${state.suggestions && state.suggestions.length && !state.pending ? `<div class="issue-actions" style="margin-bottom: 8px; flex-wrap: wrap;">
-      ${state.suggestions.map((item, idx) => `<button type="button" class="table-view-btn" data-audit-suggestion="${idx}">${escapeHtml(item.label)}</button>`).join('')}
-    </div>` : ''}
-    <form>
-      <label for="audit-question">${auditLabel('Question (supports /explain, /fix, /tests)', '質問（/explain, /fix, /tests 対応）')}</label>
-      <textarea id="audit-question" required maxlength="4000" rows="3" placeholder="${auditLabel('What changed since the audit?', '監査時点から何が変わった？')}">${escapeHtml(state.draft)}</textarea>
-      <div class="issue-actions">
-        <button class="table-view-btn workspace-primary" type="submit" ${state.pending ? 'disabled' : ''}>
-          ${state.pending
-            ? `<span class="audit-spinner" aria-hidden="true"></span> ${auditLabel('Waiting for AI…', 'AI 応答待ち…')}`
-            : auditLabel('Check GitHub and ask AI', 'GitHubを確認してAIに聞く')}
-        </button>
+    ${!selectedDiagram || selectedDiagram.is_root
+      ? `<div class="audit-chat-scroll"><div class="audit-chat-messages"><div class="chat-welcome-card">${auditLabel('Select a repository from the left sidebar to start chatting.', '左サイドバーからリポジトリを選択するとチャットを開始できます。')}</div></div></div>`
+      : `
+    <div class="audit-chat-scroll">
+      <div class="audit-chat-messages" aria-live="polite">
+        ${(state.greetingHtml || state.greeting) ? `<div class="chat-welcome-card">
+          ${state.greetingHtml ? `<div>${state.greetingHtml}</div>` : `<div style="white-space: pre-line;">${escapeHtml(state.greeting)}</div>`}
+        </div>` : ''}
+        ${state.latest ? `<details style="font-size:0.8rem;color:var(--workspace-muted);"><summary style="cursor:pointer;">${auditLabel('Latest GitHub evidence', '最新の GitHub 確認結果')}</summary>
+          <div style="margin-top:6px;">${state.latest.path ? sourceComparison(state.latest) : repositoryFacts(state.latest, selectedDiagram)}</div></details>` : ''}
+        ${state.messages.map((message, idx) => {
+          if (message.role === 'user') {
+            return `<div class="chat-msg-user">${escapeHtml(message.text)}</div>`;
+          }
+          const isLastAssistant = idx === state.messages.length - 1 && !state.pending;
+          const aiLabel = message.provider
+            ? `${AUDIT_PROVIDER_LABELS[message.provider] || message.provider}${message.model ? ' · ' + message.model : ''}`
+            : 'AI';
+          return `<div class="chat-msg-ai">
+            <div class="chat-msg-ai-head">
+              <span class="chat-msg-ai-badge">✨ ${escapeHtml(aiLabel)}</span>
+              ${isLastAssistant ? `<button type="button" class="table-view-btn" data-audit-regenerate="1" style="font-size: 0.74rem; padding: 2px 8px;">${auditLabel('↻ Regenerate', '↻ 再生成')}</button>` : ''}
+            </div>
+            ${renderChatReferences(message.references)}
+            <div class="chat-msg-ai-body">${escapeHtml(message.text)}</div>
+            ${renderDiffPathChecks(message.diffPathChecks)}
+          </div>`;
+        }).join('')}
+        ${state.pending ? `<div class="audit-chat-pending" role="status"><span class="audit-spinner" aria-hidden="true"></span><span>${auditLabel('Thinking…', 'AI が回答を生成中…')}</span></div>` : ''}
+        ${state.error ? `<div class="audit-chat-error" role="alert">${escapeHtml(state.error)}</div>` : ''}
       </div>
-      <p class="audit-note">${auditLabel('Your question, recent conversation and evidence metadata are sent to the configured AI provider.', '質問・直近の会話・監査の比較結果を設定済みAIに送ります。')}</p>
-    </form>`}
-  </div>`;
+    </div>
+    <form class="audit-chat-composer-wrap">
+      <div class="audit-chat-composer">
+        <textarea id="audit-question" required maxlength="4000" rows="2" placeholder="${auditLabel('Ask about this repository or its findings… (Enter to send, Shift+Enter for newline)', 'このリポジトリや指摘について質問…（Enter で送信 / Shift+Enter で改行）')}">${escapeHtml(state.draft)}</textarea>
+        <div class="audit-chat-composer-bar">
+          ${modelPickerHtml}
+          <button class="audit-chat-send-btn" type="submit" ${state.pending || modelOptions.length === 0 ? 'disabled' : ''}>
+            ${state.pending
+              ? `<span class="audit-spinner" aria-hidden="true"></span> ${auditLabel('Sending…', '送信中…')}`
+              : auditLabel('Send ↑', '送信 ↑')}
+          </button>
+        </div>
+      </div>
+    </form>`}`;
   const backBtn = section.querySelector('#audit-chat-back');
   if (backBtn) {
     backBtn.onclick = () => jumpToAuditRepoPage(state.repository, state.context?.title || '');
@@ -1233,18 +1282,13 @@ function renderAuditChat() {
     event.preventDefault();
     sendAuditQuestion(state);
   };
-  const messages = section.querySelector('.audit-chat-messages');
-  messages.scrollTop = messages.scrollHeight;
+  const scrollEl = section.querySelector('.audit-chat-scroll');
+  if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
 }
 
 async function sendAuditQuestion(state) {
   if (state.pending || !state.draft.trim()) return;
-  const location = state.context || (state.path.trim() ? {path: state.path.trim(), line: Number(state.line)} : {});
-  if (location.path && (!Number.isInteger(location.line) || location.line < 1 || location.line > 1000000)) {
-    state.error = auditLabel('Enter the audited line number.', '監査時の行番号を入力してください。');
-    renderAuditChat();
-    return;
-  }
+  const location = state.context || {};
   const history = state.messages.slice(-6).map(({role, text}) => ({role, text: text.slice(0, 4000)}));
   const question = state.draft.trim();
   state.pending = true;
@@ -1265,9 +1309,17 @@ async function sendAuditQuestion(state) {
           }
         }
       : {};
+    let reqProvider = state.selectedProvider || '';
+    let reqModel = '';
+    if (reqProvider.includes('::')) {
+      const parts = reqProvider.split('::');
+      reqProvider = parts[0];
+      reqModel = parts.slice(1).join('::');
+    }
     const response = await auditRequest('chat', {
       repository: state.repository, ...location, ...findingPayload, question, history, language: currentLang,
-      ...(state.selectedProvider ? {provider: state.selectedProvider} : {})
+      ...(reqProvider ? {provider: reqProvider} : {}),
+      ...(reqModel ? {model: reqModel} : {})
     });
     state.latest = response;
     if (response.answer) {

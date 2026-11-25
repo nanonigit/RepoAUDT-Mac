@@ -592,8 +592,11 @@ def chat_answer(payload, evidence, repo=None, root=None):
         raise EvidenceError("Invalid conversation history.")
     settings = load_settings()
     requested_provider = str(payload.get("provider") or "").strip()
-    if requested_provider in ("openai", "claude", "gemini", "groq", "local", "copilot"):
+    requested_model = str(payload.get("model") or "").strip()
+    if requested_provider in ("gemini_cli", "openai", "claude", "gemini", "groq", "local", "copilot"):
         settings["active_provider"] = requested_provider
+        if requested_model:
+            settings.setdefault("models", {})[requested_provider] = requested_model
     chosen = choose_active_llm(settings)
     if not chosen:
         return {

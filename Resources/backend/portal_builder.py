@@ -7038,13 +7038,22 @@ def build_portal_html(data, is_shareable=False):
             ${repoOptionsHtml
               ? `<select id="hero-repo-select" aria-label="${en ? 'Select repository' : 'リポジトリを切り替え'}" onchange="selectDiagram(Number(this.value))" style="font-size:0.88rem;font-weight:400;padding:4px 10px;border-radius:8px;border:1px solid var(--workspace-border);background:var(--workspace-surface);color:var(--workspace-text);cursor:pointer;max-width:360px;">${repoOptionsHtml}</select>`
               : `<h2 class="hero-repo-title" style="margin:0;">${escapeHtml(item.repo)}</h2>`}
-            <button type="button" id="toggle-hero-meta-btn" class="table-view-btn" style="font-size:0.72rem;padding:2px 8px;" onclick="(function(btn){const b=document.getElementById('hero-meta-body');if(!b)return;const open=b.style.display==='none';b.style.display=open?'block':'none';btn.textContent=open?'${en ? '▼ Hide Details' : '▼ 詳細を畳む'}':'${en ? '▶ Commit & PR Details' : '▶ コミット・PR詳細'}';if(typeof safeStorageSet==='function')safeStorageSet('repoaudt_hero_meta_open',open?'1':'0');})(this)">${heroMetaOpen ? (en ? '▼ Hide Details' : '▼ 詳細を畳む') : (en ? '▶ Commit & PR Details' : '▶ コミット・PR詳細')}</button>
+            <button type="button" id="toggle-hero-meta-btn" class="table-view-btn" style="font-size:0.72rem;padding:2px 8px;" onclick="(function(btn){const b=document.getElementById('hero-meta-body');if(!b)return;const open=b.style.display==='none';b.style.display=open?'grid':'none';btn.textContent=open?'${en ? '▼ Hide Details' : '▼ 詳細を畳む'}':'${en ? '▶ Commit & PR Details' : '▶ コミット・PR詳細'}';if(typeof safeStorageSet==='function')safeStorageSet('repoaudt_hero_meta_open',open?'1':'0');})(this)">${heroMetaOpen ? (en ? '▼ Hide Details' : '▼ 詳細を畳む') : (en ? '▶ Commit & PR Details' : '▶ コミット・PR詳細')}</button>
             ${updatedStampHtml}
           </div>
-          <div id="hero-meta-body" style="display:${heroMetaOpen ? 'block' : 'none'};margin-top:6px;">
-            <div class="hero-repo-desc">${escapeHtml(localizeBackendText(item.description || ''))}</div>
-            <div class="workspace-commit">${en ? 'Saved commit' : '解析対象コミット'} <code>${escapeHtml(item.commit_hash || (en ? 'Not recorded' : '未記録'))}</code></div>
-            <div class="workspace-commit" data-audit-repository-status></div>
+          <div id="hero-meta-body" style="display:${heroMetaOpen ? 'grid' : 'none'};gap:8px;margin-top:8px;padding:10px 14px;border-radius:10px;border:1px solid var(--workspace-border);background:var(--workspace-surface);max-width:780px;">
+            ${(() => {
+              const rawDesc = localizeBackendText(item.description || '').trim();
+              const isBoilerplate = !rawDesc || /自動解析アーキテクチャ構成図|Architecture, Sequence Flows & Audit Report/.test(rawDesc);
+              return isBoilerplate ? '' : `<div class="hero-repo-desc" style="font-size:0.8rem;color:var(--workspace-text);line-height:1.45;">${escapeHtml(rawDesc)}</div>`;
+            })()}
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:0.76rem;">
+              <span style="color:var(--workspace-muted);min-width:92px;">${en ? 'Analyzed commit' : '解析済コミット'}</span>
+              <code title="${escapeHtml(item.commit_hash || '')}" style="padding:2px 7px;border-radius:6px;background:rgba(148,163,184,0.14);color:var(--workspace-text);font-size:0.74rem;">${escapeHtml(item.commit_hash ? String(item.commit_hash).slice(0, 7) : (en ? 'Not recorded' : '未記録'))}</code>
+              ${commitAtText ? `<span style="color:var(--workspace-muted);font-variant-numeric:tabular-nums;">${escapeHtml(commitAtText)}</span>` : ''}
+              ${item.commit_subject ? `<span style="color:var(--workspace-text);opacity:0.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:360px;" title="${escapeHtml(item.commit_subject)}">${escapeHtml(item.commit_subject)}</span>` : ''}
+            </div>
+            <div data-audit-repository-status style="font-size:0.76rem;"></div>
             ${currentViewMode === 'coderabbit' ? pullRequestControl(item) : ''}
           </div>
         </div>
@@ -7176,6 +7185,12 @@ def build_portal_html(data, is_shareable=False):
       safeDestroyPanZoom();
 
       diagramWrapper.innerHTML = '';
+      if (!item.diagram || /No runtime modules detected/i.test(item.diagram)) {
+        diagramWrapper.innerHTML = `<div style="color: #94a3b8; padding: 40px; text-align: center; font-size: 0.96rem; display: grid; gap: 8px; justify-items: center;">
+          <div>${currentLang === 'en' ? 'No runtime modules were detected by static analysis (documentation, schema, or configuration repository).' : '静的解析で構成図（ランタイムモジュール）を特定できませんでした（ドキュメント・設計資料・設定中心のリポジトリです）。'}</div>
+        </div>`;
+        return;
+      }
       const myRenderToken = ++renderTokenCounter;
       const uniqueId = 'svg-render-' + Date.now() + '-' + myRenderToken;
 

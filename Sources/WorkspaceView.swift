@@ -440,18 +440,11 @@ struct MainContentView: View {
                         ForEach(repositories) { repo in
                             let isActiveRepo = showingRepoWorkspace && coordinator.selectedRepositoryID == repo.id
                             HStack(spacing: 6) {
-                                if isActiveRepo {
-                                    RoundedRectangle(cornerRadius: 2)
-                                        .fill(Color.accentColor)
-                                        .frame(width: 3, height: 14)
-                                }
                                 Label {
                                     Text(repo.name)
                                         .fontWeight(isActiveRepo ? .semibold : .regular)
-                                        .foregroundStyle(isActiveRepo ? Color.accentColor : Color.primary)
                                 } icon: {
                                     Image(systemName: isActiveRepo ? "folder.fill" : "folder")
-                                        .foregroundStyle(isActiveRepo ? Color.accentColor : Color.secondary)
                                 }
                                 .lineLimit(1)
                                 Spacer(minLength: 4)
@@ -492,14 +485,6 @@ struct MainContentView: View {
                                         .background(sevColor.opacity(0.18), in: Capsule())
                                 }
                             }
-                            .padding(.vertical, isActiveRepo ? 2 : 0)
-                            .padding(.horizontal, isActiveRepo ? 4 : 0)
-                            .background(
-                                isActiveRepo
-                                    ? Color.accentColor.opacity(0.14)
-                                    : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 6)
-                            )
                             .help({
                                 if let aspm = aspmRepos.first(where: { $0.id == repo.id || $0.repo == repo.name }),
                                    (aspm.p0 + aspm.p1 + aspm.p2 + aspm.p3) > 0 {
