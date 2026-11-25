@@ -173,6 +173,8 @@ struct MainContentView: View {
     @State private var addingRepo = false
     @State private var addRepoError: String?
     @State private var crossCheckTarget: DrilldownFindingItem?
+    @State private var riskGuideGroupID: String?
+    @State private var riskGuideItemID: String?
     @State private var crossCheckLoading = false
     @State private var crossCheckResult: CrossCheckResponse?
     @State private var crossCheckError: String?
@@ -777,7 +779,7 @@ struct MainContentView: View {
                                                 expandedDrilldownGroups.insert(group.id)
                                             }
                                         } label: {
-                                            HStack(spacing: 8) {
+                                            HStack(spacing: 6) {
                                                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                                                     .font(.caption.weight(.semibold))
                                                     .foregroundStyle(.secondary)
@@ -788,13 +790,35 @@ struct MainContentView: View {
                                                     .padding(.vertical, 2)
                                                     .background(group.tierColor.opacity(0.18), in: Capsule())
                                                     .foregroundStyle(group.tierColor)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                        Button {
+                                            riskGuideGroupID = (riskGuideGroupID == group.id) ? nil : group.id
+                                        } label: {
+                                            HStack(spacing: 5) {
                                                 Text(group.title)
                                                     .font(.subheadline.weight(.semibold))
                                                     .lineLimit(2)
                                                     .multilineTextAlignment(.leading)
+                                                Image(systemName: "info.circle")
+                                                    .font(.caption)
+                                                    .foregroundStyle(SemanticColors.role("infoText"))
                                             }
                                         }
                                         .buttonStyle(.plain)
+                                        .help(english ? "Click to see what this risk means and how to fix it" : "クリックしてこの指摘の危険性・影響・修正方法を表示")
+                                        .popover(
+                                            isPresented: Binding(
+                                                get: { riskGuideGroupID == group.id },
+                                                set: { if !$0 && riskGuideGroupID == group.id { riskGuideGroupID = nil } }
+                                            ),
+                                            arrowEdge: .bottom
+                                        ) {
+                                            if let rep = group.items.first {
+                                                riskGuidePopoverView(for: rep, itemCount: group.items.count, repoCount: group.repoCount)
+                                            }
+                                        }
                                         Spacer()
                                         if !reqMatches.isEmpty {
                                             let badgeColor: Color = maxElapsed >= 3 ? SemanticColors.role("warningText") : SemanticColors.role("infoText")
@@ -980,9 +1004,30 @@ struct MainContentView: View {
                                 .foregroundStyle(item.tierColor)
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack(spacing: 6) {
-                                    Text(item.title)
-                                        .font(.subheadline.weight(.semibold))
-                                        .lineLimit(2)
+                                    Button {
+                                        riskGuideItemID = (riskGuideItemID == item.id) ? nil : item.id
+                                    } label: {
+                                        HStack(spacing: 5) {
+                                            Text(item.title)
+                                                .font(.subheadline.weight(.semibold))
+                                                .lineLimit(2)
+                                                .multilineTextAlignment(.leading)
+                                            Image(systemName: "info.circle")
+                                                .font(.caption)
+                                                .foregroundStyle(SemanticColors.role("infoText"))
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help(english ? "Click to see what this risk means and how to fix it" : "クリックしてこの指摘の危険性・影響・修正方法を表示")
+                                    .popover(
+                                        isPresented: Binding(
+                                            get: { riskGuideItemID == item.id },
+                                            set: { if !$0 && riskGuideItemID == item.id { riskGuideItemID = nil } }
+                                        ),
+                                        arrowEdge: .bottom
+                                    ) {
+                                        riskGuidePopoverView(for: item, itemCount: 1, repoCount: 1)
+                                    }
                                     if let rec, isReq {
                                         Text(rec.elapsedDays >= 1 ? (english ? "Requested \(rec.elapsedDays)d" : "依頼済 \(rec.elapsedDays)日") : (english ? "Requested" : "依頼済"))
                                             .font(.caption2.bold())
@@ -4476,6 +4521,186 @@ struct MainContentView: View {
                 await MainActor.run { crossCheckError = error.localizedDescription }
             }
         }
+    }
+
+    private func plainRiskSummary(for item: DrilldownFindingItem) -> (impact: String, action: String) {
+        let combined = "\(item.title) \(item.reason) \(item.description)".lowercased()
+        if combined.contains("インジェクション") && (combined.contains("actions") || combined.contains("head_ref") || combined.contains("cwe-78") || combined.contains("shell")) {
+            return (
+                english
+                    ? "An attacker can craft a branch name or PR title containing shell metacharacters to execute arbitrary commands on the CI runner, potentially stealing repository tokens or compromising self-hosted infrastructure."
+                    : "攻撃者がブランチ名や PR タイトルにシェル特殊文字（$(...) など）を含めることで、CI ランナー上で任意のコマンドを実行でき、トークン窃取やセルフホスト環境の乗っ取りにつながる危険があります。",
+                english
+                    ? "Pass untrusted GitHub contexts via step `env:` variables and quote them (e.g. `\"$HEAD_REF\"`) instead of interpolating `${{ ... }}` directly inside `run:`."
+                    : "`run:` 内で `${{ github.head_ref }}` 等を直接展開せず、ステップの `env:` に定義して `\"$HEAD_REF\"` のように環境変数経由で参照してください。"
+            )
+        }
+        if combined.contains("シークレット") || combined.contains("gitleaks") || combined.contains("private") && combined.contains("key") || combined.contains(".env") || combined.contains("exposed credential") {
+            return (
+                english
+                    ? "Exposed API keys, passwords, or private keys in Git history can be used by unauthorized parties to access cloud resources, exfiltrate data, or incur fraudulent charges."
+                    : "API キー・パスワード・秘密鍵がソースコードや Git 履歴に残っていると、第三者による不正アクセス・データ漏洩・高額課金につながる危険があります。",
+                english
+                    ? "Revoke and rotate the credential on the provider side first, then move it to environment variables or a secret manager and remove it from Git."
+                    : "まずプロバイダ側で該当キーを即時無効化・再発行し、環境変数またはシークレットマネージャーへ移行したうえでリポジトリから削除してください。"
+            )
+        }
+        if combined.contains("middleware") || combined.contains("bypass") || combined.contains("認可バイパス") || combined.contains("cwe-285") || combined.contains("cwe-863") {
+            return (
+                english
+                    ? "Attackers may bypass authentication or authorization middleware using crafted requests/headers and reach protected admin pages or private APIs without valid credentials."
+                    : "細工されたリクエストやヘッダーにより認証・認可チェック（Middleware 等）をすり抜け、ログインなしで管理画面や保護 API へ不正アクセスされる危険があります。",
+                english
+                    ? "Upgrade the affected package to the patched version and enforce server-side authorization checks in API/data layers as defense in depth."
+                    : "対象パッケージを修正済みバージョンへ更新し、API 側でもサーバーサイドの認証・認可チェックを確実に実施してください。"
+            )
+        }
+        if combined.contains("self-hosted") || combined.contains("セルフホスト") {
+            return (
+                english
+                    ? "Running untrusted pull request code on a shared self-hosted runner allows malicious PRs to persist on the host, steal secrets, or move laterally into internal networks."
+                    : "未検証の PR コードを共有セルフホストランナー上で実行すると、ランナーホストの乗っ取り・シークレット窃取・社内ネットワークへの横展開につながる危険があります。",
+                english
+                    ? "Move offline/test jobs to GitHub-hosted ephemeral runners (`ubuntu-latest`) or isolate self-hosted runners as ephemeral containers."
+                    : "オフラインテスト等は GitHub ホストの使い捨てランナー（`ubuntu-latest`）へ移行するか、エフェメラル構成で隔離してください。"
+            )
+        }
+        if combined.contains("xss") || combined.contains("cross-site scripting") || combined.contains("cwe-79") {
+            return (
+                english
+                    ? "Specially crafted HTML/content can execute arbitrary JavaScript in an admin's or user's browser, enabling session hijacking or unauthorized actions."
+                    : "細工された HTML や入力を表示したユーザー／管理者のブラウザ上で任意の JavaScript が実行され、セッション乗っ取りや不正操作につながる危険があります。",
+                english
+                    ? "Upgrade the vulnerable library and restrict unsafe HTML embedding/sanitization settings."
+                    : "対象ライブラリを修正済みバージョンへ更新し、安全でない HTML 埋め込み設定を制限してください。"
+            )
+        }
+        if combined.contains("ssrf") || combined.contains("cwe-918") {
+            return (
+                english
+                    ? "Attackers can trick the server into sending requests to internal services or cloud metadata endpoints (169.254.169.254), exposing internal data or credentials."
+                    : "サーバーから社内ネットワークやクラウドメタデータ（認証情報等）へ意図しないリクエストを送信させられ、内部情報や権限が漏洩する危険があります。",
+                english
+                    ? "Update the affected HTTP/IP library and validate outbound target URLs against an allowlist."
+                    : "対象パッケージを更新し、外部リクエスト先 URL を許可リストで検証してください。"
+            )
+        }
+        if combined.contains("prototype pollution") || combined.contains("cwe-1321") {
+            return (
+                english
+                    ? "Attacker-controlled input can alter JavaScript object prototypes, potentially causing proxy hijacking (MITM), validation bypass, or denial of service."
+                    : "外部入力によって JavaScript オブジェクトの基底挙動が書き換えられ、通信乗っ取り（MITM）・入力検証回避・アプリ停止につながる危険があります。",
+                english
+                    ? "Upgrade the dependency to the patched release."
+                    : "依存パッケージを修正済みバージョンへアップデートしてください。"
+            )
+        }
+        if combined.contains("remote code execution") || combined.contains("rce") || combined.contains("任意コード実行") || combined.contains("cwe-94") {
+            return (
+                english
+                    ? "Remote attackers may execute arbitrary code on the application server, risking full system compromise and data theft."
+                    : "外部からの細工された入力でサーバー上の任意コードが実行され、システム全体の乗っ取りやデータ漏洩につながる重大な危険があります。",
+                english
+                    ? "Upgrade the affected package immediately and verify whether the vulnerable feature/endpoint is exposed."
+                    : "対象パッケージを優先的に修正版へ更新し、該当機能やエンドポイントが外部公開されていないか確認してください。"
+            )
+        }
+        if combined.contains("sql injection") || combined.contains("cwe-89") {
+            return (
+                english
+                    ? "Crafted inputs could manipulate database queries to read, modify, or delete sensitive records."
+                    : "入力値に不正な SQL を紛れ込ませることで、データベースの内容を不正閲覧・改ざん・削除される危険があります。",
+                english
+                    ? "Update the library and use parameterized queries / strict input validation."
+                    : "ライブラリを更新し、パラメータ化クエリと厳格な入力検証を適用してください。"
+            )
+        }
+        let fallbackImpact = item.description.isEmpty
+            ? (item.reason.isEmpty ? (english ? "Potential security or reliability risk detected by static/AI audit." : "静的解析または AI 監査で検出されたセキュリティ・品質リスクです。") : item.reason)
+            : String(item.description.prefix(260))
+        let fallbackAction = item.fixCommand.isEmpty
+            ? (english ? "Inspect the affected file and apply the recommended remediation." : "対象ファイルを確認し、推奨される修正を適用してください。")
+            : item.fixCommand
+        return (fallbackImpact, fallbackAction)
+    }
+
+    @ViewBuilder
+    private func riskGuidePopoverView(for item: DrilldownFindingItem, itemCount: Int, repoCount: Int) -> some View {
+        let summary = plainRiskSummary(for: item)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Text(item.tier)
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(item.tierColor.opacity(0.18), in: Capsule())
+                    .foregroundStyle(item.tierColor)
+                Text(english ? "Risk & Impact Guide" : "この指摘の危険性・影響")
+                    .font(.headline)
+                Spacer()
+                Text(english ? "\(itemCount) items · \(repoCount) repos" : "\(itemCount)件 · \(repoCount)リポジトリ")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            Text(item.title)
+                .font(.subheadline.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 4) {
+                Label(english ? "What could go wrong?" : "どういう危険があるか", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.bold())
+                    .foregroundStyle(item.tierColor)
+                Text(summary.impact)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !item.reason.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(english ? "Why this priority?" : "優先度の根拠")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    Text(item.reason)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Label(english ? "Recommended fix" : "推奨される対処方法", systemImage: "wrench.and.screwdriver.fill")
+                    .font(.caption.bold())
+                    .foregroundStyle(SemanticColors.role("infoText"))
+                Text(summary.action)
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !item.fixCommand.isEmpty {
+                    Text(item.fixCommand)
+                        .font(.caption2.monospaced())
+                        .padding(6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(nsColor: .textBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                        .textSelection(.enabled)
+                }
+            }
+
+            if !item.description.isEmpty && item.description != summary.impact {
+                Divider()
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(english ? "Technical details" : "技術詳細")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    Text(String(item.description.prefix(420)))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 440)
     }
 
     @ViewBuilder
