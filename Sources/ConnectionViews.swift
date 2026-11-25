@@ -40,6 +40,7 @@ final class ConnectionStore: ObservableObject {
     @Published var geminiCliAuthMethod = ""
     @Published var geminiCliModels: [CliModelOption] = []
     @Published var loadingGeminiModels = false
+    private var settingsLoaded = false
     private var settings: [String: Any] = [:]
     var port = 18765
 
@@ -158,6 +159,7 @@ final class ConnectionStore: ObservableObject {
             self.secondaryModel = self.settings["secondary_model"] as? String ?? ""
             self.localURL = self.settings["local_base_url"] as? String ?? self.localURL
             self.selectProvider()
+            self.settingsLoaded = true
             await self.refreshCopilotStatus()
             await self.refreshGeminiCliStatus()
         }
@@ -240,6 +242,28 @@ final class ConnectionStore: ObservableObject {
                     ? "GitHub Copilot SDK\(verLabel) is up to date."
                     : "GitHub Copilot SDK\(verLabel) は最新の状態です。"
             }
+        }
+    }
+
+    func autoSaveSelections() {
+        guard settingsLoaded, !busy else { return }
+        let prov = self.provider
+        let mod = self.model
+        let secProv = self.secondaryProvider
+        let secMod = self.secondaryModel
+        Task {
+            do {
+                let body: [String: Any] = [
+                    "active_provider": prov,
+                    "secondary_provider": secProv,
+                    "secondary_model": secMod,
+                    "models": [prov: mod],
+                ]
+                let saved = try await self.request("/api/settings", body: body)
+                if let st = saved["settings"] as? [String: Any] {
+                    self.settings = st
+                }
+            } catch {}
         }
     }
 
@@ -622,6 +646,7 @@ struct AIConnectionView: View {
         .disabled(store.busy)
         .onChange(of: store.provider) { _, next in
             store.selectProvider()
+            store.autoSaveSelections()
             if next == "copilot" {
                 Task { await store.refreshCopilotStatus() }
             } else if next == "gemini_cli" {
@@ -630,6 +655,15 @@ struct AIConnectionView: View {
                     await store.refreshGeminiCliModels(force: false)
                 }
             }
+        }
+        .onChange(of: store.model) { _, _ in
+            store.autoSaveSelections()
+        }
+        .onChange(of: store.secondaryProvider) { _, _ in
+            store.autoSaveSelections()
+        }
+        .onChange(of: store.secondaryModel) { _, _ in
+            store.autoSaveSelections()
         }
         .task {
             store.port = port
