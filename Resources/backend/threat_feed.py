@@ -158,15 +158,22 @@ def parse_ghsa_critical_payload(raw_json: str, *, limit: int = 30) -> List[Dict[
 
 
 def _detect_stacks_for_threat(item: Dict[str, Any]) -> Set[str]:
-    hay = f"{item.get('product', '')} {item.get('title', '')} {item.get('summary', '')}".lower()
+    """Match stack keywords strictly against product/vendor (never free-text prose).
+
+    Prevents unrelated packages (e.g. 'ruflo' mentioning 'Docker Compose' in its
+    description) from falsely matching repositories that merely contain a Dockerfile.
+    """
+    product_hay = f"{item.get('product', '')} {item.get('vendor', '')}".strip().lower()
+    if not product_hay:
+        product_hay = str(item.get("title") or "").lower()
     matched: Set[str] = set()
     for stack, keywords in STACK_KEYWORDS.items():
         for kw in keywords:
             if len(kw) <= 3:
-                if re.search(rf"(?<![a-z0-9]){re.escape(kw)}(?![a-z0-9])", hay):
+                if re.search(rf"(?<![a-z0-9]){re.escape(kw)}(?![a-z0-9])", product_hay):
                     matched.add(stack)
                     break
-            elif kw in hay:
+            elif kw in product_hay:
                 matched.add(stack)
                 break
     return matched

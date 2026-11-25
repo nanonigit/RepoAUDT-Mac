@@ -1691,7 +1691,9 @@ struct MainContentView: View {
                     }
                 }
             }
-            .padding(32)
+            .padding(.top, 14)
+            .padding(.horizontal, 28)
+            .padding(.bottom, 28)
             .frame(maxWidth: 1100, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
@@ -2238,7 +2240,9 @@ struct MainContentView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .padding(32)
+            .padding(.top, 14)
+            .padding(.horizontal, 28)
+            .padding(.bottom, 28)
             .frame(maxWidth: 1100, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
