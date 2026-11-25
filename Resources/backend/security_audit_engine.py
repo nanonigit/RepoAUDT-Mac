@@ -56,7 +56,9 @@ SETTINGS_FILE = APP_SUPPORT_DIR / "settings.json"
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "local_base_url": "http://127.0.0.1:11434/v1",
-    "active_provider": "auto",  # auto | openai | claude | gemini | gemini_cli | groq | local | copilot
+    "active_provider": "auto",  # none | auto | openai | claude | gemini | gemini_cli | groq | local | copilot
+    "secondary_provider": "none",  # none | openai | claude | gemini | gemini_cli | groq | local | copilot
+    "secondary_model": "",
     "keys": {
         "local": "",
         "openai": "",
@@ -146,8 +148,14 @@ def save_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
     current = load_settings()
     if "active_provider" in payload:
         prov_val = str(payload["active_provider"]).strip()
-        if prov_val in ("auto", "openai", "claude", "gemini", "gemini_cli", "groq", "local", "copilot"):
+        if prov_val in ("none", "auto", "openai", "claude", "gemini", "gemini_cli", "groq", "local", "copilot"):
             current["active_provider"] = prov_val
+    if "secondary_provider" in payload:
+        sec_val = str(payload["secondary_provider"]).strip()
+        if sec_val in ("none", "openai", "claude", "gemini", "gemini_cli", "groq", "local", "copilot"):
+            current["secondary_provider"] = sec_val
+    if "secondary_model" in payload:
+        current["secondary_model"] = str(payload.get("secondary_model") or "").strip()[:120]
     if "local_base_url" in payload:
         current["local_base_url"] = validate_endpoint(payload["local_base_url"], local_only=True)
     if isinstance(payload.get("keys"), dict):
@@ -204,6 +212,8 @@ def get_masked_settings(settings: Optional[Dict[str, Any]] = None) -> Dict[str, 
     return {
         "local_base_url": s.get("local_base_url", DEFAULT_SETTINGS["local_base_url"]),
         "active_provider": s.get("active_provider", "auto"),
+        "secondary_provider": s.get("secondary_provider", "none"),
+        "secondary_model": s.get("secondary_model", ""),
         "keys_masked": masked_keys,
         "configured": configured_status,
         "models": s.get("models", DEFAULT_SETTINGS["models"]),
@@ -1601,6 +1611,8 @@ def choose_active_llm(settings: Dict[str, Any]) -> Optional[Tuple[str, str, str]
         return None
 
     pref = settings.get("active_provider", "auto")
+    if pref == "none":
+        return None
     keys = settings.get("keys", {})
     models = settings.get("models", DEFAULT_SETTINGS["models"])
 
@@ -1628,6 +1640,197 @@ def choose_active_llm(settings: Dict[str, Any]) -> Optional[Tuple[str, str, str]
         if k and len(k) >= 8:
             return prov, k, models.get(prov, DEFAULT_SETTINGS["models"][prov])
     return None
+
+
+def choose_secondary_llm(settings: Dict[str, Any]) -> Optional[Tuple[str, str, str]]:
+    """Resolve optional second-opinion AI provider for finding cross-checking."""
+    sec = str(settings.get("secondary_provider") or "none").strip()
+    if not sec or sec == "none":
+        return None
+    keys = settings.get("keys", {})
+    models = settings.get("models", DEFAULT_SETTINGS["models"])
+    override_model = str(settings.get("secondary_model") or "").strip()
+    model = override_model or str(models.get(sec) or DEFAULT_SETTINGS["models"].get(sec, "")).strip()
+
+    if sec == "local":
+        return ("local", keys.get("local", ""), model) if model else None
+    if sec == "copilot":
+        token = (keys.get("copilot") or "").strip()
+        if token or copilot_bridge.is_copilot_ready():
+            return ("copilot", token, model or "auto")
+        return None
+    if sec == "gemini_cli":
+        token = (keys.get("gemini_cli") or "").strip()
+        if token or gemini_cli_bridge.is_gemini_cli_ready():
+            return ("gemini_cli", token, model or "auto")
+        return None
+    k = (keys.get(sec) or "").strip()
+    if k and len(k) >= 8:
+        return (sec, k, model)
+    return None
+
+
+_CROSS_CHECK_SYSTEM_PROMPT = """You are a senior application security auditor verifying whether a reported finding is genuinely exploitable in the actual codebase.
+Return ONLY valid JSON with these exact keys:
+{
+  "verdict": "confirmed" | "likely_false_positive" | "needs_review",
+  "confidence": "high" | "medium" | "low",
+  "summary": "Concise 2-3 sentence evidence-based explanation in Japanese",
+  "action": "Concrete next step in Japanese"
+}
+Rules:
+- Never fabricate code or config you did not see.
+- If the code context is insufficient to prove exploitability, use "needs_review".
+- Never output raw secrets or credentials."""
+
+
+def _parse_verdict_json(raw_text: str) -> Dict[str, str]:
+    txt = (raw_text or "").strip()
+    if "```" in txt:
+        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", txt, re.DOTALL)
+        if m:
+            txt = m.group(1)
+    elif "{" in txt and "}" in txt:
+        txt = txt[txt.find("{"):txt.rfind("}") + 1]
+    try:
+        data = json.loads(txt)
+        if isinstance(data, dict):
+            verdict = str(data.get("verdict") or "needs_review").strip().lower()
+            if verdict not in ("confirmed", "likely_false_positive", "needs_review"):
+                verdict = "needs_review"
+            conf = str(data.get("confidence") or "medium").strip().lower()
+            if conf not in ("high", "medium", "low"):
+                conf = "medium"
+            return {
+                "verdict": verdict,
+                "confidence": conf,
+                "summary": str(data.get("summary") or raw_text[:280]).strip(),
+                "action": str(data.get("action") or "").strip(),
+            }
+    except Exception:
+        pass
+    return {
+        "verdict": "needs_review",
+        "confidence": "low",
+        "summary": (raw_text or "").strip()[:300],
+        "action": "",
+    }
+
+
+def cross_check_finding(
+    repo: str,
+    finding: Dict[str, Any],
+    *,
+    code_context: str = "",
+    settings: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Verify a single finding using primary AI and optional second-opinion AI in parallel.
+
+    Works cleanly even when AI is disabled (`active_provider == 'none'`): returns
+    a static-only result without making any external AI call.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    s = settings if isinstance(settings, dict) else load_settings()
+    primary = choose_active_llm(s)
+    secondary = choose_secondary_llm(s)
+
+    if primary is None and secondary is None:
+        return {
+            "ok": True,
+            "mode": "static_only",
+            "consensus": "static_only",
+            "consensus_label": "AI 無効（静的解析のみ）",
+            "primary": None,
+            "secondary": None,
+            "note": "AI 接続が「使用しない（静的解析のみ）」または未設定のため、AI クロスチェックは実行していません。",
+        }
+
+    title = str(finding.get("title") or "")
+    file_loc = str(finding.get("file") or "")
+    tier = str(finding.get("tier") or finding.get("priority_tier") or "")
+    reason = str(finding.get("reason") or finding.get("priority_reason") or "")
+    desc = str(finding.get("description") or finding.get("desc") or "")
+
+    user_prompt = (
+        f"Repository: {repo}\n"
+        f"Priority: {tier}\n"
+        f"Title: {title}\n"
+        f"File: {file_loc}\n"
+        f"Reason: {reason}\n"
+        f"Details: {desc[:800]}\n"
+    )
+    if code_context.strip():
+        user_prompt += f"\nActual redacted code snippet from repository:\n```\n{code_context[:2500]}\n```\n"
+
+    def _run_one(spec: Tuple[str, str, str]) -> Dict[str, Any]:
+        prov, key, mod = spec
+        try:
+            raw = call_llm_provider(prov, key, mod, _CROSS_CHECK_SYSTEM_PROMPT, user_prompt)
+            parsed = _parse_verdict_json(raw)
+            return {
+                "ok": True,
+                "provider": prov,
+                "model": mod or "auto",
+                **parsed,
+            }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "provider": prov,
+                "model": mod or "auto",
+                "verdict": "error",
+                "confidence": "low",
+                "summary": str(exc)[:300],
+                "action": "",
+            }
+
+    prim_res = None
+    sec_res = None
+    if primary and secondary:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f1 = pool.submit(_run_one, primary)
+            f2 = pool.submit(_run_one, secondary)
+            prim_res = f1.result()
+            sec_res = f2.result()
+    elif primary:
+        prim_res = _run_one(primary)
+    elif secondary:
+        sec_res = _run_one(secondary)
+
+    v1 = prim_res.get("verdict") if isinstance(prim_res, dict) and prim_res.get("ok") else None
+    v2 = sec_res.get("verdict") if isinstance(sec_res, dict) and sec_res.get("ok") else None
+
+    if v1 and v2:
+        if v1 == v2 == "confirmed":
+            consensus, label = "agreed_confirmed", "2 AI 一致：実コードで要対応"
+        elif v1 == v2 == "likely_false_positive":
+            consensus, label = "agreed_false_positive", "2 AI 一致：誤検知・影響なし"
+        elif v1 == v2:
+            consensus, label = "agreed_needs_review", "2 AI 一致：要追加確認"
+        else:
+            consensus, label = "disagreed", "意見不一致：目視確認を推奨"
+        mode = "dual_ai"
+    elif v1 or v2:
+        sole = v1 or v2
+        consensus = f"single_{sole}"
+        label = (
+            "単一 AI：実コードで要対応"
+            if sole == "confirmed"
+            else ("単一 AI：誤検知・影響なし" if sole == "likely_false_positive" else "単一 AI：要追加確認")
+        )
+        mode = "single_ai"
+    else:
+        consensus, label, mode = "error", "AI 検証エラー", "error"
+
+    return {
+        "ok": True,
+        "mode": mode,
+        "consensus": consensus,
+        "consensus_label": label,
+        "primary": prim_res,
+        "secondary": sec_res,
+    }
 
 
 def is_openai_reasoning_or_nextgen_model(model: str) -> bool:

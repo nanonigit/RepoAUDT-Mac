@@ -16,6 +16,20 @@ class TestGeminiCliBridge(unittest.TestCase):
         raw = 'warning: something\n{"status": "SUCCESS", "response": "OK ready"}'
         self.assertEqual(gemini_cli_bridge._extract_response_text(raw), "OK ready")
 
+    def test_parse_models_output_strips_spinner_and_parses_columns(self) -> None:
+        raw = (
+            "\r⠋ Fetching available models...\rgemini-4-neon-high             Gemini 4 Neon (High)\n"
+            "claude-sonnet-5-5-medium       Claude Sonnet 5.5 (Medium)\n"
+        )
+        models = gemini_cli_bridge._parse_models_output(raw)
+        self.assertEqual(
+            models,
+            [
+                {"id": "gemini-4-neon-high", "label": "Gemini 4 Neon (High)"},
+                {"id": "claude-sonnet-5-5-medium", "label": "Claude Sonnet 5.5 (Medium)"},
+            ],
+        )
+
     def test_call_agy_invokes_headless_plan_mode(self) -> None:
         fake_proc = mock.Mock(
             returncode=0,

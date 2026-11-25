@@ -2,9 +2,16 @@ import AppKit
 import Foundation
 import SwiftUI
 
+struct CliModelOption: Identifiable, Hashable {
+    let id: String
+    let label: String
+}
+
 @MainActor
 final class ConnectionStore: ObservableObject {
     @Published var provider = "openai"
+    @Published var secondaryProvider = "none"
+    @Published var secondaryModel = ""
     @Published var model = ""
     @Published var key = ""
     @Published var keyStatus = ""
@@ -31,6 +38,8 @@ final class ConnectionStore: ObservableObject {
     @Published var geminiCliPath = ""
     @Published var geminiCliAuthenticated = false
     @Published var geminiCliAuthMethod = ""
+    @Published var geminiCliModels: [CliModelOption] = []
+    @Published var loadingGeminiModels = false
     private var settings: [String: Any] = [:]
     var port = 18765
 
@@ -86,6 +95,8 @@ final class ConnectionStore: ObservableObject {
             self.settings = try await self.request("/api/settings")
             let active = self.settings["active_provider"] as? String ?? "auto"
             self.provider = active == "auto" ? "openai" : active
+            self.secondaryProvider = self.settings["secondary_provider"] as? String ?? "none"
+            self.secondaryModel = self.settings["secondary_model"] as? String ?? ""
             self.localURL = self.settings["local_base_url"] as? String ?? self.localURL
             self.selectProvider()
             await self.refreshCopilotStatus()
@@ -101,6 +112,22 @@ final class ConnectionStore: ObservableObject {
             self.geminiCliPath = status["path"] as? String ?? ""
             self.geminiCliAuthenticated = status["authenticated"] as? Bool ?? false
             self.geminiCliAuthMethod = status["auth_method"] as? String ?? ""
+        } catch {}
+    }
+
+    func refreshGeminiCliModels(force: Bool = false) async {
+        guard !loadingGeminiModels else { return }
+        loadingGeminiModels = true
+        defer { loadingGeminiModels = false }
+        do {
+            let path = force ? "/api/connections/gemini-cli/models?force=1" : "/api/connections/gemini-cli/models"
+            let res = try await self.request(path)
+            let raw = res["models"] as? [[String: Any]] ?? []
+            self.geminiCliModels = raw.compactMap { m in
+                guard let id = m["id"] as? String, !id.isEmpty else { return nil }
+                let label = (m["label"] as? String) ?? id
+                return CliModelOption(id: id, label: label)
+            }
         } catch {}
     }
 
@@ -160,12 +187,20 @@ final class ConnectionStore: ObservableObject {
     func saveAI(test: Bool, english: Bool) {
         run {
             let body: [String: Any] = ["active_provider": self.provider,
+                                       "secondary_provider": self.secondaryProvider,
+                                       "secondary_model": self.secondaryModel,
                                        "models": [self.provider: self.model],
                                        "keys": [self.provider: self.key],
                                        "local_base_url": self.localURL]
             let saved = try await self.request("/api/settings", body: body)
             self.settings = saved["settings"] as? [String: Any] ?? self.settings
             self.selectProvider()
+            if self.provider == "none" {
+                self.feedback = english
+                    ? "Saved. AI is disabled (static scanners + OSV + threat feed only)."
+                    : "保存しました。AI を使わず静的スキャナ＋OSV＋脅威フィードのみで動作します。"
+                return
+            }
             if test {
                 let result = try await self.request("/api/test-llm", body: ["provider": self.provider])
                 self.feedback = english ? "Inference test succeeded using \(result["model"] as? String ?? self.model)." :
@@ -251,21 +286,71 @@ struct AIConnectionView: View {
                 Text(english ? "Choose the AI used for repository audits." : "リポジトリ監査に使用する AI を選びます。")
                     .foregroundStyle(.secondary)
                 Picker(english ? "Provider" : "接続先", selection: $store.provider) {
+                    Text(english ? "None (Static Analysis Only)" : "使用しない（静的解析のみ）").tag("none")
+                    Text("Antigravity CLI (Gemini)").tag("gemini_cli")
+                    Text("GitHub Copilot").tag("copilot")
                     Text("OpenAI").tag("openai")
                     Text("Claude").tag("claude")
                     Text("Gemini (API Key)").tag("gemini")
-                    Text("Antigravity CLI (Gemini)").tag("gemini_cli")
                     Text("Groq").tag("groq")
-                    Text("GitHub Copilot").tag("copilot")
                     Text(english ? "Local LLM" : "ローカル LLM").tag("local")
                 }
+                if store.provider == "none" {
+                    Label(
+                        english
+                            ? "All 7 CLI scanners, OSV, and CISA KEV / GHSA threat feeds run with zero AI calls."
+                            : "AI を使わず、7 種の静的スキャナ・OSV・CISA KEV / GHSA 脅威フィードのみで高速に動作します。",
+                        systemImage: "checkmark.shield"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(SemanticColors.role("successText"))
+                } else {
                 if store.provider == "local" {
                     TextField(english ? "API base URL" : "API ベース URL", text: $store.localURL)
                     Text(english ? "Ollama or LM Studio · OpenAI-compatible endpoint on this Mac." :
                             "Ollama / LM Studio の OpenAI 互換エンドポイントを指定します。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                TextField(english ? "Model ID" : "モデル ID", text: $store.model)
+                if store.provider == "gemini_cli" {
+                    HStack(spacing: 8) {
+                        Picker(english ? "Model" : "使用モデル", selection: $store.model) {
+                            Text(english ? "Auto (CLI Default)" : "自動（CLI デフォルト）").tag("auto")
+                            if !store.model.isEmpty && store.model != "auto" && !store.geminiCliModels.contains(where: { $0.id == store.model }) {
+                                Text(store.model).tag(store.model)
+                            }
+                            ForEach(store.geminiCliModels) { opt in
+                                Text("\(opt.label) (\(opt.id))").tag(opt.id)
+                            }
+                        }
+                        Button {
+                            Task { await store.refreshGeminiCliModels(force: true) }
+                        } label: {
+                            if store.loadingGeminiModels {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label(english ? "Refresh" : "一覧を更新", systemImage: "arrow.clockwise")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(store.loadingGeminiModels)
+                        .help(english ? "Fetch the latest available models from Antigravity CLI" : "Antigravity CLI から最新の利用可能モデル一覧を再取得")
+                    }
+                    let activeModelLabel: String = {
+                        if store.model.isEmpty || store.model == "auto" {
+                            return english ? "Auto (CLI Default)" : "自動（CLI デフォルト）"
+                        }
+                        if let found = store.geminiCliModels.first(where: { $0.id == store.model }) {
+                            return "\(found.label) [\(found.id)]"
+                        }
+                        return store.model
+                    }()
+                    Text(english ? "Active model: \(activeModelLabel)" : "現在の設定モデル: \(activeModelLabel)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(SemanticColors.role("infoText"))
+                } else {
+                    TextField(english ? "Model ID" : "モデル ID", text: $store.model)
+                }
                 SecureField(
                     store.provider == "local"
                         ? (english ? "Token (optional)" : "トークン（任意）")
@@ -291,8 +376,43 @@ struct AIConnectionView: View {
                               : "キーを空欄にすると、保存済みの値を使用します。"))
                 )
                     .font(.caption).foregroundStyle(.secondary)
+                }
             } header: {
                 Text(english ? "AI connection" : "AI 接続")
+            }
+            Section {
+                Picker(english ? "Second-Opinion AI" : "セカンドオピニオン AI", selection: $store.secondaryProvider) {
+                    Text(english ? "Disabled (Single AI / Static Only)" : "使用しない（単独または静的解析のみ）").tag("none")
+                    Text("GitHub Copilot").tag("copilot")
+                    Text("Antigravity CLI (Gemini)").tag("gemini_cli")
+                    Text("OpenAI").tag("openai")
+                    Text("Claude").tag("claude")
+                    Text("Gemini (API Key)").tag("gemini")
+                    Text("Groq").tag("groq")
+                    Text(english ? "Local LLM" : "ローカル LLM").tag("local")
+                }
+                if store.secondaryProvider == "gemini_cli" {
+                    Picker(english ? "Second-Opinion Model" : "クロスチェック用モデル", selection: $store.secondaryModel) {
+                        Text(english ? "Auto (CLI Default)" : "自動（CLI デフォルト）").tag("")
+                        ForEach(store.geminiCliModels) { opt in
+                            Text("\(opt.label) (\(opt.id))").tag(opt.id)
+                        }
+                    }
+                } else if store.secondaryProvider != "none" {
+                    TextField(
+                        english ? "Model override (optional)" : "モデル上書き（任意・空欄時は既定モデル）",
+                        text: $store.secondaryModel
+                    )
+                }
+                Text(
+                    english
+                        ? "Used only when you click Cross-Check on a finding to verify real-code exploitability with two independent models in parallel."
+                        : "緊急対応一覧の「AI検証」ボタン押下時のみ、メイン AI と並列でクロスチェックを実行して誤検知・到達可能性を裏取りします（通常スキャンには負荷をかけません）。"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            } header: {
+                Text(english ? "Second-Opinion Cross-Check (Optional)" : "セカンドオピニオン AI クロスチェック（任意）")
             }
             if store.provider == "copilot" {
                 Section {
@@ -396,10 +516,17 @@ struct AIConnectionView: View {
             if next == "copilot" {
                 Task { await store.refreshCopilotStatus() }
             } else if next == "gemini_cli" {
-                Task { await store.refreshGeminiCliStatus() }
+                Task {
+                    await store.refreshGeminiCliStatus()
+                    await store.refreshGeminiCliModels(force: false)
+                }
             }
         }
-        .task { store.port = port; store.loadAI() }
+        .task {
+            store.port = port
+            store.loadAI()
+            await store.refreshGeminiCliModels(force: false)
+        }
     }
 
     private func openGeminiCliLoginInTerminal() {

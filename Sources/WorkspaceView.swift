@@ -171,6 +171,10 @@ struct MainContentView: View {
     @State private var addRepoInput = ""
     @State private var addingRepo = false
     @State private var addRepoError: String?
+    @State private var crossCheckTarget: DrilldownFindingItem?
+    @State private var crossCheckLoading = false
+    @State private var crossCheckResult: CrossCheckResponse?
+    @State private var crossCheckError: String?
     @State private var threatFeedItems: [ThreatFeedItem] = []
     @State private var threatFeedMatchedCount = 0
     @State private var threatFeedUnaffectedCount = 0
@@ -886,6 +890,14 @@ struct MainContentView: View {
                                                     .buttonStyle(.bordered)
                                                     .controlSize(.small)
                                                     .help(isReq ? (english ? "Unmark requested" : "依頼済みを解除") : (english ? "Mark as requested on Slack" : "Slack 依頼済みにする"))
+                                                    Button {
+                                                        runCrossCheck(for: item)
+                                                    } label: {
+                                                        Label(english ? "Verify" : "AI検証", systemImage: "checkmark.seal")
+                                                    }
+                                                    .buttonStyle(.bordered)
+                                                    .controlSize(.small)
+                                                    .help(english ? "Cross-check real-code exploitability with Primary & Second-Opinion AI" : "メイン AI＋セカンドオピニオン AI で実コード到達可能性をクロスチェック")
                                                     Button(english ? "Open" : "開く") {
                                                         openDrilldownFinding(item)
                                                     }
@@ -972,6 +984,10 @@ struct MainContentView: View {
         .sheet(isPresented: $showAddRepoSheet) {
             addRepositorySheet()
                 .frame(width: 520)
+        }
+        .sheet(item: $crossCheckTarget) { item in
+            crossCheckResultSheet(for: item)
+                .frame(minWidth: 640, minHeight: 380)
         }
         .confirmationDialog(
             reposPendingDeletion.count > 1
@@ -4307,6 +4323,172 @@ struct MainContentView: View {
         }
     }
 
+    private func runCrossCheck(for item: DrilldownFindingItem) {
+        crossCheckTarget = item
+        crossCheckLoading = true
+        crossCheckResult = nil
+        crossCheckError = nil
+        Task {
+            defer { Task { @MainActor in crossCheckLoading = false } }
+            do {
+                let resp = try await requestJSON("/api/audit/cross-check", body: [
+                    "repo": item.repoName,
+                    "diagram_id": item.diagramId,
+                    "finding": [
+                        "title": item.title,
+                        "file": item.file,
+                        "tier": item.tier,
+                        "reason": item.reason,
+                        "description": item.description,
+                    ]
+                ])
+                func parseSide(_ raw: Any?) -> CrossCheckSideResult? {
+                    guard let d = raw as? [String: Any] else { return nil }
+                    return CrossCheckSideResult(
+                        ok: (d["ok"] as? Bool) ?? false,
+                        provider: (d["provider"] as? String) ?? "",
+                        model: (d["model"] as? String) ?? "",
+                        verdict: (d["verdict"] as? String) ?? "needs_review",
+                        confidence: (d["confidence"] as? String) ?? "medium",
+                        summary: (d["summary"] as? String) ?? "",
+                        action: (d["action"] as? String) ?? ""
+                    )
+                }
+                let parsed = CrossCheckResponse(
+                    mode: (resp["mode"] as? String) ?? "static_only",
+                    consensus: (resp["consensus"] as? String) ?? "static_only",
+                    consensusLabel: (resp["consensus_label"] as? String) ?? "",
+                    note: (resp["note"] as? String) ?? "",
+                    primary: parseSide(resp["primary"]),
+                    secondary: parseSide(resp["secondary"])
+                )
+                await MainActor.run { crossCheckResult = parsed }
+            } catch {
+                await MainActor.run { crossCheckError = error.localizedDescription }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func crossCheckResultSheet(for item: DrilldownFindingItem) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label(english ? "AI Cross-Check" : "AI クロスチェック検証", systemImage: "checkmark.seal.fill")
+                    .font(.title3.bold())
+                if !item.indexCode.isEmpty {
+                    Text(item.indexCode)
+                        .font(.caption.monospaced().bold())
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(item.tierColor.opacity(0.18), in: Capsule())
+                        .foregroundStyle(item.tierColor)
+                }
+                Spacer()
+                Button(english ? "Close" : "閉じる") {
+                    crossCheckTarget = nil
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.title).font(.subheadline.weight(.semibold))
+                Text("\(item.repoName) · \(item.file)")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+            Divider()
+            if crossCheckLoading {
+                VStack(spacing: 10) {
+                    ProgressView()
+                    Text(english ? "Verifying actual code with configured AI model(s)…" : "設定済みの AI モデルで実コードの到達可能性を検証中…")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let err = crossCheckError {
+                Label(err, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(SemanticColors.role("dangerText"))
+            } else if let res = crossCheckResult {
+                let bannerColor: Color = {
+                    switch res.consensus {
+                    case "agreed_confirmed", "single_confirmed": return SemanticColors.role("dangerText")
+                    case "agreed_false_positive", "single_likely_false_positive": return SemanticColors.role("successText")
+                    case "static_only": return SemanticColors.role("infoText")
+                    default: return SemanticColors.role("warningText")
+                    }
+                }()
+                HStack(spacing: 8) {
+                    Image(systemName: res.mode == "dual_ai" ? "person.2.fill" : "cpu")
+                    Text(res.consensusLabel.isEmpty ? res.consensus : res.consensusLabel)
+                        .font(.subheadline.bold())
+                }
+                .foregroundStyle(bannerColor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(bannerColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+
+                if !res.note.isEmpty {
+                    Text(res.note).font(.callout).foregroundStyle(.secondary)
+                }
+
+                HStack(alignment: .top, spacing: 12) {
+                    if let p = res.primary {
+                        crossCheckSideCard(title: english ? "Primary AI" : "メイン AI", side: p)
+                    }
+                    if let s = res.secondary {
+                        crossCheckSideCard(title: english ? "Second-Opinion AI" : "セカンドオピニオン AI", side: s)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(20)
+    }
+
+    @ViewBuilder
+    private func crossCheckSideCard(title: String, side: CrossCheckSideResult) -> some View {
+        let vColor: Color = side.verdict == "confirmed"
+            ? SemanticColors.role("dangerText")
+            : (side.verdict == "likely_false_positive" ? SemanticColors.role("successText") : SemanticColors.role("warningText"))
+        let vLabel: String = {
+            switch side.verdict {
+            case "confirmed": return english ? "Confirmed" : "要対応（確認済）"
+            case "likely_false_positive": return english ? "Likely False Positive" : "誤検知・影響なし"
+            case "error": return english ? "Error" : "エラー"
+            default: return english ? "Needs Review" : "要追加確認"
+            }
+        }()
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(title).font(.caption.bold()).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(vLabel)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(vColor.opacity(0.16), in: Capsule())
+                        .foregroundStyle(vColor)
+                }
+                Text("\(side.provider) · \(side.model)")
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.tertiary)
+                Text(side.summary)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !side.action.isEmpty {
+                    Divider()
+                    Text(side.action)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(8)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
     @ViewBuilder
     private func addRepositorySheet() -> some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -4571,6 +4753,25 @@ struct MainContentView: View {
             }
         }
     }
+}
+
+private struct CrossCheckSideResult {
+    let ok: Bool
+    let provider: String
+    let model: String
+    let verdict: String
+    let confidence: String
+    let summary: String
+    let action: String
+}
+
+private struct CrossCheckResponse {
+    let mode: String
+    let consensus: String
+    let consensusLabel: String
+    let note: String
+    let primary: CrossCheckSideResult?
+    let secondary: CrossCheckSideResult?
 }
 
 private struct ThreatFeedFindingRef {

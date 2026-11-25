@@ -675,6 +675,14 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": str(exc)})
             return
 
+        if self.path.startswith("/api/connections/gemini-cli/models"):
+            try:
+                force_refresh = "force=1" in self.path
+                self._send_json(200, gemini_cli_bridge.list_available_models(force=force_refresh))
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
         if self.path == "/api/app/diagnostics":
             try:
                 self._send_json(200, app_updater.get_runtime_diagnostics())
@@ -860,6 +868,54 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/connections/gemini-cli/install":
             try:
                 self._send_json(200, gemini_cli_bridge.install_or_update_gemini_cli())
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+            return
+
+        if self.path == "/api/audit/cross-check":
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                repo_name = str(body.get("repo") or "").strip()
+                diagram_id = str(body.get("diagram_id") or "").strip()
+                finding = body.get("finding") if isinstance(body.get("finding"), dict) else {}
+                code_ctx = ""
+                # Read redacted local file context if available
+                try:
+                    state = analyzer.load_saved_analyses()
+                    target_diag = None
+                    for d in state.get("diagrams", []):
+                        if (diagram_id and d.get("id") == diagram_id) or (repo_name and d.get("repo") == repo_name):
+                            target_diag = d
+                            break
+                    local_dir = (
+                        (target_diag or {}).get("local_path")
+                        or ((target_diag or {}).get("source_revision") or {}).get("local_path")
+                        or ""
+                    ).strip()
+                    raw_file = str(finding.get("file") or "").split(" (Target:", 1)[0].strip()
+                    if local_dir and raw_file:
+                        parts = raw_file.rsplit(":", 1)
+                        rel_path = parts[0]
+                        line_no = int(parts[1]) if len(parts) == 2 and parts[1].isdigit() else 1
+                        candidate = (Path(local_dir) / rel_path).resolve()
+                        if str(candidate).startswith(str(Path(local_dir).resolve())) and candidate.is_file():
+                            lines = candidate.read_text(encoding="utf-8", errors="ignore").splitlines()
+                            start = max(0, line_no - 15)
+                            end = min(len(lines), line_no + 25)
+                            snippet = "\n".join(f"L{i+1}: {lines[i]}" for i in range(start, end))
+                            # Redact potential secrets before sending to any LLM
+                            snippet = re.sub(r"(AKIA[0-9A-Z]{4})[0-9A-Z]{8,16}", r"\1****REDACTED", snippet)
+                            snippet = re.sub(r"(sk-[a-zA-Z0-9_-]{6})[a-zA-Z0-9_-]{12,}", r"\1****REDACTED", snippet)
+                            snippet = re.sub(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----", "[REDACTED PRIVATE KEY]", snippet)
+                            code_ctx = snippet
+                except Exception:
+                    pass
+                res = security_audit_engine.cross_check_finding(
+                    repo_name or "Repository",
+                    finding,
+                    code_context=code_ctx,
+                )
+                self._send_json(200, res)
             except Exception as exc:
                 self._send_json(400, {"ok": False, "error": str(exc)})
             return

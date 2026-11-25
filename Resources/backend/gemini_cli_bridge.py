@@ -10,10 +10,16 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+_MODELS_CACHE: Tuple[float, List[Dict[str, str]]] = (0.0, [])
+_MODELS_CACHE_TTL_SEC = 600.0
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def find_cli_binary() -> Tuple[str, str]:
@@ -114,6 +120,65 @@ def get_gemini_cli_runtime_status() -> Dict[str, Any]:
 def is_gemini_cli_ready() -> bool:
     """True when `agy` or `gemini` is installed."""
     return bool(find_gemini_cli())
+
+
+def _parse_models_output(raw: str) -> List[Dict[str, str]]:
+    """Parse `agy models` stdout into [{id, label}], stripping ANSI/spinner lines."""
+    models: List[Dict[str, str]] = []
+    seen: set[str] = set()
+    cleaned = _ANSI_RE.sub("", raw or "")
+    for line in cleaned.splitlines():
+        # Strip carriage-return spinner prefixes on the same line
+        if "\r" in line:
+            line = line.split("\r")[-1]
+        text = line.strip()
+        if not text or text.lower().startswith("fetching ") or text.lower().startswith("available "):
+            continue
+        parts = re.split(r"\s{2,}", text, maxsplit=1)
+        if len(parts) == 2:
+            mid, label = parts[0].strip(), parts[1].strip()
+        else:
+            tokens = text.split(None, 1)
+            if not tokens:
+                continue
+            mid = tokens[0].strip()
+            label = tokens[1].strip() if len(tokens) > 1 else mid
+        if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{1,80}$", mid):
+            continue
+        if mid in seen:
+            continue
+        seen.add(mid)
+        models.append({"id": mid, "label": label or mid})
+    return models
+
+
+def list_available_models(*, force: bool = False) -> Dict[str, Any]:
+    """Fetch live available models from `agy models` (with 10-min cache)."""
+    global _MODELS_CACHE
+    now = time.time()
+    cached_ts, cached_list = _MODELS_CACHE
+    if not force and cached_list and (now - cached_ts) < _MODELS_CACHE_TTL_SEC:
+        return {"ok": True, "cached": True, "models": cached_list}
+
+    binary, kind = find_cli_binary()
+    if not binary:
+        return {"ok": False, "cached": False, "models": [], "error": "CLI not installed"}
+
+    cmd = [binary, "models"] if kind == "agy" else [binary, "--list-models"]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        models = _parse_models_output((proc.stdout or "") + "\n" + (proc.stderr or ""))
+        if models:
+            _MODELS_CACHE = (now, models)
+        return {"ok": True, "cached": False, "models": models}
+    except Exception as exc:
+        return {"ok": False, "cached": False, "models": cached_list, "error": str(exc)}
 
 
 def install_or_update_gemini_cli() -> Dict[str, Any]:
