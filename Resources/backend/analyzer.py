@@ -1644,13 +1644,26 @@ def build_lightweight_repo_entry(owner: str, rmeta: Dict[str, Any], category_lab
     return diag, specs
 
 
-def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None) -> Dict[str, Any]:
+def analyze_organization_or_user(
+    owner: str,
+    local_parent: Optional[Path] = None,
+    progress_callback: Optional[Any] = None,
+) -> Dict[str, Any]:
     """
     Analyze an entire GitHub Organization or User (parent level, e.g. https://github.com/example-org or https://github.com/octocat).
     1. Discovers all repositories under `owner`.
     2. Builds a master Ecosystem Overview diagram (`<owner> (全体エコシステム)` [ECO], `is_root: True`).
     3. Deep-analyzes locally available repositories + top recent repositories, and includes lightweight diagrams for the rest.
     """
+    if progress_callback:
+        progress_callback({
+            "total": 1,
+            "completed": 0,
+            "current_repo": owner,
+            "current_stage": f"{owner} のリポジトリ一覧を取得中…",
+            "eta_seconds": None,
+            "log": f"🔎 GitHub ({owner}) からリポジトリ一覧を取得しています…",
+        })
     repos_meta = list_org_or_user_repositories(owner, limit=35)
     if not repos_meta:
         raise RuntimeError(f"GitHub の組織またはユーザー '{owner}' 配下にリポジトリが見つかりませんでした。")
@@ -1671,13 +1684,29 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
 
     # Deep-analyze up to 6 repos that either exist locally or are the most recently pushed
     deep_count = 0
-    for idx, rmeta in enumerate(repos_meta[:18]):
+    target_repos = repos_meta[:18]
+    total_targets = len(target_repos)
+    org_started_at = time.time()
+    for idx, rmeta in enumerate(target_repos):
         rname = rmeta["name"]
         rlang = rmeta.get("language") or "Code"
         nid = f"Repo_{idx}_{re.sub(r'[^a-zA-Z0-9]', '', rname)}"
         safe_name = sanitize_mermaid_label(rname)
         eco_lines.append(f'  {nid}["{safe_name}<br/>{rlang} · {owner}/{safe_name}"]')
         eco_lines.append(f"  {hub_id} -->|Manage / Deploy| {nid}")
+
+        if progress_callback:
+            elapsed = max(1.0, time.time() - org_started_at)
+            avg_sec = (elapsed / idx) if idx > 0 else 12.0
+            eta_sec = max(1, int(avg_sec * (total_targets - idx)))
+            progress_callback({
+                "total": total_targets,
+                "completed": idx,
+                "current_repo": f"{owner}/{rname}",
+                "current_stage": f"セキュリティ監査・構成解析中 ({idx + 1}/{total_targets})",
+                "eta_seconds": eta_sec,
+                "log": f"🔍 {owner}/{rname} を解析中 ({idx + 1}/{total_targets})…",
+            })
 
         local_repo = find_existing_local_repo(owner, rname)
         should_deep_analyze = (local_repo is not None) or (deep_count < 3)
@@ -1694,6 +1723,18 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
                 all_schemas.update(res.get("tableSchemas", {}))
                 if local_repo is None:
                     deep_count += 1
+                if progress_callback:
+                    elapsed_done = max(1.0, time.time() - org_started_at)
+                    remaining = total_targets - (idx + 1)
+                    eta_done = max(0, int((elapsed_done / (idx + 1)) * remaining)) if remaining > 0 else 0
+                    progress_callback({
+                        "total": total_targets,
+                        "completed": idx + 1,
+                        "current_repo": f"{owner}/{rname}",
+                        "current_stage": f"{owner}/{rname} 完了 ({idx + 1}/{total_targets})",
+                        "eta_seconds": eta_done,
+                        "log": f"✅ {owner}/{rname} 完了 ({idx + 1}/{total_targets})",
+                    })
 
                 # Register ecosystem node spec
                 all_specs[rname.lower()] = {
@@ -1830,16 +1871,39 @@ def analyze_organization_or_user(owner: str, local_parent: Optional[Path] = None
     }
 
 
-def analyze_any_github_target(raw_input: str) -> Dict[str, Any]:
+def analyze_any_github_target(raw_input: str, progress_callback: Optional[Any] = None) -> Dict[str, Any]:
     """
     Entrypoint for both Organization/User URLs (`https://github.com/example-org`)
     and Direct Repository URLs (`https://github.com/owner/repo`).
     """
     parsed = parse_github_target(raw_input)
     if parsed["mode"] == "org":
-        return analyze_organization_or_user(parsed["owner"], parsed.get("local_path"))
+        return analyze_organization_or_user(
+            parsed["owner"],
+            parsed.get("local_path"),
+            progress_callback=progress_callback,
+        )
     else:
-        return analyze_repository(raw_input)
+        if progress_callback:
+            progress_callback({
+                "total": 1,
+                "completed": 0,
+                "current_repo": raw_input,
+                "current_stage": "リポジトリ取得・セキュリティ監査中…",
+                "eta_seconds": 15,
+                "log": f"🔍 {raw_input} を解析中…",
+            })
+        res = analyze_repository(raw_input)
+        if progress_callback:
+            progress_callback({
+                "total": 1,
+                "completed": 1,
+                "current_repo": (res.get("diagram") or {}).get("repo") or raw_input,
+                "current_stage": "解析完了",
+                "eta_seconds": 0,
+                "log": f"✅ {(res.get('diagram') or {}).get('repo') or raw_input} の解析が完了しました",
+            })
+        return res
 
 
 def automatic_refresh_url(diagram: Dict[str, Any]) -> Optional[str]:

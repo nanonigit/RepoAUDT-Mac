@@ -509,7 +509,11 @@ struct MainContentView: View {
                         prompt: english ? "Find repositories" : "リポジトリを検索")
             .navigationSplitViewColumnWidth(min: 200, ideal: 280, max: 520)
         } detail: {
-            ZStack {
+            VStack(spacing: 0) {
+                if let progress = syncProgress, page != .dashboard {
+                    compactGlobalSyncBanner(progress)
+                }
+                ZStack {
                 Color(nsColor: .windowBackgroundColor)
                 if backend.isReady, let url = URL(string: "http://127.0.0.1:\(backend.port)/index.html") {
                     PortalWebView(url: url, coordinator: coordinator)
@@ -529,6 +533,7 @@ struct MainContentView: View {
                     MCPConnectionView(english: english, port: backend.port)
                 } else if page == .system {
                     SystemUpdateView(english: english, port: backend.port, autoRunUpdate: $triggerSidebarAppUpdate)
+                }
                 }
             }
             .navigationTitle(page.title(english: english))
@@ -4584,6 +4589,64 @@ struct MainContentView: View {
         .padding(20)
     }
 
+    @ViewBuilder
+    private func compactGlobalSyncBanner(_ progress: SyncProgressInfo) -> some View {
+        let isRunning = progress.status == "running"
+        let isError = progress.status == "error"
+        let pct = progress.total > 0 ? min(1.0, Double(progress.completed) / Double(progress.total)) : 0
+        HStack(spacing: 10) {
+            if isRunning {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(SemanticColors.role(isError ? "dangerText" : "successText"))
+            }
+            Text(
+                progress.currentRepo.isEmpty
+                    ? progress.currentStage
+                    : "\(progress.currentRepo) · \(progress.currentStage)"
+            )
+            .font(.caption.weight(.medium))
+            .lineLimit(1)
+            .truncationMode(.middle)
+            if isRunning && progress.total > 0 {
+                ProgressView(value: pct)
+                    .frame(width: 90)
+                Text("\(progress.completed)/\(progress.total)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            if isRunning, let eta = progress.etaSeconds, eta > 0 {
+                Text(english ? "ETA ~\(formatEta(eta))" : "残り約 \(formatEta(eta))")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(SemanticColors.role("infoText"))
+            }
+            Spacer(minLength: 4)
+            if !isRunning {
+                Button(english ? "Dismiss" : "閉じる") {
+                    syncProgress = nil
+                }
+                .buttonStyle(.borderless)
+                .font(.caption2)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+    }
+
+    private func formatEta(_ seconds: Int) -> String {
+        if seconds < 60 {
+            return english ? "\(seconds)s" : "\(seconds)秒"
+        }
+        let mins = seconds / 60
+        let secs = seconds % 60
+        return english ? "\(mins)m \(secs)s" : "\(mins)分\(secs)秒"
+    }
+
     private func submitAddRepository() async {
         let raw = addRepoInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty, !addingRepo else { return }
@@ -4598,25 +4661,82 @@ struct MainContentView: View {
         }()
         addingRepo = true
         addRepoError = nil
-        defer { addingRepo = false }
         do {
-            let resp = try await requestJSON("/api/analyze", body: ["url": normalizedUrl])
+            let resp = try await requestJSON("/api/analyze", body: ["url": normalizedUrl, "async": true])
             if let err = resp["error"] as? String, !err.isEmpty {
                 addRepoError = err
+                addingRepo = false
                 return
             }
-            let diagram = resp["diagram"] as? [String: Any]
-            let newId = (diagram?["id"] as? String) ?? ""
+            let jobId = resp["job_id"] as? String ?? ""
             addRepoInput = ""
+            addingRepo = false
             showAddRepoSheet = false
-            coordinator.send("refresh")
-            await refreshAspmPortfolio()
-            await refreshThreatFeed(force: false)
-            if !newId.isEmpty {
-                selection = ["repo:\(newId)"]
+            syncProgress = SyncProgressInfo(
+                status: "running",
+                total: 1,
+                completed: 0,
+                currentRepo: normalizedUrl,
+                currentStage: english ? "Fetching repository…" : "リポジトリを取得中…",
+                etaSeconds: nil,
+                logs: [english ? "▶ Started analyzing \(normalizedUrl)…" : "▶ \(normalizedUrl) の解析を開始しました…"]
+            )
+            guard !jobId.isEmpty else {
+                coordinator.send("refresh")
+                return
+            }
+            Task {
+                var finalDiagramId = ""
+                for attempt in 0..<1800 {
+                    try? await Task.sleep(for: .seconds(1))
+                    guard let statusResp = try? await requestJSON("/api/sync/status?job_id=\(jobId)") else {
+                        continue
+                    }
+                    let status = statusResp["status"] as? String ?? ""
+                    let total = statusResp["total"] as? Int ?? 1
+                    let completed = statusResp["completed"] as? Int ?? 0
+                    let currentRepo = statusResp["current_repo"] as? String ?? ""
+                    let currentStage = statusResp["current_stage"] as? String ?? ""
+                    let etaSeconds = statusResp["eta_seconds"] as? Int
+                    let logs = statusResp["logs"] as? [String] ?? []
+                    if let did = statusResp["diagram_id"] as? String, !did.isEmpty {
+                        finalDiagramId = did
+                    }
+                    syncProgress = SyncProgressInfo(
+                        status: status,
+                        total: total,
+                        completed: completed,
+                        currentRepo: currentRepo,
+                        currentStage: currentStage,
+                        etaSeconds: etaSeconds,
+                        logs: logs
+                    )
+                    if attempt % 4 == 3 {
+                        coordinator.send("refresh")
+                    }
+                    if status == "completed" || status == "error" {
+                        break
+                    }
+                }
+                coordinator.send("refresh")
+                await refreshAspmPortfolio()
+                await refreshThreatFeed(force: true)
+                await refreshRemediationRequests()
+                if !finalDiagramId.isEmpty {
+                    selection = ["repo:\(finalDiagramId)"]
+                }
+                if syncProgress?.status == "completed" {
+                    try? await Task.sleep(for: .seconds(6))
+                    if syncProgress?.status == "completed" {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            syncProgress = nil
+                        }
+                    }
+                }
             }
         } catch {
             addRepoError = error.localizedDescription
+            addingRepo = false
         }
     }
 

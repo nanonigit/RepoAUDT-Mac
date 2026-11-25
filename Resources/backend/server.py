@@ -1439,6 +1439,68 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
                 if not repo_url:
                     self._send_json(400, {"error": "GitHub URL が空です。"})
                     return
+                if body.get("async"):
+                    job_id = str(uuid.uuid4())
+                    with _SYNC_JOBS_LOCK:
+                        _SYNC_JOBS[job_id] = {
+                            "job_id": job_id,
+                            "status": "running",
+                            "total": 1,
+                            "completed": 0,
+                            "current_repo": repo_url,
+                            "current_stage": "取得・準備中…",
+                            "eta_seconds": None,
+                            "logs": [f"▶ {repo_url} の解析を開始しました…"],
+                            "started_at": datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
+                            "diagram_id": "",
+                            "error": "",
+                        }
+
+                    def _run_analyze_job() -> None:
+                        def _on_progress(ev: Dict[str, Any]) -> None:
+                            with _SYNC_JOBS_LOCK:
+                                job = _SYNC_JOBS.get(job_id)
+                                if not job:
+                                    return
+                                if "total" in ev:
+                                    job["total"] = int(ev["total"])
+                                if "completed" in ev:
+                                    job["completed"] = int(ev["completed"])
+                                if "current_repo" in ev:
+                                    job["current_repo"] = str(ev["current_repo"])
+                                if "current_stage" in ev:
+                                    job["current_stage"] = str(ev["current_stage"])
+                                if "eta_seconds" in ev:
+                                    job["eta_seconds"] = ev["eta_seconds"]
+                                if ev.get("log"):
+                                    job["logs"] = (job.get("logs") or [])[-29:] + [str(ev["log"])]
+
+                        try:
+                            res = analyzer.analyze_any_github_target(repo_url, progress_callback=_on_progress)
+                            analyzer.save_analysis_result(res)
+                            new_id = str((res.get("diagram") or {}).get("id") or "")
+                            with _SYNC_JOBS_LOCK:
+                                job = _SYNC_JOBS.get(job_id)
+                                if job:
+                                    job["status"] = "completed"
+                                    job["completed"] = job.get("total", 1)
+                                    job["eta_seconds"] = 0
+                                    job["current_stage"] = "完了"
+                                    job["diagram_id"] = new_id
+                                    job["last_sync_time"] = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+                                    job["logs"] = (job.get("logs") or [])[-29:] + ["🎉 解析と保存が完了しました"]
+                        except Exception as job_exc:
+                            with _SYNC_JOBS_LOCK:
+                                job = _SYNC_JOBS.get(job_id)
+                                if job:
+                                    job["status"] = "error"
+                                    job["error"] = str(job_exc)
+                                    job["current_stage"] = f"エラー: {str(job_exc)[:120]}"
+                                    job["logs"] = (job.get("logs") or [])[-29:] + [f"❌ エラー: {job_exc}"]
+
+                    threading.Thread(target=_run_analyze_job, daemon=True).start()
+                    self._send_json(200, {"ok": True, "job_id": job_id, "status": "running"})
+                    return
                 result = analyzer.analyze_any_github_target(repo_url)
                 analyzer.save_analysis_result(result)
                 self._send_json(200, result)
