@@ -120,7 +120,7 @@ _DOC_OR_TEST_PLACEHOLDERS = (
 
 
 _PUBLIC_CLIENT_KEY_RE = re.compile(
-    r"(?:reCaptchaKey|RECAPTCHA_SITE_KEY|NEXT_PUBLIC_[A-Z0-9_]+|VITE_PUBLIC_[A-Z0-9_]+|(?:sitekey|site_key|data-sitekey)\b[^\n]{0,24}['\"]6L[A-Za-z0-9_-]{28,50}['\"])",
+    r"(?:reCaptchaKey|RECAPTCHA_SITE_KEY|NEXT_PUBLIC_[A-Z0-9_]+|VITE_PUBLIC_[A-Z0-9_]+|aws_appsync_apiKey|(?:sitekey|site_key|data-sitekey)\b[^\n]{0,24}['\"]6L[A-Za-z0-9_-]{28,50}['\"])",
     re.IGNORECASE,
 )
 

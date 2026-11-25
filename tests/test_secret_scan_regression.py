@@ -107,6 +107,11 @@ class TestSecretScanRegression(unittest.TestCase):
                 "assert.equal(f.captcha.sitekey,'6LfsDt0sAAAAALb1234567890abcdef1234PfIK')"
             )
         )
+        self.assertTrue(
+            source_scanners._is_public_client_key_line(
+                '    "aws_appsync_apiKey": "da2-xf1234567890abcdefghijkxhcu",'
+            )
+        )
         self.assertFalse(
             source_scanners._is_public_client_key_line(
                 "RECAPTCHA_SECRET_KEY='6LfsDt0sAAAAALb1234567890abcdef1234PfIK'"
