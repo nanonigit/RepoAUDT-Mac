@@ -4741,7 +4741,7 @@
           <div class="sync-meta-box" style="margin-top: 0; border: none; padding: 0; background: transparent;">
             <div class="sync-timestamp-row">
               <span data-i18n="last_updated">🔄 最終更新:</span>
-              <strong id="portal-sync-time">2026/11/25 12:57:37</strong>
+              <strong id="portal-sync-time">2026/11/25 13:03:01</strong>
             </div>
             
             <!-- Live Uptime & Health Monitoring Widget -->
@@ -6777,12 +6777,20 @@
       currentArchSubView = mode;
       const overlay = document.getElementById('visual-cards-overlay');
       const dock = document.getElementById('canvas-floating-dock');
+      const wtPanel = document.getElementById('sequence-walkthrough-panel');
       const btnCards = document.getElementById('subview-btn-cards');
       const btnDiag = document.getElementById('subview-btn-diagram');
       const btnSeq = document.getElementById('subview-btn-seq');
       const isCards = mode === 'cards';
       if (overlay) overlay.style.display = isCards ? 'block' : 'none';
       if (dock) dock.style.display = isCards ? 'none' : 'flex';
+      if (isCards) {
+        if (typeof stopWalkthroughPlay === 'function') stopWalkthroughPlay();
+        if (wtPanel) wtPanel.style.display = 'none';
+      } else if (wtPanel && currentWalkthroughMode === 'arch' && Array.isArray(currentWalkthroughSteps) && currentWalkthroughSteps.length > 0) {
+        wtPanel.style.display = 'flex';
+        if (typeof renderWalkthroughBar === 'function') renderWalkthroughBar();
+      }
       if (btnCards) { btnCards.classList.toggle('active', isCards); btnCards.setAttribute('aria-selected', String(isCards)); }
       if (btnDiag) { btnDiag.classList.toggle('active', !isCards); btnDiag.setAttribute('aria-selected', String(!isCards)); }
       if (btnSeq) { btnSeq.classList.remove('active'); btnSeq.setAttribute('aria-selected', 'false'); }
@@ -7167,6 +7175,16 @@
             svgElement.style.height = '100%';
             svgElement.style.minWidth = '100%';
             svgElement.style.minHeight = '100%';
+
+            currentSeqSvgElement = svgElement;
+            currentWalkthroughMode = 'arch';
+            currentWalkthroughSteps = parseArchDiagramSteps(item.diagram, item);
+            currentWalkthroughIndex = -1;
+            const wtPanelArch = document.getElementById('sequence-walkthrough-panel');
+            if (wtPanelArch) {
+              wtPanelArch.style.display = (currentArchSubView === 'diagram' && currentWalkthroughSteps.length > 0) ? 'flex' : 'none';
+            }
+            if (typeof renderWalkthroughBar === 'function') renderWalkthroughBar();
             
             if (window.svgPanZoom && svgElement.isConnected && svgElement.clientWidth > 0 && svgElement.clientHeight > 0) {
               try {
@@ -11946,10 +11964,68 @@
       }
     }
 
+    let currentWalkthroughMode = 'seq';
+
+    function parseArchDiagramSteps(diagramCode, item) {
+      const code = String(diagramCode || '');
+      const nodeMap = {};
+      const nodeOrder = [];
+      const nodeRe = /([A-Za-z0-9_]+)\s*\["([^"]+)"\]/g;
+      let nm;
+      while ((nm = nodeRe.exec(code)) !== null) {
+        const nid = nm[1];
+        const cleanLabel = nm[2].replace(/<br\s*\/?>/gi, ' / ').replace(/\\n/g, ' / ').trim();
+        if (!nodeMap[nid]) {
+          nodeMap[nid] = cleanLabel || nid;
+          nodeOrder.push(nid);
+        }
+      }
+      const steps = [];
+      const edgeRe = /^\s*([A-Za-z0-9_]+)\s*(?:-->|-.->|==>)\s*(?:\|([^|]+)\|\s*)?([A-Za-z0-9_]+)/gm;
+      let em;
+      let edgeIdx = 0;
+      while ((em = edgeRe.exec(code)) !== null) {
+        const fromId = em[1];
+        const edgeLabel = (em[2] || '').trim();
+        const toId = em[3];
+        const fromLabel = nodeMap[fromId] || fromId;
+        const toLabel = nodeMap[toId] || toId;
+        steps.push({
+          stepNumber: steps.length + 1,
+          edgeIndex: edgeIdx,
+          fromId,
+          toId,
+          fromLabel,
+          toLabel,
+          message: edgeLabel ? `${fromLabel.split(' / ')[0]} → ${toLabel.split(' / ')[0]} (${edgeLabel})` : `${fromLabel.split(' / ')[0]} → ${toLabel.split(' / ')[0]}`,
+          isReturn: false,
+          isArch: true
+        });
+        edgeIdx++;
+      }
+      if (steps.length === 0 && nodeOrder.length > 0) {
+        nodeOrder.forEach((nid, idx) => {
+          const lbl = nodeMap[nid] || nid;
+          steps.push({
+            stepNumber: idx + 1,
+            edgeIndex: -1,
+            fromId: nid,
+            toId: nid,
+            fromLabel: lbl,
+            toLabel: lbl,
+            message: lbl.split(' / ')[0],
+            isReturn: false,
+            isArch: true
+          });
+        });
+      }
+      return steps.slice(0, 30);
+    }
+
     function clearWalkthroughSvgHighlight() {
       if (!currentSeqSvgElement) return;
       currentSeqSvgElement.querySelectorAll('.wt-StepHighlightRing').forEach(el => el.remove());
-      const allEls = currentSeqSvgElement.querySelectorAll('.messageText, .messageLine0, .messageLine1, .sequenceNumber, g.actor, rect.actor, text.actor, .note, .noteText');
+      const allEls = currentSeqSvgElement.querySelectorAll('.messageText, .messageLine0, .messageLine1, .sequenceNumber, g.actor, rect.actor, text.actor, .note, .noteText, g.node, g.node rect, g.node polygon, .edgePath, .edgePath path, path.flowchart-link, .edgeLabel');
       allEls.forEach(el => {
         el.style.opacity = '';
         el.style.filter = '';
@@ -11969,6 +12045,67 @@
 
       const st = currentWalkthroughSteps[stepIdx];
       const svg = currentSeqSvgElement;
+
+      if (currentWalkthroughMode === 'arch' || st.isArch) {
+        const nodes = Array.from(svg.querySelectorAll('g.node'));
+        const edges = Array.from(svg.querySelectorAll('.edgePath, path.flowchart-link'));
+        const edgeLabels = Array.from(svg.querySelectorAll('.edgeLabel'));
+
+        nodes.forEach(n => { n.style.opacity = '0.22'; });
+        edges.forEach(e => { e.style.opacity = '0.16'; });
+        edgeLabels.forEach(l => { l.style.opacity = '0.2'; });
+
+        const matchNode = (nodeId, labelStr) => {
+          const idLow = String(nodeId || '').toLowerCase();
+          const lblLow = String(labelStr || '').split(' / ')[0].trim().toLowerCase();
+          return nodes.find(n => {
+            const rawId = String(n.id || '').toLowerCase();
+            if (idLow && (rawId === idLow || rawId.includes('-' + idLow + '-') || rawId.endsWith('-' + idLow))) return true;
+            const txt = (n.textContent || '').trim().toLowerCase();
+            return lblLow && txt.includes(lblLow);
+          });
+        };
+
+        const fromNode = matchNode(st.fromId, st.fromLabel);
+        const toNode = matchNode(st.toId, st.toLabel);
+        const highlightNode = (nodeEl, strokeColor, glowColor) => {
+          if (!nodeEl) return;
+          nodeEl.style.opacity = '1';
+          const shape = nodeEl.querySelector('rect, polygon, circle, path');
+          if (shape) {
+            if (shape.dataset.origStroke === undefined) {
+              shape.dataset.origStroke = shape.style.stroke || '';
+              shape.dataset.origStrokeWidth = shape.style.strokeWidth || '';
+            }
+            shape.style.stroke = strokeColor;
+            shape.style.strokeWidth = '3px';
+            shape.style.filter = `drop-shadow(0 0 10px ${glowColor})`;
+          }
+        };
+        highlightNode(fromNode, '#38bdf8', 'rgba(56, 189, 248, 0.75)');
+        if (toNode && toNode !== fromNode) {
+          highlightNode(toNode, '#34d399', 'rgba(52, 211, 153, 0.75)');
+        }
+
+        if (typeof st.edgeIndex === 'number' && st.edgeIndex >= 0 && edges[st.edgeIndex]) {
+          const targetEdge = edges[st.edgeIndex];
+          targetEdge.style.opacity = '1';
+          const pathEl = targetEdge.tagName.toLowerCase() === 'path' ? targetEdge : targetEdge.querySelector('path');
+          if (pathEl) {
+            if (pathEl.dataset.origStroke === undefined) {
+              pathEl.dataset.origStroke = pathEl.style.stroke || '';
+              pathEl.dataset.origStrokeWidth = pathEl.style.strokeWidth || '';
+            }
+            pathEl.style.stroke = '#38bdf8';
+            pathEl.style.strokeWidth = '3.5px';
+            pathEl.style.filter = 'drop-shadow(0 0 6px rgba(56, 189, 248, 0.85))';
+          }
+          if (edgeLabels[st.edgeIndex]) {
+            edgeLabels[st.edgeIndex].style.opacity = '1';
+          }
+        }
+        return;
+      }
 
       const msgTexts = Array.from(svg.querySelectorAll('.messageText'));
       const msgLines = Array.from(svg.querySelectorAll('.messageLine0, .messageLine1'));
@@ -12107,7 +12244,7 @@
 
     // Keyboard navigation (ArrowLeft / ArrowRight) for Sequence Walkthrough
     document.addEventListener('keydown', (e) => {
-      if (currentViewMode !== 'seq') return;
+      if (currentViewMode !== 'seq' && !(currentViewMode === 'arch' && currentArchSubView === 'diagram')) return;
       const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
       if (activeTag === 'input' || activeTag === 'textarea') return;
       if (e.key === 'ArrowRight') {
@@ -12124,9 +12261,10 @@
     function renderCurrentRepoSequence() {
       if (!selectedDiagram) return;
       stopWalkthroughPlay();
+      currentWalkthroughMode = 'seq';
       const seqs = selectedDiagram.sequences || [];
       const wtPanel = document.getElementById('sequence-walkthrough-panel');
-      if (wtPanel) wtPanel.style.display = 'flex';
+      if (wtPanel) wtPanel.style.display = seqs.length > 0 ? 'flex' : 'none';
       if (seqs.length === 0) {
         diagramWrapper.innerHTML = `<div id="seq-empty-state" style="color: #94a3b8; padding: 40px; text-align: center; font-size: 0.96rem; display: grid; gap: 10px; justify-items: center;">
           <div>${currentLang === 'en' ? 'No execution flow was detected by static analysis (no HTTP routes or module-to-module calls found).' : '静的解析で実行フローを特定できませんでした（HTTPルートやモジュール間呼び出しが検出されませんでした）。'}</div>
