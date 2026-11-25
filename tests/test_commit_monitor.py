@@ -193,6 +193,31 @@ class TestCommitMonitor(unittest.TestCase):
         resolved = [info for k, info in before_sigs.items() if k not in after_sigs]
         self.assertEqual(resolved, [])
 
+    def test_git_history_persistence_detects_removed_from_head_and_in_history(self) -> None:
+        import subprocess
+        import revocation_checker
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+            secret_file = repo / "config" / "cred.json"
+            secret_file.parent.mkdir(parents=True)
+            secret_file.write_text('{"accessKeyId":"AKIA5S1234567890ABCD"}', encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-qm", "add cred"], cwd=repo, check=True)
+
+            h1 = revocation_checker.check_git_history_persistence(repo, "config/cred.json:1")
+            self.assertEqual(h1["status"], "still_in_head")
+
+            secret_file.unlink()
+            subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-qm", "remove cred"], cwd=repo, check=True)
+
+            h2 = revocation_checker.check_git_history_persistence(repo, "config/cred.json:1")
+            self.assertEqual(h2["status"], "head_removed_in_history")
+            self.assertGreaterEqual(h2["commit_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

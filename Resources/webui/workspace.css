@@ -52,7 +52,18 @@
 .native-host body .subview-toggle-group { background: var(--workspace-raised); border: 1px solid var(--workspace-border); padding: 2px; }
 .native-host body .subview-btn { font-size: 12px; font-weight: 500; color: var(--workspace-muted); }
 .native-host body .subview-btn.active { background: var(--workspace-surface); border-color: var(--workspace-border); color: var(--workspace-text); box-shadow: 0 1px 2px #0002; }
-.native-host body #visual-cards-overlay { background: var(--workspace-bg); padding: 24px 32px 80px; }
+.native-host body #visual-cards-overlay {
+  top: 0; right: 0; bottom: 0; left: auto;
+  width: min(440px, 48%); min-width: 300px; max-width: 100%;
+  background: var(--workspace-surface);
+  border-left: 1px solid var(--workspace-border);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.28);
+  padding: 18px 20px 64px;
+}
+.native-host body .components-drawer-btn.active {
+  border-color: var(--workspace-accent) !important;
+  color: var(--workspace-accent) !important;
+}
 .native-host body .visual-cards-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
 .native-host body .visual-node-card {
   background: var(--workspace-surface); border: 1px solid var(--workspace-border); border-radius: 10px; padding: 18px; box-shadow: none;

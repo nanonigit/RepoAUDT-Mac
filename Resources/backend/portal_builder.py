@@ -4559,14 +4559,22 @@ def build_portal_html(data, is_shareable=False):
       box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
     }
 
-    /* Visual Cards Grid Overlay (Friendly, High-Contrast Card Explorer) */
+    /* Components Right-Side Slide-Over Drawer */
     #visual-cards-overlay {
       position: absolute;
-      inset: 0;
-      background: #090d16;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: auto;
+      width: min(440px, 48%);
+      min-width: 300px;
+      max-width: 100%;
+      background: #0b1120;
+      border-left: 1px solid #1e293b;
+      box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
       overflow-y: auto;
-      padding: 20px 22px 80px 22px;
-      z-index: 12;
+      padding: 18px 20px 64px 20px;
+      z-index: 24;
       display: none;
     }
     .visual-cards-header {
@@ -6798,42 +6806,45 @@ def build_portal_html(data, is_shareable=False):
       updateAccordionActiveIndicators();
     }
 
-    let currentArchSubView = 'auto'; // 'cards' | 'diagram' | 'auto'
+    let currentArchSubView = 'diagram'; // 'diagram' (components moved to right drawer)
+    let componentsDrawerOpen = false;
 
     function getEffectiveArchSubView(item) {
-      if (currentArchSubView === 'cards' || currentArchSubView === 'diagram') {
-        return currentArchSubView;
+      return 'diagram';
+    }
+
+    function toggleComponentsDrawer(forceState) {
+      componentsDrawerOpen = typeof forceState === 'boolean' ? forceState : !componentsDrawerOpen;
+      const overlay = document.getElementById('visual-cards-overlay');
+      const btn = document.getElementById('components-drawer-toggle-btn');
+      if (overlay) {
+        if (componentsDrawerOpen && selectedDiagram) {
+          renderVisualCardsOverlay(selectedDiagram);
+        }
+        overlay.style.display = componentsDrawerOpen ? 'block' : 'none';
       }
-      if (!item) return 'cards';
-      const nodeCount = ((item.diagram || '').match(/\\["/g) || []).length;
-      if (item.is_root || nodeCount > 8) {
-        return 'cards';
+      if (btn) {
+        btn.classList.toggle('active', componentsDrawerOpen);
+        btn.setAttribute('aria-expanded', String(componentsDrawerOpen));
       }
-      return 'cards';
     }
 
     function setArchSubView(mode) {
-      currentArchSubView = mode;
+      currentArchSubView = 'diagram';
       const overlay = document.getElementById('visual-cards-overlay');
       const dock = document.getElementById('canvas-floating-dock');
       const wtPanel = document.getElementById('sequence-walkthrough-panel');
-      const btnCards = document.getElementById('subview-btn-cards');
       const btnDiag = document.getElementById('subview-btn-diagram');
       const btnSeq = document.getElementById('subview-btn-seq');
-      const isCards = mode === 'cards';
-      if (overlay) overlay.style.display = isCards ? 'block' : 'none';
-      if (dock) dock.style.display = isCards ? 'none' : 'flex';
-      if (isCards) {
-        if (typeof stopWalkthroughPlay === 'function') stopWalkthroughPlay();
-        if (wtPanel) wtPanel.style.display = 'none';
-      } else if (wtPanel && currentWalkthroughMode === 'arch' && Array.isArray(currentWalkthroughSteps) && currentWalkthroughSteps.length > 0) {
+      if (overlay) overlay.style.display = componentsDrawerOpen ? 'block' : 'none';
+      if (dock) dock.style.display = 'flex';
+      if (wtPanel && currentWalkthroughMode === 'arch' && Array.isArray(currentWalkthroughSteps) && currentWalkthroughSteps.length > 0) {
         wtPanel.style.display = 'flex';
         if (typeof renderWalkthroughBar === 'function') renderWalkthroughBar();
       }
-      if (btnCards) { btnCards.classList.toggle('active', isCards); btnCards.setAttribute('aria-selected', String(isCards)); }
-      if (btnDiag) { btnDiag.classList.toggle('active', !isCards); btnDiag.setAttribute('aria-selected', String(!isCards)); }
+      if (btnDiag) { btnDiag.classList.add('active'); btnDiag.setAttribute('aria-selected', 'true'); }
       if (btnSeq) { btnSeq.classList.remove('active'); btnSeq.setAttribute('aria-selected', 'false'); }
-      if (!isCards && currentPanZoom) {
+      if (currentPanZoom) {
         setTimeout(() => {
           safeResizePanZoom();
           safeFitPanZoom(0.95);
@@ -7067,10 +7078,10 @@ def build_portal_html(data, is_shareable=False):
         </div>
         <div class="hero-right-controls">
           ${(currentViewMode === 'arch' || currentViewMode === 'seq') ? `<div class="subview-toggle-group" role="tablist" aria-label="${en ? 'Architecture & Flow view' : '表示切り替え'}">
-            <button type="button" role="tab" aria-selected="${currentViewMode === 'arch' && subView === 'cards'}" class="subview-btn ${currentViewMode === 'arch' && subView === 'cards' ? 'active' : ''}" id="subview-btn-cards" onclick="if(currentViewMode==='arch'){setArchSubView('cards');}else{currentArchSubView='cards';switchViewMode('arch');}">${en ? 'Components' : 'コンポーネント'}</button>
-            <button type="button" role="tab" aria-selected="${currentViewMode === 'arch' && subView === 'diagram'}" class="subview-btn ${currentViewMode === 'arch' && subView === 'diagram' ? 'active' : ''}" id="subview-btn-diagram" onclick="if(currentViewMode==='arch'){setArchSubView('diagram');}else{currentArchSubView='diagram';switchViewMode('arch');}">${en ? 'Diagram' : '構成図'}</button>
+            <button type="button" role="tab" aria-selected="${currentViewMode === 'arch'}" class="subview-btn ${currentViewMode === 'arch' ? 'active' : ''}" id="subview-btn-diagram" onclick="if(currentViewMode==='arch'){setArchSubView('diagram');}else{switchViewMode('arch');}">${en ? 'Diagram' : '構成図'}</button>
             <button type="button" role="tab" aria-selected="${currentViewMode === 'seq'}" class="subview-btn ${currentViewMode === 'seq' ? 'active' : ''}" id="subview-btn-seq" onclick="switchViewMode('seq')">${en ? 'Execution Flow' : '実行フロー'}</button>
-          </div>` : ''}
+          </div>
+          <button type="button" id="components-drawer-toggle-btn" class="table-view-btn components-drawer-btn ${componentsDrawerOpen ? 'active' : ''}" aria-expanded="${componentsDrawerOpen}" onclick="toggleComponentsDrawer()" title="${en ? 'Open Components panel on the right' : 'コンポーネント一覧を右側に開く'}">◫ ${en ? 'Components' : 'コンポーネント'} (${(parseDiagramNodesForCards(item) || []).length})</button>` : ''}
           <span class="workspace-findings">${en ? `${count} findings` : `指摘 ${count}件`}</span>
           <button type="button" id="hero-rescan-btn" onclick="rescanRepositoryDirect(event, '${encodeURIComponent(source).replace(/'/g, '%27')}', this)" class="table-view-btn">${en ? 'Re-scan' : '再スキャン'}</button>
           ${githubLink}
@@ -7092,6 +7103,7 @@ def build_portal_html(data, is_shareable=False):
             <h2 class="component-heading">${isEn ? 'Components' : 'コンポーネント'} <span>${currentVisualCards.length}</span></h2>
             <p class="component-hint">${isEn ? 'Select a component to inspect its role, files and saved findings.' : 'コンポーネントを選ぶと、役割・関連ファイル・保存済みの指摘を確認できます。'}</p>
           </div>
+          <button type="button" class="table-view-btn" onclick="toggleComponentsDrawer(false)" aria-label="${isEn ? 'Close components panel' : 'コンポーネント一覧を閉じる'}" title="${isEn ? 'Close' : '閉じる'}" style="padding:3px 9px;font-size:0.78rem;">✕</button>
         </div>
         <div class="component-list">
           ${currentVisualCards.map((c, idx) => `
@@ -7156,7 +7168,7 @@ def build_portal_html(data, is_shareable=False):
 
       if (currentViewMode === 'seq') {
         const overlay = document.getElementById('visual-cards-overlay');
-        if (overlay) overlay.style.display = 'none';
+        if (overlay) overlay.style.display = componentsDrawerOpen ? 'block' : 'none';
         renderCurrentRepoSequence();
         return;
       } else if (currentViewMode === 'coderabbit') {
@@ -8663,7 +8675,7 @@ def build_portal_html(data, is_shareable=False):
       } else if (mode === 'seq') {
         if (btnSeq) btnSeq.classList.add('active');
         const overlay = document.getElementById('visual-cards-overlay');
-        if (overlay) overlay.style.display = 'none';
+        if (overlay) overlay.style.display = componentsDrawerOpen ? 'block' : 'none';
         const dock = document.getElementById('canvas-floating-dock');
         if (dock) dock.style.display = 'flex';
         if (seqBar) seqBar.style.display = 'none';

@@ -200,6 +200,7 @@ struct MainContentView: View {
     @State private var monitorPageSize = 10
     @State private var monitorPageIndex = 0
     @State private var revocationChecks: [SecretRevocationItem] = []
+    @State private var checkingRevocationKey: String?
 
     private struct ResolvedFindingSummary: Identifiable {
         let id = UUID()
@@ -219,6 +220,10 @@ struct MainContentView: View {
         let resolvedAt: String
         let revokedConfirmed: Bool
         let confirmedAt: String?
+        let historyStatus: String
+        let historyCommitCount: Int
+        let liveCheckStatus: String
+        let liveCheckMessage: String
     }
 
     private struct MonitorUpdateEvent: Identifiable {
@@ -292,24 +297,27 @@ struct MainContentView: View {
         return Array(items[start..<end])
     }
 
+    private func compareReposByRiskPriority(_ lhs: WorkspaceRepository, _ rhs: WorkspaceRepository) -> Bool {
+        let la = aspmRepos.first(where: { $0.id == lhs.id || $0.repo == lhs.name })
+        let ra = aspmRepos.first(where: { $0.id == rhs.id || $0.repo == rhs.name })
+        let lP0 = la?.p0 ?? 0, rP0 = ra?.p0 ?? 0
+        if lP0 != rP0 { return lP0 > rP0 }
+        let lP1 = la?.p1 ?? 0, rP1 = ra?.p1 ?? 0
+        if lP1 != rP1 { return lP1 > rP1 }
+        let lScore = la?.riskScore ?? 0, rScore = ra?.riskScore ?? 0
+        if lScore != rScore { return lScore > rScore }
+        let lSev = severityRank(lhs.severity), rSev = severityRank(rhs.severity)
+        if lSev != rSev { return lSev > rSev }
+        if lhs.findings != rhs.findings { return lhs.findings > rhs.findings }
+        return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+    }
+
     private func sortDashboardRepositories(_ items: [WorkspaceRepository], by order: DashboardSortOrder) -> [WorkspaceRepository] {
         switch order {
         case .severityDesc:
-            return items.sorted {
-                let lhs = severityRank($0.severity)
-                let rhs = severityRank($1.severity)
-                if lhs != rhs { return lhs > rhs }
-                if $0.findings != $1.findings { return $0.findings > $1.findings }
-                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
-            }
+            return items.sorted { compareReposByRiskPriority($0, $1) }
         case .severityAsc:
-            return items.sorted {
-                let lhs = severityRank($0.severity)
-                let rhs = severityRank($1.severity)
-                if lhs != rhs { return lhs < rhs }
-                if $0.findings != $1.findings { return $0.findings < $1.findings }
-                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
-            }
+            return items.sorted { !compareReposByRiskPriority($0, $1) && $0.id != $1.id }
         case .analyzedDesc:
             return items.sorted {
                 let lhs = normalizedTimestamp($0.analyzedAt)
@@ -343,19 +351,7 @@ struct MainContentView: View {
         case .defaultOrder:
             return items
         case .riskScoreDesc:
-            return items.sorted { lhs, rhs in
-                let la = aspmRepos.first(where: { $0.id == lhs.id || $0.repo == lhs.name })
-                let ra = aspmRepos.first(where: { $0.id == rhs.id || $0.repo == rhs.name })
-                let lScore = la?.riskScore ?? 0
-                let rScore = ra?.riskScore ?? 0
-                if lScore != rScore { return lScore > rScore }
-                let lP0 = la?.p0 ?? 0, rP0 = ra?.p0 ?? 0
-                if lP0 != rP0 { return lP0 > rP0 }
-                let lP1 = la?.p1 ?? 0, rP1 = ra?.p1 ?? 0
-                if lP1 != rP1 { return lP1 > rP1 }
-                if lhs.findings != rhs.findings { return lhs.findings > rhs.findings }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-            }
+            return items.sorted { compareReposByRiskPriority($0, $1) }
         case .nameAsc:
             return items.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         case .nameDesc:
@@ -3168,7 +3164,7 @@ struct MainContentView: View {
             }
             .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     let revBadge = remediationIndexBadge(repo: rev.repo, file: rev.file, title: rev.title)
                     if !revBadge.isEmpty {
@@ -3192,24 +3188,75 @@ struct MainContentView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
+                    if rev.historyStatus == "purged_from_history" {
+                        Text(english ? "✓ Purged from Git history" : "✓ 履歴からも完全削除済")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(SemanticColors.role("successText").opacity(0.16), in: Capsule())
+                            .foregroundStyle(SemanticColors.role("successText"))
+                    } else if rev.historyStatus == "head_removed_in_history" {
+                        Text(english ? "Removed from HEAD · In Git history (\(rev.historyCommitCount))" : "HEAD削除済・履歴に残存 (\(rev.historyCommitCount)コミット)")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(SemanticColors.role("warningText").opacity(0.16), in: Capsule())
+                            .foregroundStyle(SemanticColors.role("warningText"))
+                    } else if rev.historyStatus == "still_in_head" {
+                        Text(english ? "Still in HEAD" : "HEAD に残存")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(SemanticColors.role("dangerText").opacity(0.16), in: Capsule())
+                            .foregroundStyle(SemanticColors.role("dangerText"))
+                    }
                 }
                 Text(rev.title)
                     .font(.caption)
                     .strikethrough(rev.revokedConfirmed, color: .secondary)
                     .foregroundStyle(rev.revokedConfirmed ? .secondary : .primary)
                     .lineLimit(1)
+                if !rev.liveCheckMessage.isEmpty {
+                    let msgColor: Color = {
+                        switch rev.liveCheckStatus {
+                        case "revoked", "purged": return SemanticColors.role("successText")
+                        case "active": return SemanticColors.role("dangerText")
+                        default: return .secondary
+                        }
+                    }()
+                    Text(rev.liveCheckMessage)
+                        .font(.caption2.weight(rev.liveCheckStatus == "active" ? .bold : .medium))
+                        .foregroundStyle(msgColor)
+                        .lineLimit(2)
+                }
             }
             Spacer(minLength: 0)
-            if rev.revokedConfirmed {
-                Text(english ? "Revoked ✓" : "Revoke済み ✓")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(SemanticColors.role("successText"))
-            } else {
-                Button(english ? "Mark Revoked" : "失効確認済みにする") {
-                    Task { await toggleRevocationConfirmation(key: rev.id, confirmed: true) }
+            HStack(spacing: 6) {
+                Button {
+                    Task { await runLiveRevocationCheck(key: rev.id) }
+                } label: {
+                    if checkingRevocationKey == rev.id {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Label(english ? "Check Live" : "失効チェック", systemImage: "antenna.radiowaves.left.and.right")
+                    }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
+                .disabled(checkingRevocationKey != nil)
+                .help(english ? "Explicitly verify via read-only AWS/OpenAI/GitHub API whether this key is revoked" : "明示操作時のみ AWS / OpenAI / GitHub の読み取り専用 API でキーが本当に無効化済みか確認します")
+
+                if rev.revokedConfirmed {
+                    Text(english ? "Revoked ✓" : "Revoke済み ✓")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(SemanticColors.role("successText"))
+                } else {
+                    Button(english ? "Mark Revoked" : "失効確認済みにする") {
+                        Task { await toggleRevocationConfirmation(key: rev.id, confirmed: true) }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                }
             }
         }
         .padding(.horizontal, 10)
@@ -3315,9 +3362,22 @@ struct MainContentView: View {
                     newCommit: item["new_commit"] as? String ?? "",
                     resolvedAt: item["resolved_at"] as? String ?? "",
                     revokedConfirmed: item["revoked_confirmed"] as? Bool ?? false,
-                    confirmedAt: item["confirmed_at"] as? String
+                    confirmedAt: item["confirmed_at"] as? String,
+                    historyStatus: item["history_status"] as? String ?? "unavailable",
+                    historyCommitCount: item["history_commit_count"] as? Int ?? 0,
+                    liveCheckStatus: item["live_check_status"] as? String ?? "",
+                    liveCheckMessage: item["live_check_message"] as? String ?? ""
                 )
             }
+        }
+    }
+
+    private func runLiveRevocationCheck(key: String) async {
+        guard backend.isReady, checkingRevocationKey == nil else { return }
+        checkingRevocationKey = key
+        defer { checkingRevocationKey = nil }
+        if let json = try? await requestJSON("/api/monitor/revoke-check", body: ["key": key]) {
+            applyMonitorStatusPayload(json)
         }
     }
 

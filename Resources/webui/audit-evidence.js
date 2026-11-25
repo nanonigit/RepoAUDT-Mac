@@ -789,8 +789,42 @@ function buildAuditStarter(repo, context) {
     };
   }
 
-  const topIssues = issues.slice(0, 3);
-  const topList = topIssues.map(i => `• [${String(i.severity || 'info').toUpperCase()}] ${i.title || ''}`).join('\n');
+  const tierRank = (t) => ({P0: 0, P1: 1, P2: 2, P3: 3}[String(t || '').toUpperCase()] ?? 4);
+  const inferTier = (it) => {
+    const raw = String(it.priority_tier || '').toUpperCase();
+    if (raw === 'P0' || raw === 'P1' || raw === 'P2' || raw === 'P3') return raw;
+    const s = String(it.severity || 'info').toLowerCase();
+    if (s === 'critical') return 'P1';
+    if (s === 'high') return 'P1';
+    if (s === 'medium' || s === 'warning') return 'P2';
+    return 'P3';
+  };
+  const globalIndexByKey = {};
+  if (typeof diagrams !== 'undefined' && Array.isArray(diagrams)) {
+    const tierCounters = {P0: 0, P1: 0, P2: 0, P3: 0};
+    for (const d of diagrams) {
+      if (!d || d.is_root) continue;
+      const dIssues = typeof getWorkspaceIssues === 'function' ? getWorkspaceIssues(d) : [];
+      const seenD = new Set();
+      for (const it of dIssues) {
+        const cleanF = String(it.file || '').split(' (Target:', 1)[0].trim();
+        const k = `${d.id || d.repo}|${String(it.title || '').trim().toLowerCase()}|${cleanF.toLowerCase()}`;
+        if (seenD.has(k)) continue;
+        seenD.add(k);
+        const tr = inferTier(it);
+        tierCounters[tr] = (tierCounters[tr] || 0) + 1;
+        globalIndexByKey[k] = `${tr}-${String(tierCounters[tr]).padStart(2, '0')}`;
+      }
+    }
+  }
+  const sortedIssues = [...issues].sort((a, b) => tierRank(inferTier(a)) - tierRank(inferTier(b)));
+  const topIssues = sortedIssues.slice(0, 3);
+  const formatIssueCode = (i) => {
+    const cleanF = String(i.file || '').split(' (Target:', 1)[0].trim();
+    const k = `${repo.id || repo.repo}|${String(i.title || '').trim().toLowerCase()}|${cleanF.toLowerCase()}`;
+    return globalIndexByKey[k] || inferTier(i);
+  };
+  const topList = topIssues.map(i => `• [${formatIssueCode(i)}] ${i.title || ''}`).join('\n');
   const greeting = issues.length > 0
     ? auditLabel(
         `Loaded "${repo.repo}" (${issues.length} saved findings):\n${topList}\n\nWhat would you like to ask or check?`,
@@ -806,8 +840,8 @@ function buildAuditStarter(repo, context) {
       <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 8px 0;">
         ${topIssues.map(i => {
           const t = String(i.title || '');
-          const s = String(i.severity || 'info').toUpperCase();
-          return `<button type="button" class="table-view-btn" style="text-align: left; white-space: normal; padding: 4px 8px;" data-jump-repo="${escapeHtml(repoId)}" data-jump-finding="${escapeHtml(t)}">• [${escapeHtml(s)}] ${escapeHtml(t)}</button>`;
+          const code = formatIssueCode(i);
+          return `<button type="button" class="table-view-btn" style="text-align: left; white-space: normal; padding: 4px 8px;" data-jump-repo="${escapeHtml(repoId)}" data-jump-finding="${escapeHtml(t)}">• [${escapeHtml(code)}] ${escapeHtml(t)}</button>`;
         }).join('')}
       </div>
       <div>${auditLabel('What would you like to ask or check?', 'このリポジトリについて何を確認・相談しますか？')}</div>

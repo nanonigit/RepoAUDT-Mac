@@ -42,6 +42,7 @@ import gemini_cli_bridge  # noqa: E402
 import diff_verification  # noqa: E402
 import mcp_server  # noqa: E402
 import mcp_client  # noqa: E402
+import revocation_checker  # noqa: E402
 import security_audit_engine  # noqa: E402
 
 
@@ -236,6 +237,52 @@ class SyncDaemon:
             p.write_text(json.dumps(self.revocations, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception:
             pass
+
+    def _resolve_repo_dir(self, repo_slug: str) -> Optional[Path]:
+        parts = [p for p in str(repo_slug or "").strip().split("/") if p]
+        if len(parts) >= 2:
+            found = analyzer.find_existing_local_repo(parts[0], parts[1])
+            if found and found.exists():
+                return found
+        return None
+
+    def enrich_revocation_history(self) -> None:
+        """Attach local read-only Git history persistence status to each revocation record."""
+        with self._lock:
+            items = list(self.revocations.items())
+        for key, rec in items:
+            if not isinstance(rec, dict):
+                continue
+            rdir = self._resolve_repo_dir(str(rec.get("repo") or ""))
+            hist = revocation_checker.check_git_history_persistence(rdir, str(rec.get("file") or ""))
+            with self._lock:
+                if key in self.revocations:
+                    self.revocations[key]["history_status"] = hist.get("status", "unavailable")
+                    self.revocations[key]["history_commit_count"] = int(hist.get("commit_count") or 0)
+
+    def run_live_revocation_check(self, key: str) -> Dict[str, Any]:
+        """Explicit opt-in provider revocation check triggered only by user button click."""
+        with self._lock:
+            rec = dict(self.revocations.get(key) or {})
+        if not rec:
+            raise ValueError("Revocation record not found")
+        rdir = self._resolve_repo_dir(str(rec.get("repo") or ""))
+        res = revocation_checker.check_live_revocation(rdir, str(rec.get("file") or ""), str(rec.get("title") or ""))
+        now_local, _ = analyzer.now_timestamps()
+        hist = res.get("history") or {}
+        live_status = str(res.get("live_status") or "error")
+        with self._lock:
+            if key in self.revocations:
+                self.revocations[key]["history_status"] = hist.get("status", "unavailable")
+                self.revocations[key]["history_commit_count"] = int(hist.get("commit_count") or 0)
+                self.revocations[key]["live_check_status"] = live_status
+                self.revocations[key]["live_check_message"] = str(res.get("message") or "")
+                self.revocations[key]["live_checked_at"] = now_local
+                if live_status == "revoked":
+                    self.revocations[key]["revoked_confirmed"] = True
+                    self.revocations[key]["confirmed_at"] = now_local
+                self._save_revocations()
+        return self.status_dict()
 
     def confirm_revocation(self, key: str, confirmed: bool = True) -> Dict[str, Any]:
         now_local, _ = analyzer.now_timestamps()
@@ -824,6 +871,7 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(200, {"suppressed": analyzer.get_suppressed_findings()})
             return
         if self.path.startswith("/api/monitor/status"):
+            _SYNC_DAEMON.enrich_revocation_history()
             self._send_json(200, _SYNC_DAEMON.status_dict())
             return
         if self.path.startswith("/api/sync/status"):
@@ -1220,6 +1268,18 @@ class RepoAUDTRequestHandler(SimpleHTTPRequestHandler):
 
         if self.path.startswith("/api/monitor/check"):
             self._send_json(200, _SYNC_DAEMON.trigger_check_async())
+            return
+
+        if self.path.startswith("/api/monitor/revoke-check"):
+            try:
+                body = json.loads(body_raw) if body_raw else {}
+                rev_key = str(body.get("key") or "").strip()
+                if not rev_key:
+                    self._send_json(400, {"error": "Missing revocation key"})
+                    return
+                self._send_json(200, _SYNC_DAEMON.run_live_revocation_check(rev_key))
+            except Exception as exc:
+                self._send_json(400, {"error": str(exc)})
             return
 
         if self.path.startswith("/api/monitor/revoke"):
